@@ -1,29 +1,38 @@
-use std::sync::Arc;
+use std::marker::PhantomData;
 
-use crate::{context::ContextView, time::Time};
+use crate::{
+    context::{view::*, Context},
+    time::Time,
+};
 use crossbeam::channel::{self, select};
-
-type ContextViewRef<T> = Arc<T>;
 
 #[derive(Clone, Copy)]
 pub struct ChannelElement<T> {
-    time: Time,
-    data: T,
+    pub time: Time,
+    pub data: T,
 }
 
-pub struct Sender<T, S, R> {
+impl<T: Copy> ChannelElement<T> {
+    pub fn new(time: Time, data: T) -> ChannelElement<T> {
+        ChannelElement { time, data }
+    }
+}
+
+type ViewType = Box<dyn ContextView>;
+
+pub struct Sender<T> {
     underlying: channel::Sender<ChannelElement<T>>,
     resp: channel::Receiver<Time>,
     send_receive_delta: usize,
     capacity: usize,
 
-    sender: ContextViewRef<S>,
-    receiver: ContextViewRef<R>,
+    sender: ViewType,
+    receiver: ViewType,
     backlog: Option<Time>,
     next_available: Option<Time>,
 }
 
-impl<T: Copy, S: ContextView, R: ContextView> Sender<T, S, R> {
+impl<T: Copy> Sender<T> {
     pub fn send(&mut self, elem: ChannelElement<T>) -> Result<(), Time> {
         if self.is_full() {
             match self.next_available {
@@ -90,12 +99,12 @@ impl<T: Copy, S: ContextView, R: ContextView> Sender<T, S, R> {
     }
 }
 
-pub struct Receiver<T, S, R> {
+pub struct Receiver<T> {
     underlying: channel::Receiver<ChannelElement<T>>,
     resp: channel::Sender<Time>,
 
-    sender: ContextViewRef<S>,
-    receiver: ContextViewRef<R>,
+    sender: ViewType,
+    receiver: ViewType,
     head: Option<Recv<T>>,
 }
 
@@ -106,7 +115,7 @@ pub enum Recv<T> {
     Closed,
 }
 
-impl<T: Copy, S: ContextView, R: ContextView> Receiver<T, S, R> {
+impl<T: Copy> Receiver<T> {
     pub fn peek(&mut self) -> Recv<T> {
         let recv_time = self.receiver.tick_lower_bound();
         match self.head {
@@ -153,19 +162,21 @@ impl<T: Copy, S: ContextView, R: ContextView> Receiver<T, S, R> {
         self.head.unwrap()
     }
     pub fn recv(&mut self) -> Recv<T> {
-        unimplemented!()
+        let res = self.peek();
+        self.head = None;
+        res
     }
 }
 
-pub fn bounded<T, S, R>(
+fn bounded_internal<'a, T, S, R>(
     capacity: usize,
-    sender: ContextViewRef<S>,
-    receiver: ContextViewRef<R>,
-) -> (Sender<T, S, R>, Receiver<T, S, R>)
+    sender: &S,
+    receiver: &R,
+) -> (Sender<T>, Receiver<T>)
 where
     T: Copy,
-    S: ContextView,
-    R: ContextView,
+    S: Context<'a>,
+    R: Context<'a>,
 {
     let (tx, rx) = channel::bounded::<ChannelElement<T>>(capacity);
     let (resp_t, resp_r) = channel::bounded::<Time>(capacity);
@@ -174,17 +185,31 @@ where
         resp: resp_r,
         send_receive_delta: 0,
         capacity,
-        sender: sender.clone(),
-        receiver: receiver.clone(),
+        sender: sender.view(),
+        receiver: receiver.view(),
         backlog: None,
         next_available: None,
     };
     let rcv = Receiver {
         underlying: rx,
         resp: resp_t,
-        sender: sender.clone(),
-        receiver: receiver.clone(),
+        sender: sender.view(),
+        receiver: receiver.view(),
         head: None,
     };
     (snd, rcv)
+}
+
+pub struct Bounded<T> {
+    phantom: PhantomData<T>,
+}
+
+impl<T: Copy> Bounded<T> {
+    pub fn new<'a, S: Context<'a>, R: Context<'a>>(
+        capacity: usize,
+        sender: &S,
+        receiver: &R,
+    ) -> (Sender<T>, Receiver<T>) {
+        bounded_internal(capacity, sender, receiver)
+    }
 }

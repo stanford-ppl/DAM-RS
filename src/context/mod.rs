@@ -1,118 +1,74 @@
-use crate::time::Time;
-use crossbeam::channel;
 use rayon::prelude::*;
-use std::sync::{Arc, RwLock};
 
-trait Context<'a>: Send + Sync {
+pub use self::view::ContextView;
+
+pub mod function_context;
+pub mod parent;
+pub mod view;
+
+type ParentType<'a> = &'a dyn ParentContext<'a>;
+pub trait Context<'a>: Send + Sync {
     fn init(&mut self);
     fn run(&mut self);
     fn cleanup(&mut self);
-    fn set_parent(&mut self, parent: &mut Arc<dyn ParentContext>);
+    fn view(&self) -> Box<dyn ContextView>;
 }
 
-pub trait ContextView: Clone {
-    fn tick_lower_bound(&self) -> Time;
-    fn signal_when(&self, when: Time) -> channel::Receiver<Time>;
+type ChildType<'a> = dyn Context<'a>;
+
+#[derive(Default)]
+pub struct ChildManager<'a> {
+    next_id: usize,
+    children: Vec<&'a mut ChildType<'a>>,
 }
 
-struct SignalElement {
-    when: Time,
-    how: channel::Sender<Time>,
-}
-
-// Encapsulates the callback backlog and the current tick info to make ContextView work.
-struct TimeInfoUnderlying {
-    time: Time,
-    signal_buffer: Vec<SignalElement>,
-}
-pub struct TimeInfo {
-    under: RwLock<TimeInfoUnderlying>,
-}
-
-impl TimeInfo {
-    fn tick_lower_bound(&self) -> Time {
-        return self.under.read().unwrap().time;
-    }
-
-    fn signal_when(self, when: Time) -> channel::Receiver<Time> {
-        let (tx, rx) = channel::bounded::<Time>(1);
-
-        // Check time first. Since time is non-decreasing, if this cond is true, then it's always true.
-        let cur_time = self.tick_lower_bound();
-        if cur_time >= when {
-            tx.send(cur_time).unwrap();
-            drop(tx);
-            rx
-        } else {
-            let mut write = self.under.write().unwrap();
-            if write.time >= when {
-                tx.send(cur_time).unwrap();
-                drop(tx);
-            } else {
-                write.signal_buffer.push(SignalElement { when, how: tx })
-            }
-            rx
-        }
-    }
-
-    fn incr_cycles<T>(&mut self, incr: T)
-    where
-        Time: std::ops::AddAssign<T>,
-    {
-        self.under.write().unwrap().time += incr;
-        self.scan_and_write_signals();
-    }
-
-    fn scan_and_write_signals(&mut self) {
-        let tlb = self.tick_lower_bound();
-        let mut write = self.under.write().unwrap();
-        write.signal_buffer.retain(|signal| {
-            if signal.when <= tlb {
-                // If the signal time is in the present or past,
-                signal.how.send(tlb).unwrap();
-                false
-            } else {
-                true
-            }
-        })
-    }
-}
-
-type ChildType<'a> = Arc<RwLock<dyn Context<'a>>>;
-trait ParentContext<'a>: Context<'a> {
-    fn current_id(&mut self) -> &mut usize;
+impl<'a> ChildManager<'a> {
     fn new_child_id(&mut self) -> usize {
-        let x = self.current_id();
-        *x += 1;
-        *x - 1
+        self.next_id += 1;
+        self.next_id - 1
     }
 
-    fn children(&mut self) -> &mut Vec<ChildType<'a>>;
-    fn add_child(&mut self, child: &mut ChildType<'a>) {
-        self.children().push(child.clone());
+    fn add_child(&mut self, child: &'a mut ChildType<'a>) {
+        self.children.push(child);
     }
 
-    fn for_each_child(&mut self, map_f: fn(child: &ChildType<'a>)) {
-        self.children()
-            .into_par_iter()
-            .for_each(|child| map_f(child))
+    fn for_each_child(&mut self, map_f: fn(child: &mut ChildType<'a>)) {
+        rayon::scope(|s: &rayon::Scope| {
+            self.children.iter_mut().for_each(|child| {
+                s.spawn(|_| map_f(*child));
+            });
+        });
+    }
+}
+
+pub trait ParentContext<'a>: Context<'a> {
+    fn manager(&mut self) -> &mut ChildManager<'a>;
+    fn new_child_id(&mut self) -> usize {
+        self.manager().new_child_id()
     }
 
+    fn add_child(&mut self, child: &'a mut ChildType<'a>) {
+        self.manager().add_child(child);
+    }
+}
+
+impl<'a, T: ParentContext<'a>> Context<'a> for T {
     fn init(&mut self) {
-        self.for_each_child(|child| {
-            child.write().unwrap().init();
+        self.manager().for_each_child(|child| {
+            child.init();
         })
     }
 
     fn run(&mut self) {
-        self.for_each_child(|child| {
-            child.write().unwrap().run();
+        self.manager().for_each_child(|child| {
+            child.run();
+            child.cleanup();
         })
     }
 
-    fn cleanup(&mut self) {
-        self.for_each_child(|child| {
-            child.write().unwrap().cleanup();
-        })
+    fn cleanup(&mut self) {}
+
+    fn view(&self) -> Box<dyn ContextView> {
+        todo!()
     }
 }

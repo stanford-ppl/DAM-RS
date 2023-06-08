@@ -1,6 +1,6 @@
 use std::cmp::Ordering;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct Time {
     time: u64,
     done: bool,
@@ -16,7 +16,7 @@ impl Time {
 
     pub fn infinite() -> Self {
         Self {
-            time: u64::MAX,
+            time: 0,
             done: true,
         }
     }
