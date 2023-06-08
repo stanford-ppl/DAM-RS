@@ -1,5 +1,3 @@
-use rayon::prelude::*;
-
 pub use self::view::ContextView;
 
 pub mod function_context;
