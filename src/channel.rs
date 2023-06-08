@@ -1,12 +1,14 @@
 use std::marker::PhantomData;
 
+use std::fmt::Debug;
+
 use crate::{
     context::{view::*, Context},
     time::Time,
 };
 use crossbeam::channel::{self, select};
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct ChannelElement<T> {
     pub time: Time,
     pub data: T,
@@ -32,7 +34,7 @@ pub struct Sender<T> {
     next_available: Option<Time>,
 }
 
-impl<T: Copy> Sender<T> {
+impl<T: Copy + Debug> Sender<T> {
     pub fn send(&mut self, elem: ChannelElement<T>) -> Result<(), Time> {
         if self.is_full() {
             match self.next_available {
@@ -41,7 +43,8 @@ impl<T: Copy> Sender<T> {
             }
         }
 
-        assert!(self.send_receive_delta < self.capacity);
+        // assert!(self.send_receive_delta < self.capacity);
+        println!("Sending: {elem:?}");
         self.underlying.send(elem).unwrap();
         self.send_receive_delta += 1;
         Ok(())
@@ -53,11 +56,12 @@ impl<T: Copy> Sender<T> {
         }
         self.update_len();
 
-        return self.send_receive_delta < self.capacity;
+        return self.send_receive_delta == self.capacity;
     }
 
     fn update_len(&mut self) {
         let send_time = self.sender.tick_lower_bound();
+        println!("{}, {:?}", self.send_receive_delta, self.backlog);
         if let Some(time) = self.backlog {
             if time < send_time {
                 self.backlog = None;
@@ -69,10 +73,10 @@ impl<T: Copy> Sender<T> {
             }
         }
 
-        let signal = self.receiver.signal_when(self.sender.tick_lower_bound());
-        let mut update_srd = |time: Time| {
+        let signal = self.receiver.signal_when(send_time);
+        let mut update_srd = |time: Time, next_avail: &mut Option<Time>| {
             if send_time < time {
-                self.next_available = Some(time);
+                *next_avail = Some(time);
                 false
             } else {
                 assert_ne!(self.send_receive_delta, 0);
@@ -80,17 +84,22 @@ impl<T: Copy> Sender<T> {
                 true
             }
         };
+
+        println!("Looping in UpdateLen");
         loop {
+            println!("Pay me money");
             select! {
                 recv(signal) -> _ => {
                     while let Ok(recv_time) = self.resp.try_recv() {
-                        if !update_srd(recv_time) {
+                        if !update_srd(recv_time, &mut self.next_available) {
                             return
                         }
                     }
+                    self.next_available = Some(send_time + 1);
+                    return
                 },
                 recv(self.resp) -> recv_time => {
-                    if !update_srd(recv_time.unwrap()) {
+                    if !update_srd(recv_time.unwrap(), &mut self.next_available) {
                         return
                     }
                 }
@@ -164,6 +173,10 @@ impl<T: Copy> Receiver<T> {
     pub fn recv(&mut self) -> Recv<T> {
         let res = self.peek();
         self.head = None;
+        if let Recv::Something(stuff) = res {
+            let ct = self.receiver.tick_lower_bound();
+            let _ = self.resp.send(ct.max(stuff.time));
+        }
         res
     }
 }

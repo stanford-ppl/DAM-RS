@@ -14,7 +14,7 @@ mod tests {
 
     #[test]
     fn simple_channel_test() {
-        const TEST_SIZE: i32 = 8;
+        const TEST_SIZE: i32 = 32;
         let mut writer = FunctionContext::default();
         let mut reader = FunctionContext::default();
         let (snd, rcv) = dam_rs::channel::Bounded::<i32>::new(8, &writer, &reader);
@@ -23,8 +23,12 @@ mod tests {
         writer.set_run(Arc::new(move |wr| {
             let mut sender = send_mut.lock().unwrap();
             for i in 0..TEST_SIZE {
-                sender.send(ChannelElement::new(wr.time.tick(), i)).unwrap();
+                println!("Trying to send {i}");
+                sender
+                    .send(ChannelElement::new(wr.time.tick() + 1, i))
+                    .unwrap();
                 wr.time.incr_cycles(1);
+                println!("Sending {}", i);
             }
         }));
 
@@ -33,14 +37,18 @@ mod tests {
             for i in 0..TEST_SIZE {
                 loop {
                     let res = receiver.recv();
+                    println!("Trying to read {}, Time={:#?}", i, rd.time.tick());
                     match res {
                         Recv::Something(ce) => {
                             rd.time.advance(ce.time);
+                            println!("Read {}", ce.data);
                             assert_eq!(ce.data, i);
                             break;
                         }
                         Recv::Nothing(time) => {
-                            rd.time.advance(time + 1);
+                            rd.time.advance(time);
+                            rd.time.incr_cycles(1);
+                            println!("Recieved nothing, waiting");
                         }
                         Recv::Closed => {
                             panic!("Channel was prematurely closed!");

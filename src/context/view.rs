@@ -52,9 +52,10 @@ impl TimeManager {
         let tlb = self.arc.tick_lower_bound();
         let mut write = self.arc.write().unwrap();
         write.signal_buffer.retain(|signal| {
+            println!("Scan And Write @ {tlb:?} {:p}", signal);
             if signal.when <= tlb {
                 // If the signal time is in the present or past,
-                signal.how.send(tlb).unwrap();
+                let _ = signal.how.send(tlb);
                 false
             } else {
                 true
@@ -90,13 +91,11 @@ impl ContextView for BasicContextView {
         let cur_time = self.under.tick_lower_bound();
         if cur_time >= when {
             tx.send(cur_time).unwrap();
-            drop(tx);
             rx
         } else {
             let mut write = self.under.write().unwrap();
             if write.time >= when {
                 tx.send(cur_time).unwrap();
-                drop(tx);
             } else {
                 write.signal_buffer.push(SignalElement { when, how: tx })
             }

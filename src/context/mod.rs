@@ -32,7 +32,7 @@ impl<'a> ChildManager<'a> {
         self.children.push(child);
     }
 
-    fn for_each_child(&mut self, map_f: fn(child: &mut ChildType<'a>)) {
+    fn for_each_child(&mut self, map_f: impl Fn(&mut ChildType<'a>) + Sync) {
         rayon::scope(|s: &rayon::Scope| {
             self.children.iter_mut().for_each(|child| {
                 s.spawn(|_| map_f(*child));
