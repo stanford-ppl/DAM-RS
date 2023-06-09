@@ -1,7 +1,5 @@
 use std::marker::PhantomData;
 
-use std::fmt::Debug;
-
 use crate::{
     context::{view::*, Context},
     time::Time,
@@ -34,7 +32,7 @@ pub struct Sender<T> {
     next_available: Option<Time>,
 }
 
-impl<T: Copy + Debug> Sender<T> {
+impl<T: Copy> Sender<T> {
     pub fn send(&mut self, elem: ChannelElement<T>) -> Result<(), Time> {
         if self.is_full() {
             match self.next_available {
@@ -43,8 +41,7 @@ impl<T: Copy + Debug> Sender<T> {
             }
         }
 
-        // assert!(self.send_receive_delta < self.capacity);
-        println!("Sending: {elem:?}");
+        assert!(self.send_receive_delta < self.capacity);
         self.underlying.send(elem).unwrap();
         self.send_receive_delta += 1;
         Ok(())
@@ -61,7 +58,6 @@ impl<T: Copy + Debug> Sender<T> {
 
     fn update_len(&mut self) {
         let send_time = self.sender.tick_lower_bound();
-        println!("{}, {:?}", self.send_receive_delta, self.backlog);
         if let Some(time) = self.backlog {
             if time < send_time {
                 self.backlog = None;
@@ -85,9 +81,7 @@ impl<T: Copy + Debug> Sender<T> {
             }
         };
 
-        println!("Looping in UpdateLen");
         loop {
-            println!("Pay me money");
             select! {
                 recv(signal) -> _ => {
                     while let Ok(recv_time) = self.resp.try_recv() {

@@ -6,7 +6,11 @@ pub struct BasicParentContext<'a> {
 }
 
 impl<'a> ParentContext<'a> for BasicParentContext<'a> {
-    fn manager(&mut self) -> &mut super::ChildManager<'a> {
+    fn manager_mut(&mut self) -> &mut super::ChildManager<'a> {
         &mut self.child_manager
+    }
+
+    fn manager(&self) -> &super::ChildManager<'a> {
+        &self.child_manager
     }
 }

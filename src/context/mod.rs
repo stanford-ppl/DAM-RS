@@ -1,3 +1,5 @@
+use crate::time::Time;
+
 pub use self::view::ContextView;
 
 pub mod function_context;
@@ -20,6 +22,41 @@ pub struct ChildManager<'a> {
     children: Vec<&'a mut ChildType<'a>>,
 }
 
+struct ParentView {
+    child_views: Vec<Box<dyn ContextView>>,
+}
+
+impl ContextView for ParentView {
+    fn signal_when(&self, when: Time) -> crossbeam::channel::Receiver<Time> {
+        let (tx, rx) = crossbeam::channel::bounded::<Time>(1);
+        let individual_signals: Vec<crossbeam::channel::Receiver<Time>> = self
+            .child_views
+            .iter()
+            .map(|child| child.signal_when(when))
+            .collect();
+        rayon::spawn(move || {
+            let local_times = individual_signals
+                .iter()
+                .map(|signal| signal.recv().unwrap_or(Time::infinite()));
+            let min_time = local_times.min().unwrap_or(Time::infinite());
+            let _ = tx.send(min_time);
+        });
+        rx
+    }
+
+    fn tick_lower_bound(&self) -> Time {
+        let min_time = self
+            .child_views
+            .iter()
+            .map(|child| child.tick_lower_bound())
+            .min();
+        match min_time {
+            Some(time) => time,
+            None => Time::infinite(),
+        }
+    }
+}
+
 impl<'a> ChildManager<'a> {
     fn new_child_id(&mut self) -> usize {
         self.next_id += 1;
@@ -37,28 +74,34 @@ impl<'a> ChildManager<'a> {
             });
         });
     }
+
+    fn view(&self) -> Box<dyn ContextView> {
+        let child_views = self.children.iter().map(|child| child.view()).collect();
+        Box::new(ParentView { child_views })
+    }
 }
 
 pub trait ParentContext<'a>: Context<'a> {
-    fn manager(&mut self) -> &mut ChildManager<'a>;
+    fn manager_mut(&mut self) -> &mut ChildManager<'a>;
+    fn manager(&self) -> &ChildManager<'a>;
     fn new_child_id(&mut self) -> usize {
-        self.manager().new_child_id()
+        self.manager_mut().new_child_id()
     }
 
     fn add_child(&mut self, child: &'a mut ChildType<'a>) {
-        self.manager().add_child(child);
+        self.manager_mut().add_child(child);
     }
 }
 
 impl<'a, T: ParentContext<'a>> Context<'a> for T {
     fn init(&mut self) {
-        self.manager().for_each_child(|child| {
+        self.manager_mut().for_each_child(|child| {
             child.init();
         })
     }
 
     fn run(&mut self) {
-        self.manager().for_each_child(|child| {
+        self.manager_mut().for_each_child(|child| {
             child.run();
             child.cleanup();
         })
@@ -67,6 +110,6 @@ impl<'a, T: ParentContext<'a>> Context<'a> for T {
     fn cleanup(&mut self) {}
 
     fn view(&self) -> Box<dyn ContextView> {
-        todo!()
+        self.manager().view()
     }
 }
