@@ -171,7 +171,6 @@ where
 
     fn cleanup(&mut self) {
         self.readers.clear();
-        println!("Reader finished at {:?}", self.time.tick());
         self.time.cleanup();
     }
 
@@ -219,8 +218,6 @@ where
                 Some((ind, time)) => (ind, time),
             };
 
-            println!("Next Write Event: {event_time:?}");
-
             match event_time {
                 EventTime::Ready(time) => self.time.advance(*time),
                 EventTime::Nothing(time) => {
@@ -250,7 +247,6 @@ where
 
     fn cleanup(&mut self) {
         self.writers.clear();
-        println!("Writer finished at {:?}", self.time.tick());
         self.time.cleanup();
     }
 
