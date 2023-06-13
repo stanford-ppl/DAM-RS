@@ -34,7 +34,7 @@ impl ContextView for ParentView {
             .iter()
             .map(|child| child.signal_when(when))
             .collect();
-        rayon::spawn(move || {
+        rayon::spawn_fifo(move || {
             let local_times = individual_signals
                 .iter()
                 .map(|signal| signal.recv().unwrap_or(Time::infinite()));
@@ -68,7 +68,7 @@ impl<'a> ChildManager<'a> {
     }
 
     fn for_each_child(&mut self, map_f: impl Fn(&mut ChildType<'a>) + Sync) {
-        rayon::scope(|s: &rayon::Scope| {
+        rayon::in_place_scope(|s: &rayon::Scope| {
             self.children.iter_mut().for_each(|child| {
                 s.spawn(|_| map_f(*child));
             });

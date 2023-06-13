@@ -40,7 +40,7 @@ impl TimeManager {
     pub fn advance(&mut self, new: Time) {
         {
             let mut write = self.arc.write().unwrap();
-            if write.time < new {
+            if write.time > new {
                 return;
             }
             write.time = new;
@@ -52,7 +52,6 @@ impl TimeManager {
         let tlb = self.arc.tick_lower_bound();
         let mut write = self.arc.write().unwrap();
         write.signal_buffer.retain(|signal| {
-            println!("Scan And Write @ {tlb:?} {:p}", signal);
             if signal.when <= tlb {
                 // If the signal time is in the present or past,
                 let _ = signal.how.send(tlb);
@@ -65,6 +64,10 @@ impl TimeManager {
 
     pub fn tick(&self) -> Time {
         self.arc.tick_lower_bound()
+    }
+
+    pub fn cleanup(&mut self) {
+        self.advance(Time::infinite());
     }
 }
 
@@ -95,7 +98,7 @@ impl ContextView for BasicContextView {
         } else {
             let mut write = self.under.write().unwrap();
             if write.time >= when {
-                tx.send(cur_time).unwrap();
+                tx.send(write.time).unwrap();
             } else {
                 write.signal_buffer.push(SignalElement { when, how: tx })
             }

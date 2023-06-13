@@ -9,7 +9,7 @@ pub struct Time {
 impl Time {
     pub fn new(time: u64) -> Self {
         Self {
-            time: time,
+            time,
             done: false,
         }
     }
@@ -19,6 +19,10 @@ impl Time {
             time: 0,
             done: true,
         }
+    }
+
+    pub fn is_infinite(&self) -> bool {
+        self.done
     }
 
     fn cmp(&self, other: &Self) -> Ordering {
@@ -146,7 +150,7 @@ mod tests {
 
         let fin42 = fin0 + 42;
         assert_eq!(fin42.time, 42);
-        assert_eq!(fin42.done, false);
+        assert!(!fin42.done);
 
         let mut fin1 = Time::new(1);
         fin1 += 1;
