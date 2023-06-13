@@ -21,7 +21,7 @@ where
     writer: WritePipeline<T, IT, AT>,
 }
 
-impl<T: DAMType, IT: DAMType, AT: DAMType> Context<'_> for PMU<T, IT, AT>
+impl<T: DAMType, IT: DAMType, AT: DAMType> Context for PMU<T, IT, AT>
 where
     usize: From<IT>,
 {
@@ -115,7 +115,7 @@ impl<T: DAMType, IT: DAMType> ReadPipeline<T, IT> {
     }
 }
 
-impl<T: DAMType, IT: DAMType> Context<'_> for ReadPipeline<T, IT>
+impl<T: DAMType, IT: DAMType> Context for ReadPipeline<T, IT>
 where
     usize: From<IT>,
 {
@@ -191,7 +191,7 @@ impl<T: DAMType, IT: DAMType, AT: DAMType> WritePipeline<T, IT, AT> {
     }
 }
 
-impl<T: DAMType, IT: DAMType, AT: DAMType> Context<'_> for WritePipeline<T, IT, AT>
+impl<T: DAMType, IT: DAMType, AT: DAMType> Context for WritePipeline<T, IT, AT>
 where
     usize: From<IT>,
 {

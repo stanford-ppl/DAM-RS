@@ -12,7 +12,7 @@ pub struct FunctionContext {
     cleanup_fn: Arc<FType>,
 }
 
-impl<'a> Context<'a> for FunctionContext {
+impl Context for FunctionContext {
     fn init(&mut self) {
         (self.init_fn.clone())(self);
     }

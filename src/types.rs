@@ -20,3 +20,7 @@ impl DAMType for u16 {
         16
     }
 }
+
+pub trait Cleanable {
+    fn cleanup(&mut self);
+}

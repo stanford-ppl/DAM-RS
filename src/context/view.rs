@@ -9,7 +9,7 @@ pub trait ContextView: Send + Sync {
     fn tick_lower_bound(&self) -> Time;
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct TimeManager {
     arc: Arc<RwLock<TimeInfo>>,
 }
@@ -112,13 +112,14 @@ impl ContextView for BasicContextView {
 }
 
 // Private bookkeeping constructs
+#[derive(Debug)]
 struct SignalElement {
     when: Time,
     how: channel::Sender<Time>,
 }
 
 // Encapsulates the callback backlog and the current tick info to make BasicContextView work.
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct TimeInfo {
     time: Time,
     signal_buffer: Vec<SignalElement>,

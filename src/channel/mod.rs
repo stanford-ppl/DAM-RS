@@ -5,6 +5,7 @@ use std::marker::PhantomData;
 use crate::{
     context::{view::*, Context},
     time::Time,
+    types::Cleanable,
 };
 use crossbeam::channel::{self, select, SendError};
 
@@ -122,6 +123,12 @@ impl<T: Copy> Sender<T> {
     }
 }
 
+impl<T: Copy> Cleanable for Sender<T> {
+    fn cleanup(&mut self) {
+        self.close();
+    }
+}
+
 enum ReceiverState<T> {
     Open(channel::Receiver<T>),
     Closed,
@@ -212,15 +219,17 @@ impl<T: Copy> Receiver<T> {
     }
 }
 
-fn bounded_internal<'a, T, S, R>(
-    capacity: usize,
-    sender: &S,
-    receiver: &R,
-) -> (Sender<T>, Receiver<T>)
+impl<T: Copy> Cleanable for Receiver<T> {
+    fn cleanup(&mut self) {
+        self.close();
+    }
+}
+
+fn bounded_internal<T, S, R>(capacity: usize, sender: &S, receiver: &R) -> (Sender<T>, Receiver<T>)
 where
     T: Copy,
-    S: Context<'a>,
-    R: Context<'a>,
+    S: Context,
+    R: Context,
 {
     let (tx, rx) = channel::bounded::<ChannelElement<T>>(capacity);
     let (resp_t, resp_r) = channel::bounded::<Time>(capacity);
@@ -249,7 +258,7 @@ pub struct Bounded<T> {
 }
 
 impl<T: Copy> Bounded<T> {
-    pub fn make<'a, S: Context<'a>, R: Context<'a>>(
+    pub fn make<S: Context, R: Context>(
         capacity: usize,
         sender: &S,
         receiver: &R,
