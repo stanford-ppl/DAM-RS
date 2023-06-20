@@ -1,12 +1,12 @@
 pub mod utils;
 
-use std::marker::PhantomData;
-
-use crate::{
-    context::{view::*, Context},
-    time::Time,
-    types::Cleanable,
+use std::{
+    marker::PhantomData,
+    sync::{Arc, RwLock},
 };
+
+use crate::context::Context;
+use crate::{context::view::*, time::Time, types::Cleanable};
 use crossbeam::channel::{self, select, SendError};
 
 #[derive(Clone, Copy, Debug)]
@@ -21,11 +21,35 @@ impl<T: Copy> ChannelElement<T> {
     }
 }
 
-type ViewType = Box<dyn ContextView>;
+type ViewType = Option<Box<dyn ContextView>>;
 
 enum SenderState<T> {
     Open(channel::Sender<T>),
     Closed,
+}
+
+#[derive(Default)]
+struct ViewData {
+    pub sender: ViewType,
+    pub receiver: ViewType,
+}
+
+#[derive(Default)]
+struct ViewStruct {
+    pub sender_views: RwLock<ViewData>,
+    pub receiver_views: RwLock<ViewData>,
+}
+
+impl ViewStruct {
+    pub fn attach_sender(&self, sender: &dyn Context) {
+        self.sender_views.write().unwrap().sender = Some(sender.view());
+        self.receiver_views.write().unwrap().sender = Some(sender.view());
+    }
+
+    pub fn attach_receiver(&self, receiver: &dyn Context) {
+        self.sender_views.write().unwrap().receiver = Some(receiver.view());
+        self.receiver_views.write().unwrap().receiver = Some(receiver.view());
+    }
 }
 
 pub struct Sender<T> {
@@ -34,8 +58,7 @@ pub struct Sender<T> {
     send_receive_delta: usize,
     capacity: usize,
 
-    sender: ViewType,
-    receiver: ViewType,
+    view_struct: Arc<ViewStruct>,
     backlog: Option<Time>,
     next_available: Option<Time>,
 }
@@ -48,6 +71,17 @@ impl<T: Copy> Sender<T> {
         }
     }
 
+    fn sender_tlb(&self) -> Time {
+        self.view_struct
+            .sender_views
+            .read()
+            .unwrap()
+            .sender
+            .as_ref()
+            .unwrap()
+            .tick_lower_bound()
+    }
+
     // This drops the underlying channel
     pub fn close(&mut self) {
         self.underlying = SenderState::Closed;
@@ -57,15 +91,19 @@ impl<T: Copy> Sender<T> {
         if self.is_full() {
             match self.next_available {
                 Some(time) => return Result::Err(time),
-                None => return Result::Err(self.sender.tick_lower_bound() + 1),
+                None => return Result::Err(self.sender_tlb() + 1),
             }
         }
 
         assert!(self.send_receive_delta < self.capacity);
-        assert!(elem.time >= self.sender.tick_lower_bound());
+        assert!(elem.time >= self.sender_tlb());
         self.under_send(elem).unwrap();
         self.send_receive_delta += 1;
         Ok(())
+    }
+
+    pub fn attach_sender(&mut self, sender: &dyn Context) {
+        self.view_struct.attach_sender(sender);
     }
 
     fn is_full(&mut self) -> bool {
@@ -78,7 +116,7 @@ impl<T: Copy> Sender<T> {
     }
 
     fn update_len(&mut self) {
-        let send_time = self.sender.tick_lower_bound();
+        let send_time = self.sender_tlb();
         if let Some(time) = self.backlog {
             if time < send_time {
                 self.backlog = None;
@@ -90,7 +128,15 @@ impl<T: Copy> Sender<T> {
             }
         }
 
-        let signal = self.receiver.signal_when(send_time);
+        let signal = self
+            .view_struct
+            .sender_views
+            .read()
+            .unwrap()
+            .receiver
+            .as_ref()
+            .unwrap()
+            .signal_when(send_time);
         let mut update_srd = |time: Time, next_avail: &mut Option<Time>| {
             if send_time < time {
                 *next_avail = Some(time);
@@ -138,8 +184,7 @@ pub struct Receiver<T> {
     underlying: ReceiverState<ChannelElement<T>>,
     resp: channel::Sender<Time>,
 
-    sender: ViewType,
-    receiver: ViewType,
+    view_struct: Arc<ViewStruct>,
     head: Option<Recv<T>>,
 }
 
@@ -162,8 +207,19 @@ impl<T: Copy> Receiver<T> {
         }
     }
 
+    fn receiver_tlb(&self) -> Time {
+        self.view_struct
+            .receiver_views
+            .read()
+            .unwrap()
+            .sender
+            .as_ref()
+            .unwrap()
+            .tick_lower_bound()
+    }
+
     pub fn peek(&mut self) -> Recv<T> {
-        let recv_time = self.receiver.tick_lower_bound();
+        let recv_time = self.receiver_tlb();
         match self.head {
             Some(Recv::Nothing(time)) if time >= recv_time => {
                 return Recv::Nothing(time);
@@ -189,7 +245,15 @@ impl<T: Copy> Receiver<T> {
             return stuff;
         }
 
-        let signal = self.sender.signal_when(recv_time);
+        let signal = self
+            .view_struct
+            .receiver_views
+            .read()
+            .unwrap()
+            .sender
+            .as_ref()
+            .unwrap()
+            .signal_when(recv_time);
         select! {
             recv(signal) -> send_time => {
                 if let Some(stuff) = update_head(self.under()) {
@@ -212,10 +276,14 @@ impl<T: Copy> Receiver<T> {
         let res = self.peek();
         self.head = None;
         if let Recv::Something(stuff) = res {
-            let ct = self.receiver.tick_lower_bound();
+            let ct = self.receiver_tlb();
             let _ = self.resp.send(ct.max(stuff.time));
         }
         res
+    }
+
+    pub fn attach_receiver(&mut self, receiver: &dyn Context) {
+        self.view_struct.attach_receiver(receiver);
     }
 }
 
@@ -225,29 +293,26 @@ impl<T: Copy> Cleanable for Receiver<T> {
     }
 }
 
-fn bounded_internal<T, S, R>(capacity: usize, sender: &S, receiver: &R) -> (Sender<T>, Receiver<T>)
+fn bounded_internal<T>(capacity: usize) -> (Sender<T>, Receiver<T>)
 where
     T: Copy,
-    S: Context,
-    R: Context,
 {
     let (tx, rx) = channel::bounded::<ChannelElement<T>>(capacity);
     let (resp_t, resp_r) = channel::bounded::<Time>(capacity);
+    let view_struct = Arc::new(ViewStruct::default());
     let snd = Sender {
         underlying: SenderState::Open(tx),
         resp: resp_r,
         send_receive_delta: 0,
         capacity,
-        sender: sender.view(),
-        receiver: receiver.view(),
+        view_struct: view_struct.clone(),
         backlog: None,
         next_available: None,
     };
     let rcv = Receiver {
         underlying: ReceiverState::Open(rx),
         resp: resp_t,
-        sender: sender.view(),
-        receiver: receiver.view(),
+        view_struct,
         head: None,
     };
     (snd, rcv)
@@ -258,12 +323,8 @@ pub struct Bounded<T> {
 }
 
 impl<T: Copy> Bounded<T> {
-    pub fn make<S: Context, R: Context>(
-        capacity: usize,
-        sender: &S,
-        receiver: &R,
-    ) -> (Sender<T>, Receiver<T>) {
-        bounded_internal(capacity, sender, receiver)
+    pub fn make(capacity: usize) -> (Sender<T>, Receiver<T>) {
+        bounded_internal(capacity)
     }
 }
 

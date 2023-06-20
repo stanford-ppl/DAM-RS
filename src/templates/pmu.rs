@@ -5,7 +5,7 @@ use crate::{
         utils::{dequeue, enqueue, EventTime, Peekable},
         ChannelElement, Receiver, Sender,
     },
-    context::{view::TimeManager, Context, ContextView},
+    context::{self, view::TimeManager, Context, ContextView},
     time::Time,
     types::DAMType,
 };
@@ -102,9 +102,15 @@ struct ReadPipeline<T: DAMType, IT: DAMType> {
     writer_view: Option<Box<dyn ContextView>>,
 }
 
-impl<T: DAMType, IT: DAMType> ReadPipeline<T, IT> {
+impl<T: DAMType, IT: DAMType> ReadPipeline<T, IT>
+where
+    ReadPipeline<T, IT>: context::Context,
+{
     pub fn add_reader(&mut self, reader: PMUReadBundle<T, IT>) {
-        self.readers.push(reader);
+        let mut rd = reader;
+        rd.addr.attach_receiver(self);
+        rd.resp.attach_sender(self);
+        self.readers.push(rd);
     }
 
     fn await_writer(&mut self) -> crossbeam::channel::Receiver<Time> {
@@ -119,7 +125,7 @@ impl<T: DAMType, IT: DAMType> Context for ReadPipeline<T, IT>
 where
     usize: From<IT>,
 {
-    fn init(&mut self) {} // Do nothing for init
+    fn init(&mut self) {}
 
     fn run(&mut self) {
         loop {
@@ -185,9 +191,16 @@ struct WritePipeline<T: DAMType, IT: DAMType, AT: DAMType> {
     datastore: Arc<Datastore<T>>,
 }
 
-impl<T: DAMType, IT: DAMType, AT: DAMType> WritePipeline<T, IT, AT> {
+impl<T: DAMType, IT: DAMType, AT: DAMType> WritePipeline<T, IT, AT>
+where
+    WritePipeline<T, IT, AT>: context::Context,
+{
     pub fn add_writer(&mut self, writer: PMUWriteBundle<T, IT, AT>) {
-        self.writers.push(writer);
+        let mut wr = writer;
+        wr.addr.attach_receiver(self);
+        wr.data.attach_receiver(self);
+        wr.ack.attach_sender(self);
+        self.writers.push(wr);
     }
 }
 
@@ -286,11 +299,20 @@ mod tests {
         let mut write_issue = FunctionContext::default();
         let mut read_issue = FunctionContext::default();
         let mut checker = FunctionContext::default();
-        let (write_ack_send, write_ack_recv) = Bounded::<bool>::make(8, &pmu.writer, &read_issue);
-        let (write_addr_send, write_addr_recv) = Bounded::<u16>::make(8, &write_issue, &pmu.writer);
-        let (write_data_send, write_data_recv) = Bounded::<i32>::make(8, &write_issue, &pmu.writer);
-        let (read_addr_send, read_addr_recv) = Bounded::<u16>::make(8, &read_issue, &pmu.reader);
-        let (read_data_send, read_data_recv) = Bounded::<i32>::make(8, &pmu.reader, &checker);
+        let (write_ack_send, mut write_ack_recv) = Bounded::<bool>::make(8);
+        write_ack_recv.attach_receiver(&read_issue);
+
+        let (mut write_addr_send, write_addr_recv) = Bounded::<u16>::make(8);
+        write_addr_send.attach_sender(&write_issue);
+
+        let (mut write_data_send, write_data_recv) = Bounded::<i32>::make(8);
+        write_data_send.attach_sender(&write_issue);
+
+        let (mut read_addr_send, read_addr_recv) = Bounded::<u16>::make(8);
+        read_addr_send.attach_sender(&read_issue);
+
+        let (read_data_send, mut read_data_recv) = Bounded::<i32>::make(8);
+        read_data_recv.attach_receiver(&checker);
 
         let wr_addr_send = Arc::new(Mutex::new(write_addr_send));
         let wr_data_send = Arc::new(Mutex::new(write_data_send));
