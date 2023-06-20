@@ -274,8 +274,9 @@ mod tests {
 
     use crate::{
         channel::{
+            bounded,
             utils::{dequeue, enqueue},
-            Bounded, ChannelElement,
+            ChannelElement,
         },
         context::{
             function_context::FunctionContext, parent::BasicParentContext, Context, ParentContext,
@@ -299,19 +300,19 @@ mod tests {
         let mut write_issue = FunctionContext::default();
         let mut read_issue = FunctionContext::default();
         let mut checker = FunctionContext::default();
-        let (write_ack_send, mut write_ack_recv) = Bounded::<bool>::make(8);
+        let (write_ack_send, mut write_ack_recv) = bounded::<bool>(8);
         write_ack_recv.attach_receiver(&read_issue);
 
-        let (mut write_addr_send, write_addr_recv) = Bounded::<u16>::make(8);
+        let (mut write_addr_send, write_addr_recv) = bounded::<u16>(8);
         write_addr_send.attach_sender(&write_issue);
 
-        let (mut write_data_send, write_data_recv) = Bounded::<i32>::make(8);
+        let (mut write_data_send, write_data_recv) = bounded::<i32>(8);
         write_data_send.attach_sender(&write_issue);
 
-        let (mut read_addr_send, read_addr_recv) = Bounded::<u16>::make(8);
+        let (mut read_addr_send, read_addr_recv) = bounded::<u16>(8);
         read_addr_send.attach_sender(&read_issue);
 
-        let (read_data_send, mut read_data_recv) = Bounded::<i32>::make(8);
+        let (read_data_send, mut read_data_recv) = bounded::<i32>(8);
         read_data_recv.attach_receiver(&checker);
 
         let wr_addr_send = Arc::new(Mutex::new(write_addr_send));

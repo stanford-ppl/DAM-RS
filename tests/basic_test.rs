@@ -17,7 +17,7 @@ mod tests {
         const TEST_SIZE: i32 = 32;
         let mut writer = FunctionContext::default();
         let mut reader = FunctionContext::default();
-        let (mut snd, mut rcv) = dam_rs::channel::Bounded::<i32>::make(8);
+        let (mut snd, mut rcv) = dam_rs::channel::bounded::<i32>(8);
         snd.attach_sender(&writer);
         rcv.attach_receiver(&reader);
         let send_mut = Mutex::new(snd);

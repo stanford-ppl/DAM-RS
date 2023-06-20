@@ -1,9 +1,6 @@
 pub mod utils;
 
-use std::{
-    marker::PhantomData,
-    sync::{Arc, RwLock},
-};
+use std::sync::{Arc, RwLock};
 
 use crate::context::Context;
 use crate::{context::view::*, time::Time, types::Cleanable};
@@ -293,7 +290,7 @@ impl<T: Copy> Cleanable for Receiver<T> {
     }
 }
 
-fn bounded_internal<T>(capacity: usize) -> (Sender<T>, Receiver<T>)
+pub fn bounded<T>(capacity: usize) -> (Sender<T>, Receiver<T>)
 where
     T: Copy,
 {
@@ -316,16 +313,6 @@ where
         head: None,
     };
     (snd, rcv)
-}
-
-pub struct Bounded<T> {
-    phantom: PhantomData<T>,
-}
-
-impl<T: Copy> Bounded<T> {
-    pub fn make(capacity: usize) -> (Sender<T>, Receiver<T>) {
-        bounded_internal(capacity)
-    }
 }
 
 #[derive(Debug)]
