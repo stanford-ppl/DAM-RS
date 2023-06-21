@@ -6,6 +6,5 @@
     },
     "rust-analyzer.linkedProjects": [
         "./Cargo.toml",
-        "./op-impls/Cargo.toml",
     ]
 }
