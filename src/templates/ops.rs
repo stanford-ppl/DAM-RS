@@ -3,7 +3,7 @@ use crate::types::DAMType;
 macro_rules! RegisterALUOp {
     ($name: ident, |($($prev_regs:ident),*), ($($next_regs:ident),*)| [$($new_next_regs:expr),*] $(, $($rules:tt)*)?) => {
         #[allow(non_snake_case, unused_assignments, unused_mut, unused_variables)]
-        fn $name<T: DAMType>() -> ALUOp<T> where  $($($rules)*)* {
+        pub fn $name<T: DAMType>() -> ALUOp<T> where  $($($rules)*)* {
 
             ALUOp::<T> {
                 name: stringify!($name),

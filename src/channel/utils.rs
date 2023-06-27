@@ -13,6 +13,33 @@ use super::Sender;
 
 use std::cmp::Ordering;
 
+pub struct RecvBundle<T> {
+    receivers: Vec<Receiver<T>>,
+}
+
+pub struct SendBundle<T> {
+    senders: Vec<Sender<T>>,
+}
+
+impl<T: DAMType> Peekable for RecvBundle<T> {
+    fn next_event(&mut self) -> EventTime {
+        let events = self.receivers.iter_mut().map(|recv| recv.next_event());
+        events.max().unwrap_or(EventTime::Closed)
+    }
+}
+
+impl<T: Copy> RecvBundle<T> {
+    fn dequeue(
+        &mut self,
+        manager: &mut TimeManager,
+    ) -> Vec<Result<ChannelElement<T>, DequeueError>> {
+        self.receivers
+            .iter_mut()
+            .map(|recv| dequeue(manager, recv))
+            .collect()
+    }
+}
+
 pub fn dequeue<T: Copy>(
     manager: &mut TimeManager,
     recv: &mut Receiver<T>,
@@ -24,6 +51,28 @@ pub fn dequeue<T: Copy>(
             Recv::Closed => return Err(DequeueError {}), // Channel is closed, so let the dequeuer know
             Recv::Something(stuff) => return Ok(stuff),
         }
+    }
+}
+
+pub fn dequeue_bundle<T: DAMType>(
+    manager: &mut TimeManager,
+    bundles: &mut Vec<RecvBundle<T>>,
+) -> Result<(Vec<ChannelElement<T>>, usize), DequeueError> {
+    let next_events = bundles.iter_mut().map(|bundle| bundle.next_event());
+    let earliest_event = next_events.enumerate().min_by_key(|(_, evt)| *evt);
+    match earliest_event {
+        Some((ind, _)) => {
+            let dequeued = bundles[ind].dequeue(manager);
+            let mut result = Vec::<ChannelElement<T>>::with_capacity(dequeued.len());
+            for sub_result in dequeued {
+                match sub_result {
+                    Ok(elem) => result.push(elem),
+                    Err(e) => return Err(e),
+                }
+            }
+            Ok((result, ind))
+        }
+        None => return Err(DequeueError {}),
     }
 }
 
@@ -47,7 +96,7 @@ pub fn enqueue<T: Copy>(
     }
 }
 
-#[derive(PartialEq, Eq, Debug)]
+#[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub enum EventTime {
     Ready(Time),
     Nothing(Time),
@@ -78,6 +127,12 @@ impl PartialOrd for EventTime {
 
 pub trait Peekable {
     fn next_event(&mut self) -> EventTime;
+}
+
+impl Peekable for EventTime {
+    fn next_event(&mut self) -> EventTime {
+        return *self;
+    }
 }
 
 impl<T: DAMType> Peekable for Receiver<T> {
