@@ -54,6 +54,20 @@ pub fn dequeue<T: Copy>(
     }
 }
 
+pub fn peek_next<T: Copy>(
+    manager: &mut TimeManager,
+    recv: &mut Receiver<T>,
+) -> Result<ChannelElement<T>, DequeueError> {
+    loop {
+        let v: Recv<T> = recv.peek();
+        match v {
+            Recv::Nothing(time) => manager.advance(time + 1), // Nothing here, so tick forward until there might be
+            Recv::Closed => return Err(DequeueError {}), // Channel is closed, so let the dequeuer know
+            Recv::Something(stuff) => return Ok(stuff),
+        }
+    }
+}
+
 pub fn dequeue_bundle<T: DAMType>(
     manager: &mut TimeManager,
     bundles: &mut Vec<RecvBundle<T>>,
