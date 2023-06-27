@@ -1,4 +1,4 @@
-pub trait DAMType: Sync + Send + Copy + Default {
+pub trait DAMType: Sync + Send + Copy + Default + core::fmt::Debug + std::cmp::PartialEq {
     // Returns the size of the object in BITS
     fn dam_size() -> usize;
 }

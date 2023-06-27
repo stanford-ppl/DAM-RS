@@ -2,7 +2,9 @@ use crate::time::Time;
 
 pub use self::view::ContextView;
 
+pub mod checker_context;
 pub mod function_context;
+pub mod generator_context;
 pub mod parent;
 pub mod view;
 

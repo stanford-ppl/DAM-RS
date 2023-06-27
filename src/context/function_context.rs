@@ -23,6 +23,7 @@ impl Context for FunctionContext {
 
     fn cleanup(&mut self) {
         (self.cleanup_fn.clone())(self);
+        self.time.cleanup();
     }
 
     fn view(&self) -> Box<dyn ContextView> {

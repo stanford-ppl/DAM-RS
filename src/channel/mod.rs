@@ -99,7 +99,7 @@ impl<T: Copy> Sender<T> {
         Ok(())
     }
 
-    pub fn attach_sender(&mut self, sender: &dyn Context) {
+    pub fn attach_sender(&self, sender: &dyn Context) {
         self.view_struct.attach_sender(sender);
     }
 
@@ -279,7 +279,7 @@ impl<T: Copy> Receiver<T> {
         res
     }
 
-    pub fn attach_receiver(&mut self, receiver: &dyn Context) {
+    pub fn attach_receiver(&self, receiver: &dyn Context) {
         self.view_struct.attach_receiver(receiver);
     }
 }
@@ -302,6 +302,31 @@ where
         resp: resp_r,
         send_receive_delta: 0,
         capacity,
+        view_struct: view_struct.clone(),
+        backlog: None,
+        next_available: None,
+    };
+    let rcv = Receiver {
+        underlying: ReceiverState::Open(rx),
+        resp: resp_t,
+        view_struct,
+        head: None,
+    };
+    (snd, rcv)
+}
+
+pub fn unbounded<T>() -> (Sender<T>, Receiver<T>)
+where
+    T: Copy,
+{
+    let (tx, rx) = channel::unbounded::<ChannelElement<T>>();
+    let (resp_t, resp_r) = channel::unbounded::<Time>();
+    let view_struct = Arc::new(ViewStruct::default());
+    let snd = Sender {
+        underlying: SenderState::Open(tx),
+        resp: resp_r,
+        send_receive_delta: 0,
+        capacity: usize::MAX,
         view_struct: view_struct.clone(),
         backlog: None,
         next_available: None,

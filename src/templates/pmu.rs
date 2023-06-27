@@ -107,7 +107,7 @@ where
     ReadPipeline<T, IT>: context::Context,
 {
     pub fn add_reader(&mut self, reader: PMUReadBundle<T, IT>) {
-        let mut rd = reader;
+        let rd = reader;
         rd.addr.attach_receiver(self);
         rd.resp.attach_sender(self);
         self.readers.push(rd);
@@ -196,7 +196,7 @@ where
     WritePipeline<T, IT, AT>: context::Context,
 {
     pub fn add_writer(&mut self, writer: PMUWriteBundle<T, IT, AT>) {
-        let mut wr = writer;
+        let wr = writer;
         wr.addr.attach_receiver(self);
         wr.data.attach_receiver(self);
         wr.ack.attach_sender(self);
@@ -300,19 +300,19 @@ mod tests {
         let mut write_issue = FunctionContext::default();
         let mut read_issue = FunctionContext::default();
         let mut checker = FunctionContext::default();
-        let (write_ack_send, mut write_ack_recv) = bounded::<bool>(8);
+        let (write_ack_send, write_ack_recv) = bounded::<bool>(8);
         write_ack_recv.attach_receiver(&read_issue);
 
-        let (mut write_addr_send, write_addr_recv) = bounded::<u16>(8);
+        let (write_addr_send, write_addr_recv) = bounded::<u16>(8);
         write_addr_send.attach_sender(&write_issue);
 
-        let (mut write_data_send, write_data_recv) = bounded::<i32>(8);
+        let (write_data_send, write_data_recv) = bounded::<i32>(8);
         write_data_send.attach_sender(&write_issue);
 
-        let (mut read_addr_send, read_addr_recv) = bounded::<u16>(8);
+        let (read_addr_send, read_addr_recv) = bounded::<u16>(8);
         read_addr_send.attach_sender(&read_issue);
 
-        let (read_data_send, mut read_data_recv) = bounded::<i32>(8);
+        let (read_data_send, read_data_recv) = bounded::<i32>(8);
         read_data_recv.attach_receiver(&checker);
 
         let wr_addr_send = Arc::new(Mutex::new(write_addr_send));
