@@ -5,7 +5,6 @@
         "editor.formatOnSave": true
     },
     "rust-analyzer.linkedProjects": [
-        "./Cargo.toml",
-        "./op-impls/Cargo.toml",
+        "./Cargo.toml"
     ]
 }
