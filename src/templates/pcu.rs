@@ -227,7 +227,7 @@ mod tests {
     fn pcu_test() {
         // two-stage PCU on scalars, with the third stage a no-op.
 
-        const CHAN_SIZE: usize = 32;
+        const CHAN_SIZE: usize = 8;
 
         let mut pcu = PCU::<u16>::new(
             super::PCUConfig {
