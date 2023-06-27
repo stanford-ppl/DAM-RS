@@ -49,7 +49,10 @@ pub fn dequeue<T: Copy>(
         match v {
             Recv::Nothing(time) => manager.advance(time + 1), // Nothing here, so tick forward until there might be
             Recv::Closed => return Err(DequeueError {}), // Channel is closed, so let the dequeuer know
-            Recv::Something(stuff) => return Ok(stuff),
+            Recv::Something(stuff) => {
+                manager.advance(stuff.time);
+                return Ok(stuff);
+            }
         }
     }
 }
@@ -63,7 +66,10 @@ pub fn peek_next<T: Copy>(
         match v {
             Recv::Nothing(time) => manager.advance(time + 1), // Nothing here, so tick forward until there might be
             Recv::Closed => return Err(DequeueError {}), // Channel is closed, so let the dequeuer know
-            Recv::Something(stuff) => return Ok(stuff),
+            Recv::Something(stuff) => {
+                manager.advance(stuff.time);
+                return Ok(stuff);
+            }
         }
     }
 }
