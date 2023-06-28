@@ -148,7 +148,7 @@ where
                                 panic!("Invalid empty inside peek");
                             }
                         };
-                        dbg!(output);
+                        // dbg!(output);
                         let curr_time = self.time.tick();
                         enqueue(
                             &mut self.time,
@@ -217,7 +217,9 @@ where
         + std::ops::Mul<ValType, Output = ValType>
         + std::ops::Add<ValType, Output = ValType>
         + std::cmp::PartialOrd<ValType>,
-    usize: From<ValType>,
+    // usize: From<ValType>,
+    ValType: TryInto<usize>,
+    <ValType as TryInto<usize>>::Error: std::fmt::Debug,
     StopType: DAMType + std::ops::Add<u32, Output = StopType>,
 {
     fn init(&mut self) {}
@@ -228,11 +230,13 @@ where
             match dequeue(&mut self.time, &mut self.rd_scan_data.in_ref) {
                 Ok(curr_ref) => match curr_ref.data {
                     Token::Val(val) => {
-                        let idx: usize = val.into();
+                        let idx: usize = val.try_into().unwrap();
+                        // let idx: usize = usize::try_from(val).unwrap();
                         let mut curr_addr = self.seg_arr[idx];
-                        let stop_addr = self.seg_arr[idx];
+                        let stop_addr = self.seg_arr[idx + 1];
                         while curr_addr < stop_addr {
-                            let read_addr: usize = curr_addr.into();
+                            let read_addr: usize = curr_addr.try_into().unwrap();
+                            // let read_addr: usize = usize::try_from(curr_addr).unwrap();
                             let coord = self.crd_arr[read_addr];
                             let curr_time = self.time.tick();
                             enqueue(
@@ -268,7 +272,7 @@ where
                                 panic!("Invalid empty inside peek");
                             }
                         };
-                        dbg!(output);
+                        // dbg!(output);
                         let curr_time = self.time.tick();
                         enqueue(
                             &mut self.time,
@@ -438,6 +442,64 @@ mod tests {
         compressed_rd_scan_test(seg_arr, crd_arr, in_ref, out_ref, out_crd);
     }
 
+    #[test]
+    fn crd_2d_test() {
+        let seg_arr = vec![0u32, 3, 4, 6];
+        let crd_arr = vec![0u32, 2, 3, 0, 2, 3];
+        let in_ref = || {
+            [
+                Token::Val(0u32),
+                Token::Val(0),
+                Token::Stop(0),
+                Token::Val(1),
+                Token::Stop(0),
+                Token::Val(2),
+                Token::Stop(1),
+                Token::Done,
+            ]
+            .into_iter()
+        };
+        let out_ref = || {
+            [0u32, 1, 2]
+                .into_iter()
+                .map(Token::Val)
+                .chain([Token::Stop(0)])
+                .chain([0u32, 1, 2].into_iter().map(Token::Val))
+                .chain(
+                    [
+                        Token::Stop(1),
+                        Token::Val(3),
+                        Token::Stop(1),
+                        Token::Val(4),
+                        Token::Val(5),
+                        Token::Stop(2),
+                        Token::Done,
+                    ]
+                    .into_iter(),
+                )
+        };
+        let out_crd = || {
+            [0u32, 2, 3]
+                .into_iter()
+                .map(Token::Val)
+                .chain([Token::Stop(0)])
+                .chain([0u32, 2, 3].into_iter().map(Token::Val))
+                .chain(
+                    [
+                        Token::Stop(1),
+                        Token::Val(0),
+                        Token::Stop(1),
+                        Token::Val(2),
+                        Token::Val(3),
+                        Token::Stop(2),
+                        Token::Done,
+                    ]
+                    .into_iter(),
+                )
+        };
+        compressed_rd_scan_test(seg_arr, crd_arr, in_ref, out_ref, out_crd);
+    }
+
     fn compressed_rd_scan_test<IRT, ORT, CRT>(
         seg_arr: Vec<u32>,
         crd_arr: Vec<u32>,
@@ -449,7 +511,6 @@ mod tests {
         CRT: Iterator<Item = Token<u32, u32>> + 'static,
         ORT: Iterator<Item = Token<u32, u32>> + 'static,
     {
-        let meta_dim: u32 = 32;
         let (ref_sender, ref_receiver) = unbounded::<Token<u32, u32>>();
         let (crd_sender, crd_receiver) = unbounded::<Token<u32, u32>>();
         let (in_ref_sender, in_ref_receiver) = unbounded::<Token<u32, u32>>();
