@@ -1,16 +1,34 @@
-use std::collections::HashMap;
+// use std::collections::HashMap;
 
-pub enum Stream {
-    i(i32),
-    f(f32),
-    s(String),
-}
+// pub enum Stream {
+//     i(i32),
+//     f(f32),
+//     s(String),
+// }
 
-#[derive(Clone, Copy)]
+use std::cmp::max;
+
+use crate::types::DAMType;
+
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Token<ValType, StopType> {
     Val(ValType),
     Stop(StopType),
+    Empty,
     Done,
+}
+
+impl<ValType: Default, StopType: Default> Default for Token<ValType, StopType> {
+    fn default() -> Self {
+        // Token::Val(ValType::default())
+        panic!("Wrong default used for token");
+    }
+}
+
+impl<ValType: DAMType, StopType: DAMType> DAMType for Token<ValType, StopType> {
+    fn dam_size() -> usize {
+        max(ValType::dam_size(), StopType::dam_size()) + 1
+    }
 }
 
 // trait Primitive {

@@ -21,6 +21,12 @@ impl DAMType for u16 {
     }
 }
 
+impl DAMType for u32 {
+    fn dam_size() -> usize {
+        32
+    }
+}
+
 pub trait Cleanable {
     fn cleanup(&mut self);
 }

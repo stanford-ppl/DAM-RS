@@ -1,12 +1,9 @@
-use std::sync::{Arc, Mutex};
-
 use crate::{
     channel::{
-        utils::{dequeue, enqueue},
+        utils::{dequeue, enqueue, peek_next},
         ChannelElement, Receiver, Sender,
     },
     context::{view::TimeManager, Context},
-    time::Time,
     types::{Cleanable, DAMType},
 };
 
@@ -46,19 +43,53 @@ pub struct UncompressedCrdRdScan<ValType, StopType> {
     time: TimeManager,
 }
 
-impl<ValType, StopType> UncompressedCrdRdScan<ValType, StopType> {
-    fn new(
+pub struct CompressedCrdRdScan<ValType, StopType> {
+    rd_scan_data: RdScanData<ValType, StopType>,
+    // meta_dim: ValType,
+    crd_arr: Vec<ValType>,
+    seg_arr: Vec<ValType>,
+    time: TimeManager,
+}
+
+impl<ValType: DAMType, StopType: DAMType> UncompressedCrdRdScan<ValType, StopType>
+where
+    UncompressedCrdRdScan<ValType, StopType>: Context,
+{
+    pub fn new(
         rd_scan_data: RdScanData<ValType, StopType>,
         meta_dim: ValType,
     ) -> UncompressedCrdRdScan<ValType, StopType> {
-        let mut ucr = UncompressedCrdRdScan {
+        let ucr = UncompressedCrdRdScan {
             rd_scan_data,
             meta_dim,
             time: TimeManager::default(),
         };
-        ucr.rd_scan_data.in_ref.attach_receiver(ucr);
-        ucr.rd_scan_data.out_ref.attach_sender(ucr);
-        ucr.rd_scan_data.out_crd.attach_sender(ucr);
+        (ucr.rd_scan_data.in_ref).attach_receiver(&ucr);
+        (ucr.rd_scan_data.out_ref).attach_sender(&ucr);
+        (ucr.rd_scan_data.out_crd).attach_sender(&ucr);
+
+        ucr
+    }
+}
+
+impl<ValType: DAMType, StopType: DAMType> CompressedCrdRdScan<ValType, StopType>
+where
+    CompressedCrdRdScan<ValType, StopType>: Context,
+{
+    pub fn new(
+        rd_scan_data: RdScanData<ValType, StopType>,
+        crd_arr: Vec<ValType>,
+        seg_arr: Vec<ValType>,
+    ) -> Self {
+        let ucr = CompressedCrdRdScan {
+            rd_scan_data,
+            crd_arr,
+            seg_arr,
+            time: TimeManager::default(),
+        };
+        (ucr.rd_scan_data.in_ref).attach_receiver(&ucr);
+        (ucr.rd_scan_data.out_ref).attach_sender(&ucr);
+        (ucr.rd_scan_data.out_crd).attach_sender(&ucr);
 
         ucr
     }
@@ -69,12 +100,13 @@ where
     ValType: DAMType
         + std::ops::AddAssign<u32>
         + std::ops::Mul<ValType, Output = ValType>
-        + std::ops::Add<ValType, Output = ValType>,
+        + std::ops::Add<ValType, Output = ValType>
+        + std::cmp::PartialOrd<ValType>,
     StopType: DAMType + std::ops::Add<u32, Output = StopType>,
 {
     fn init(&mut self) {}
 
-    fn run(&mut self) -> ! {
+    fn run(&mut self) {
         // let mut curr_crd: Token<ValType, StopType>
         loop {
             match dequeue(&mut self.time, &mut self.rd_scan_data.in_ref) {
@@ -86,29 +118,48 @@ where
                             enqueue(
                                 &mut self.time,
                                 &mut self.rd_scan_data.out_crd,
-                                ChannelElement::new(curr_time + 1, crd_count),
+                                ChannelElement::new(
+                                    curr_time + 1,
+                                    super::primitive::Token::Val(crd_count),
+                                ),
                             )
                             .unwrap();
-                            crd_count += 1;
                             enqueue(
                                 &mut self.time,
                                 &mut self.rd_scan_data.out_ref,
-                                ChannelElement::new(curr_time + 1, crd_count + val * self.meta_dim),
+                                ChannelElement::new(
+                                    curr_time + 1,
+                                    super::primitive::Token::Val(crd_count + val * self.meta_dim),
+                                ),
                             )
                             .unwrap();
+                            crd_count += 1;
                             self.time.incr_cycles(1);
                         }
+                        let next_tkn =
+                            peek_next(&mut self.time, &mut self.rd_scan_data.in_ref).unwrap();
+                        let output: Token<ValType, StopType> = match next_tkn.data {
+                            Token::Val(_) | Token::Done => Token::Stop(StopType::default()),
+                            Token::Stop(stop_tkn) => {
+                                dequeue(&mut self.time, &mut self.rd_scan_data.in_ref).unwrap();
+                                Token::Stop(stop_tkn + 1)
+                            }
+                            Token::Empty => {
+                                panic!("Invalid empty inside peek");
+                            }
+                        };
+                        dbg!(output);
                         let curr_time = self.time.tick();
                         enqueue(
                             &mut self.time,
                             &mut self.rd_scan_data.out_crd,
-                            ChannelElement::new(curr_time + 1, Token::Stop(StopType::default())),
+                            ChannelElement::new(curr_time + 1, output),
                         )
                         .unwrap();
                         enqueue(
                             &mut self.time,
                             &mut self.rd_scan_data.out_ref,
-                            ChannelElement::new(curr_time + 1, Token::Stop(StopType::default())),
+                            ChannelElement::new(curr_time + 1, output),
                         )
                         .unwrap();
                     }
@@ -127,7 +178,18 @@ where
                         )
                         .unwrap();
                     }
-                    Token::Done => return,
+                    // Could either be a done token or an empty token
+                    // In the case of done token, return
+                    tkn => {
+                        let channel_elem = ChannelElement::new(self.time.tick() + 1, tkn);
+                        enqueue(&mut self.time, &mut self.rd_scan_data.out_crd, channel_elem)
+                            .unwrap();
+                        enqueue(&mut self.time, &mut self.rd_scan_data.out_ref, channel_elem)
+                            .unwrap();
+                        if tkn == Token::Done {
+                            return;
+                        }
+                    }
                 },
                 Err(_) => panic!("Error: rd_scan_data dequeue error"),
             }
@@ -150,6 +212,89 @@ where
 
 #[cfg(test)]
 mod tests {
+    use crate::{
+        channel::unbounded,
+        context::{
+            checker_context::CheckerContext, generator_context::GeneratorContext,
+            parent::BasicParentContext, Context, ParentContext,
+        },
+        templates::sam::primitive::Token,
+    };
+
+    use super::RdScanData;
+    use super::UncompressedCrdRdScan;
+
     #[test]
-    fn pcu_test() {}
+    fn ucrd_1d_test() {
+        let in_ref = || [Token::Val(0u32), Token::Done].into_iter();
+        let out_ref = || {
+            (0u32..32)
+                .map(Token::Val)
+                .chain([Token::Stop(0), Token::Done])
+        };
+        uncompressed_rd_scan_test(in_ref, out_ref, out_ref);
+    }
+
+    #[test]
+    fn ucrd_2d_test() {
+        let in_ref = || {
+            (0u32..4)
+                .map(Token::Val)
+                .chain([Token::Stop(0), Token::Done])
+        };
+        let out_ref = || {
+            (0u32..32)
+                .map(Token::Val)
+                .chain([Token::Stop(0)])
+                .chain((32u32..64).map(Token::Val))
+                .chain([Token::Stop(0)])
+                .chain((64u32..96).map(Token::Val))
+                .chain([Token::Stop(0)])
+                .chain((96u32..128).map(Token::Val))
+                .chain([Token::Stop(1), Token::Done])
+        };
+        let out_crd = || {
+            (0u32..32)
+                .map(Token::Val)
+                .chain([Token::Stop(0)])
+                .cycle()
+                // Repeat 3 fibers with stops and another fiber without the first level stop token since it gets replaced with second level stop
+                .take(33 * 4 - 1)
+                .chain([Token::Stop(1), Token::Done])
+        };
+        uncompressed_rd_scan_test(in_ref, out_ref, out_crd);
+    }
+
+    // #[test]
+    fn uncompressed_rd_scan_test<IRT, ORT, CRT>(
+        in_ref: fn() -> IRT,
+        out_ref: fn() -> ORT,
+        out_crd: fn() -> CRT,
+    ) where
+        IRT: Iterator<Item = Token<u32, u32>> + 'static,
+        CRT: Iterator<Item = Token<u32, u32>> + 'static,
+        ORT: Iterator<Item = Token<u32, u32>> + 'static,
+    {
+        let meta_dim: u32 = 32;
+        let (ref_sender, ref_receiver) = unbounded::<Token<u32, u32>>();
+        let (crd_sender, crd_receiver) = unbounded::<Token<u32, u32>>();
+        let (in_ref_sender, in_ref_receiver) = unbounded::<Token<u32, u32>>();
+        let data = RdScanData::<u32, u32> {
+            in_ref: in_ref_receiver,
+            out_ref: ref_sender,
+            out_crd: crd_sender,
+        };
+        let mut ucr = UncompressedCrdRdScan::new(data, meta_dim);
+        let mut gen1 = GeneratorContext::new(in_ref, in_ref_sender);
+        let mut crd_checker = CheckerContext::new(out_crd, crd_receiver);
+        let mut ref_checker = CheckerContext::new(out_ref, ref_receiver);
+        let mut parent = BasicParentContext::default();
+        parent.add_child(&mut gen1);
+        parent.add_child(&mut crd_checker);
+        parent.add_child(&mut ref_checker);
+        parent.add_child(&mut ucr);
+        parent.init();
+        parent.run();
+        parent.cleanup();
+    }
 }
