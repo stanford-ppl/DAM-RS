@@ -6,11 +6,12 @@ use crate::{
 
 use super::primitive::Token;
 
-pub struct WrScanData<ValType, StopType> {
+pub struct ComputeData<ValType, StopType> {
     // curr_ref: Token,
     // curr_crd: Stream,
-    input: Receiver<Token<ValType, StopType>>,
-    // out_ref: Sender<Token<ValType, StopType>>,
+    in1: Receiver<Token<ValType, StopType>>,
+    in2: Receiver<Token<ValType, StopType>>,
+    out_val: Sender<Token<ValType, StopType>>,
     // out_crd: Sender<Token<ValType, StopType>>,
     // end_fiber: bool,
     // emit_tkn: bool,
@@ -20,9 +21,11 @@ pub struct WrScanData<ValType, StopType> {
     // begin: bool,
 }
 
-impl<ValType: DAMType, StopType: DAMType> Cleanable for WrScanData<ValType, StopType> {
+impl<ValType: DAMType, StopType: DAMType> Cleanable for ComputeData<ValType, StopType> {
     fn cleanup(&mut self) {
-        self.input.cleanup();
+        self.in1.cleanup();
+        self.in2.cleanup();
+        self.out_val.cleanup();
     }
 }
 
