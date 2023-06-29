@@ -18,15 +18,6 @@ pub struct PCUConfig {
     num_registers: usize,
 }
 
-trait Operation<T: DAMType> {
-    fn execute(
-        previous: &[PipelineRegister<T>],
-        next: &[PipelineRegister<T>],
-    ) -> Vec<PipelineRegister<T>>;
-
-    fn name() -> &'static str;
-}
-
 #[derive(Debug)]
 pub struct PipelineStage<ET: Copy> {
     op: ALUOp<ET>,
@@ -113,7 +104,7 @@ pub struct PCU<ElementType: DAMType> {
 }
 
 impl<ElementType: DAMType> PCU<ElementType> {
-    fn new(
+    pub fn new(
         configuration: PCUConfig,
         ingress_op: IngressOpType<ElementType>,
         egress_op: EgressOpType<ElementType>,
@@ -137,7 +128,7 @@ impl<ElementType: DAMType> PCU<ElementType> {
         }
     }
 
-    const READ_ALL_INPUTS: IngressOpType<ElementType> = |ics, regs, time| {
+    pub const READ_ALL_INPUTS: IngressOpType<ElementType> = |ics, regs, time| {
         let mut reads: Vec<_> = ics
             .lock()
             .unwrap()
@@ -155,7 +146,7 @@ impl<ElementType: DAMType> PCU<ElementType> {
         return true;
     };
 
-    const WRITE_ALL_RESULTS: EgressOpType<ElementType> = |ocs, regs, out_time, manager| {
+    pub const WRITE_ALL_RESULTS: EgressOpType<ElementType> = |ocs, regs, out_time, manager| {
         ocs.lock()
             .unwrap()
             .iter_mut()
@@ -173,17 +164,17 @@ impl<ElementType: DAMType> PCU<ElementType> {
             });
     };
 
-    fn push_stage(&mut self, stage: PipelineStage<ElementType>) {
+    pub fn push_stage(&mut self, stage: PipelineStage<ElementType>) {
         self.stages.push(stage);
         assert!(self.stages.len() <= self.configuration.pipeline_depth);
     }
 
-    fn add_input_channel(&mut self, recv: Receiver<ElementType>) {
+    pub fn add_input_channel(&mut self, recv: Receiver<ElementType>) {
         recv.attach_receiver(self);
         self.input_channels.lock().unwrap().push(recv);
     }
 
-    fn add_output_channel(&mut self, send: Sender<ElementType>) {
+    pub fn add_output_channel(&mut self, send: Sender<ElementType>) {
         send.attach_sender(self);
         self.output_channels.lock().unwrap().push(send);
     }
