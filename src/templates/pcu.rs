@@ -14,17 +14,17 @@ use super::ops::{ALUOp, PipelineRegister};
 
 #[derive(Debug)]
 pub struct PCUConfig {
-    pipeline_depth: usize,
-    num_registers: usize,
+    pub pipeline_depth: usize,
+    pub num_registers: usize,
 }
 
 #[derive(Debug)]
 pub struct PipelineStage<ET: Copy> {
-    op: ALUOp<ET>,
-    forward: Vec<(usize, usize)>,
-    prev_register_ids: Vec<usize>,
-    next_register_ids: Vec<usize>,
-    output_register_ids: Vec<usize>,
+    pub op: ALUOp<ET>,
+    pub forward: Vec<(usize, usize)>,
+    pub prev_register_ids: Vec<usize>,
+    pub next_register_ids: Vec<usize>,
+    pub output_register_ids: Vec<usize>,
 }
 
 impl<ET: DAMType> PipelineStage<ET> {
