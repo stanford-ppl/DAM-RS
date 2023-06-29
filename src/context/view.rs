@@ -43,7 +43,11 @@ impl TimeManager {
             if write.time > new {
                 return;
             }
-            write.time = new;
+            if new.is_infinite() {
+                write.time.set_infinite();
+            } else {
+                write.time = new;
+            }
         }
         self.scan_and_write_signals();
     }

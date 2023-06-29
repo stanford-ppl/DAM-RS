@@ -8,10 +8,7 @@ pub struct Time {
 
 impl Time {
     pub fn new(time: u64) -> Self {
-        Self {
-            time,
-            done: false,
-        }
+        Self { time, done: false }
     }
 
     pub fn infinite() -> Self {
@@ -23,6 +20,10 @@ impl Time {
 
     pub fn is_infinite(&self) -> bool {
         self.done
+    }
+
+    pub fn set_infinite(&mut self) {
+        self.done = true;
     }
 
     fn cmp(&self, other: &Self) -> Ordering {
