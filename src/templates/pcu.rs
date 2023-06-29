@@ -1,7 +1,10 @@
 use std::sync::{Arc, Mutex};
 
 use crate::{
-    channel::{Receiver, Sender},
+    channel::{
+        utils::{dequeue, enqueue},
+        ChannelElement, Receiver, Sender,
+    },
     context::{view::TimeManager, Context},
     time::Time,
     types::DAMType,
@@ -134,6 +137,42 @@ impl<ElementType: DAMType> PCU<ElementType> {
         }
     }
 
+    const READ_ALL_INPUTS: IngressOpType<ElementType> = |ics, regs, time| {
+        let mut reads: Vec<_> = ics
+            .lock()
+            .unwrap()
+            .iter_mut()
+            .map(|recv| dequeue(time, recv))
+            .collect();
+
+        for (ind, read) in reads.iter_mut().enumerate() {
+            if let Err(_) = read {
+                return false;
+            }
+            regs[ind].data = read.as_ref().unwrap().data;
+        }
+
+        return true;
+    };
+
+    const WRITE_ALL_RESULTS: EgressOpType<ElementType> = |ocs, regs, out_time, manager| {
+        ocs.lock()
+            .unwrap()
+            .iter_mut()
+            .enumerate()
+            .for_each(|(ind, out_chan)| {
+                enqueue(
+                    manager,
+                    out_chan,
+                    ChannelElement {
+                        time: out_time,
+                        data: regs[ind].data,
+                    },
+                )
+                .unwrap();
+            });
+    };
+
     fn push_stage(&mut self, stage: PipelineStage<ElementType>) {
         self.stages.push(stage);
         assert!(self.stages.len() <= self.configuration.pipeline_depth);
@@ -209,11 +248,7 @@ impl<ElementType: DAMType> Context for PCU<ElementType> {
 mod tests {
 
     use crate::{
-        channel::{
-            bounded,
-            utils::{dequeue, enqueue},
-            ChannelElement,
-        },
+        channel::bounded,
         context::{
             checker_context::CheckerContext, generator_context::GeneratorContext,
             parent::BasicParentContext, Context, ParentContext,
@@ -228,46 +263,16 @@ mod tests {
         // two-stage PCU on scalars, with the third stage a no-op.
 
         const CHAN_SIZE: usize = 8;
+        let ingress_op = PCU::<u16>::READ_ALL_INPUTS;
+        let egress_op = PCU::<u16>::WRITE_ALL_RESULTS;
 
         let mut pcu = PCU::<u16>::new(
             super::PCUConfig {
                 pipeline_depth: 3,
                 num_registers: 3,
             },
-            |ics, regs, time| {
-                let mut reads: Vec<_> = ics
-                    .lock()
-                    .unwrap()
-                    .iter_mut()
-                    .map(|recv| dequeue(time, recv))
-                    .collect();
-
-                for (ind, read) in reads.iter_mut().enumerate() {
-                    if let Err(_) = read {
-                        return false;
-                    }
-                    regs[ind].data = read.as_ref().unwrap().data;
-                }
-
-                return true;
-            },
-            |ocs, regs, out_time, manager| {
-                ocs.lock()
-                    .unwrap()
-                    .iter_mut()
-                    .enumerate()
-                    .for_each(|(ind, out_chan)| {
-                        enqueue(
-                            manager,
-                            out_chan,
-                            ChannelElement {
-                                time: out_time,
-                                data: regs[ind].data,
-                            },
-                        )
-                        .unwrap();
-                    });
-            },
+            ingress_op,
+            egress_op,
         );
 
         pcu.push_stage(super::PipelineStage {
