@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 crossbeam = "0.8.2"
 rayon = "1.7.0"
+num = "0.4.0"

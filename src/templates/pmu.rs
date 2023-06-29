@@ -7,24 +7,18 @@ use crate::{
     },
     context::{self, view::TimeManager, Context, ContextView},
     time::Time,
-    types::DAMType,
+    types::{DAMType, IndexLike},
 };
 
 use super::datastore::{self, Behavior, Datastore};
 
-pub struct PMU<T: DAMType, IT: DAMType, AT: DAMType>
-where
-    usize: From<IT>,
-{
+pub struct PMU<T: DAMType, IT: IndexLike, AT: DAMType> {
     time: TimeManager,
     reader: ReadPipeline<T, IT>,
     writer: WritePipeline<T, IT, AT>,
 }
 
-impl<T: DAMType, IT: DAMType, AT: DAMType> Context for PMU<T, IT, AT>
-where
-    usize: From<IT>,
-{
+impl<T: DAMType, IT: IndexLike, AT: DAMType> Context for PMU<T, IT, AT> {
     fn init(&mut self) {
         self.reader.init();
         self.writer.init();
@@ -50,10 +44,7 @@ where
     }
 }
 
-impl<T: DAMType, IT: DAMType, AT: DAMType> PMU<T, IT, AT>
-where
-    usize: From<IT>,
-{
+impl<T: DAMType, IT: IndexLike, AT: DAMType> PMU<T, IT, AT> {
     pub fn new(capacity: usize, behavior: Behavior) -> PMU<T, IT, AT> {
         // This could probably somehow be embedded into the PMU instead of being an Arc.
         let datastore = Arc::new(Datastore::new(capacity, behavior));
@@ -121,10 +112,7 @@ where
     }
 }
 
-impl<T: DAMType, IT: DAMType> Context for ReadPipeline<T, IT>
-where
-    usize: From<IT>,
-{
+impl<T: DAMType, IT: IndexLike> Context for ReadPipeline<T, IT> {
     fn init(&mut self) {}
 
     fn run(&mut self) {
@@ -162,7 +150,7 @@ where
             let deq_reader = self.readers.get_mut(event_ind).unwrap();
             let elem = dequeue(&mut self.time, &mut deq_reader.addr).unwrap();
 
-            let addr: usize = elem.data.into();
+            let addr: usize = elem.data.to_usize();
             let cur_time = self.time.tick();
             let rv = self.datastore.read(addr, cur_time);
             enqueue(
@@ -191,7 +179,7 @@ struct WritePipeline<T: DAMType, IT: DAMType, AT: DAMType> {
     datastore: Arc<Datastore<T>>,
 }
 
-impl<T: DAMType, IT: DAMType, AT: DAMType> WritePipeline<T, IT, AT>
+impl<T: DAMType, IT: IndexLike, AT: DAMType> WritePipeline<T, IT, AT>
 where
     WritePipeline<T, IT, AT>: context::Context,
 {
@@ -204,10 +192,7 @@ where
     }
 }
 
-impl<T: DAMType, IT: DAMType, AT: DAMType> Context for WritePipeline<T, IT, AT>
-where
-    usize: From<IT>,
-{
+impl<T: DAMType, IT: IndexLike, AT: DAMType> Context for WritePipeline<T, IT, AT> {
     fn init(&mut self) {} // Do nothing for init
 
     fn run(&mut self) {
@@ -244,7 +229,7 @@ where
             let addr_elem = dequeue(&mut self.time, &mut deq_writer.addr).unwrap();
             let data_elem = dequeue(&mut self.time, &mut deq_writer.data).unwrap();
 
-            let addr: usize = addr_elem.data.into();
+            let addr: usize = addr_elem.data.to_usize();
             let cur_time = self.time.tick();
             self.datastore.write(addr, data_elem.data, self.time.tick());
             enqueue(
