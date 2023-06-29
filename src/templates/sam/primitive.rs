@@ -6,9 +6,9 @@
 //     s(String),
 // }
 
-use std::cmp::max;
+use std::{cmp::max, process::Output};
 
-use crate::types::DAMType;
+use crate::{templates::ops::ALUOp, types::DAMType};
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Token<ValType, StopType> {
@@ -22,6 +22,30 @@ impl<ValType: Default, StopType: Default> Default for Token<ValType, StopType> {
     fn default() -> Self {
         // Token::Val(ValType::default())
         panic!("Wrong default used for token");
+    }
+}
+
+// impl<ValType, StopType> PartialEq for Token<ValType, StopType> {
+//     fn eq(&self, other: &Self) -> bool {
+//         match (self, other) {
+//             (Self::Apple, Self::Apple) | (Self::Orange, Self::Orange) => true,
+//             _ => false,
+//         }
+//     }
+// }
+
+impl<
+        ValType: Copy + std::ops::Add<Output = ValType>,
+        StopType: Copy + std::ops::Add<Output = StopType>,
+    > Token<ValType, StopType>
+{
+    fn add(self, rhs: Token<ValType, StopType>) -> Token<ValType, StopType> {
+        match rhs {
+            Token::Val(_) => todo!(),
+            Token::Stop(_) => todo!(),
+            Token::Empty => todo!(),
+            Token::Done => todo!(),
+        }
     }
 }
 
