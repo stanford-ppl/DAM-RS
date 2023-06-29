@@ -155,7 +155,7 @@ impl Peekable for EventTime {
     }
 }
 
-impl<T: DAMType> Peekable for Receiver<T> {
+impl<T: Copy> Peekable for Receiver<T> {
     fn next_event(&mut self) -> EventTime {
         match self.peek() {
             Recv::Closed => EventTime::Closed,

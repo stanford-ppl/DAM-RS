@@ -21,6 +21,19 @@ impl DAMType for u16 {
     }
 }
 
+pub trait IndexLike: DAMType + TryInto<usize> + num::Num {
+    fn to_usize(self) -> usize {
+        match self.try_into() {
+            Ok(s) => s,
+            Err(_) => panic!("Could not convert {self:?} to usize!"),
+        }
+    }
+}
+
+impl<T> IndexLike for T where T: DAMType + Into<usize> + num::Num {}
+
+pub trait IntegerLike: DAMType + num::Num {}
+
 pub trait Cleanable {
     fn cleanup(&mut self);
 }
