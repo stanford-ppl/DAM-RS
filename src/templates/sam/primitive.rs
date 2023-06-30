@@ -40,6 +40,11 @@ impl<ValType: DAMType, StopType: DAMType> DAMType for Token<ValType, StopType> {
     }
 }
 
+// impl<ValType: DAMType, StopType: DAMType> std::ops::Sub<u32> for Token<ValType, StopType> {
+//     type Output = Token<ValType, StopType>;
+//     fn sub(self, rhs: u32) -> Token<ValType, StopType> {}
+// }
+
 // trait Primitive {
 //     fn out_done(&self) -> bool;
 //     fn is_debug(&self) -> bool;
