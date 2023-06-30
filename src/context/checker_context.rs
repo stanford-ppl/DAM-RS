@@ -5,30 +5,38 @@ use crate::{
 
 use super::{view::TimeManager, Context};
 
-pub struct CheckerContext<T, IType>
+pub struct CheckerContext<T, IType, FType>
 where
     IType: Iterator<Item = T>,
+    FType: FnOnce() -> IType + Send + Sync,
 {
     time: TimeManager,
-    iterator: fn() -> IType,
+    iterator: Option<FType>,
     input: Receiver<T>,
 }
 
-impl<T: DAMType, IType> Context for CheckerContext<T, IType>
+impl<T: DAMType, IType, FType> Context for CheckerContext<T, IType, FType>
 where
     IType: Iterator<Item = T>,
+    FType: FnOnce() -> IType + Send + Sync,
 {
     fn init(&mut self) {}
 
     fn run(&mut self) {
-        for (ind, val) in (self.iterator)().enumerate() {
-            match dequeue(&mut self.time, &mut self.input) {
-                Ok(ChannelElement { time, data }) if data != val => {
-                    panic!("Mismatch on iteration {ind} at time {time:?}: Expected {val:?} but found {data:?}")
+        if let Some(iter) = self.iterator.take() {
+            for (ind, val) in iter().enumerate() {
+                match dequeue(&mut self.time, &mut self.input) {
+                    Ok(ChannelElement { time, data }) if data != val => {
+                        panic!("Mismatch on iteration {ind} at time {time:?}: Expected {val:?} but found {data:?}")
+                    }
+                    Ok(_) => {}
+                    Err(_) => {
+                        panic!("Ran out of things to read on iteration {ind}, expected {val:?}")
+                    }
                 }
-                Ok(_) => {}
-                Err(_) => panic!("Ran out of things to read on iteration {ind}, expected {val:?}"),
             }
+        } else {
+            panic!("Cannot run a Checker twice!");
         }
     }
 
@@ -41,14 +49,15 @@ where
     }
 }
 
-impl<T: DAMType, IType> CheckerContext<T, IType>
+impl<T: DAMType, IType, FType> CheckerContext<T, IType, FType>
 where
     IType: Iterator<Item = T>,
+    FType: FnOnce() -> IType + Send + Sync,
 {
-    pub fn new(iterator: fn() -> IType, input: Receiver<T>) -> CheckerContext<T, IType> {
+    pub fn new(iterator: FType, input: Receiver<T>) -> CheckerContext<T, IType, FType> {
         let gc = CheckerContext {
             time: TimeManager::new(),
-            iterator,
+            iterator: Some(iterator),
             input,
         };
         gc.input.attach_receiver(&gc);

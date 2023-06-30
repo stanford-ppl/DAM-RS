@@ -255,26 +255,32 @@ impl<T: DAMType, IT: IndexLike, AT: DAMType> Context for WritePipeline<T, IT, AT
 
 #[cfg(test)]
 mod tests {
-    use std::sync::{Arc, Mutex};
 
     use crate::{
         channel::{
-            bounded,
+            unbounded,
             utils::{dequeue, enqueue},
             ChannelElement,
         },
         context::{
-            function_context::FunctionContext, parent::BasicParentContext, Context, ParentContext,
+            checker_context::CheckerContext, function_context::FunctionContext,
+            generator_context::GeneratorContext, parent::BasicParentContext, Context,
+            ParentContext,
         },
-        templates::datastore::Behavior,
+        templates::{
+            datastore::Behavior,
+            pmu::{PMUReadBundle, PMUWriteBundle},
+        },
     };
 
     use super::PMU;
 
     #[test]
     fn simple_pmu_test() {
-        const TEST_SIZE: usize = 32;
-        let mut pmu = PMU::<i32, u16, bool>::new(
+        const TEST_SIZE: usize = 128;
+        let mut parent = BasicParentContext::default();
+
+        let mut pmu = PMU::<u16, u16, bool>::new(
             TEST_SIZE,
             Behavior {
                 mod_address: false,
@@ -282,130 +288,64 @@ mod tests {
             },
         );
 
-        let mut write_issue = FunctionContext::default();
-        let mut read_issue = FunctionContext::default();
-        let mut checker = FunctionContext::default();
-        let (write_ack_send, write_ack_recv) = bounded::<bool>(8);
-        write_ack_recv.attach_receiver(&read_issue);
+        let (wr_addr_send, wr_addr_recv) = unbounded::<u16>();
+        let (wr_data_send, wr_data_recv) = unbounded::<u16>();
+        let (wr_ack_send, mut wr_ack_recv) = unbounded::<bool>();
 
-        let (write_addr_send, write_addr_recv) = bounded::<u16>(8);
-        write_addr_send.attach_sender(&write_issue);
+        let mut write_addr_gen = GeneratorContext::new(
+            move || (0..TEST_SIZE).map(|x| u16::try_from(x).unwrap()),
+            wr_addr_send,
+        );
+        parent.add_child(&mut write_addr_gen);
 
-        let (write_data_send, write_data_recv) = bounded::<i32>(8);
-        write_data_send.attach_sender(&write_issue);
+        let mut wr_data_gen = GeneratorContext::new(
+            move || (0..TEST_SIZE).map(|x| u16::try_from(x).unwrap()),
+            wr_data_send,
+        );
 
-        let (read_addr_send, read_addr_recv) = bounded::<u16>(8);
-        read_addr_send.attach_sender(&read_issue);
+        parent.add_child(&mut wr_data_gen);
 
-        let (read_data_send, read_data_recv) = bounded::<i32>(8);
-        read_data_recv.attach_receiver(&checker);
-
-        let wr_addr_send = Arc::new(Mutex::new(write_addr_send));
-        let wr_data_send = Arc::new(Mutex::new(write_data_send));
-        // Set up the write issuer
-        {
-            let was = wr_addr_send.clone();
-            let wds = wr_data_send.clone();
-            write_issue.set_run(Arc::new(move |ctx| {
-                let mut addr = was.lock().unwrap();
-                let mut data = wds.lock().unwrap();
-                for i in 0..TEST_SIZE {
-                    let tick = ctx.time.tick();
-                    println!("Write Issue iteration {i} at time {tick:?}");
-                    enqueue(
-                        &mut ctx.time,
-                        &mut addr,
-                        ChannelElement::new(tick, u16::try_from(i).unwrap()),
-                    )
-                    .unwrap();
-
-                    enqueue(
-                        &mut ctx.time,
-                        &mut data,
-                        ChannelElement::new(tick, i32::try_from(i).unwrap()),
-                    )
-                    .unwrap();
-                    ctx.time.incr_cycles(1);
-                }
-            }));
-        }
-        {
-            let was = wr_addr_send;
-            let wds = wr_data_send;
-            write_issue.set_cleanup(Arc::new(move |ctx| {
-                was.lock().unwrap().close();
-                wds.lock().unwrap().close();
-                ctx.time.cleanup()
-            }));
-        }
-
-        let wack = Arc::new(Mutex::new(write_ack_recv));
-        let raddr_send = Arc::new(Mutex::new(read_addr_send));
-        // Set up the read issuer
-        {
-            let wackr = wack.clone();
-            let raddr = raddr_send.clone();
-            read_issue.set_run(Arc::new(move |ctx| {
-                let mut wack = wackr.lock().unwrap();
-                let mut raddr = raddr.lock().unwrap();
-                for i in 0..TEST_SIZE {
-                    let _ = dequeue(&mut ctx.time, &mut wack).unwrap();
-                    let tick = ctx.time.tick();
-                    println!("Read Issue iteration {i} at time {tick:?}");
-                    enqueue(
-                        &mut ctx.time,
-                        &mut raddr,
-                        ChannelElement::new(tick, i.try_into().unwrap()),
-                    )
-                    .unwrap();
-                    ctx.time.incr_cycles(1);
-                }
-            }));
-        }
-
-        {
-            let wackr = wack;
-            let raddr = raddr_send;
-            read_issue.set_cleanup(Arc::new(move |ctx| {
-                wackr.lock().unwrap().close();
-                raddr.lock().unwrap().close();
-                ctx.time.cleanup()
-            }));
-        }
-
-        let rdata_recv = Arc::new(Mutex::new(read_data_recv));
-
-        {
-            let rdatar = rdata_recv;
-            checker.set_run(Arc::new(move |ctx| {
-                let mut rdata = rdatar.lock().unwrap();
-                for i in 0..TEST_SIZE {
-                    let d = dequeue(&mut ctx.time, &mut rdata).unwrap();
-                    println!("Checker iteration {i}");
-                    let gold: i32 = i.try_into().unwrap();
-                    assert_eq!(gold, d.data);
-                    ctx.time.incr_cycles(1);
-                }
-            }))
-        }
-
-        pmu.add_writer(super::PMUWriteBundle {
-            addr: write_addr_recv,
-            data: write_data_recv,
-            ack: write_ack_send,
+        pmu.add_writer(PMUWriteBundle {
+            addr: wr_addr_recv,
+            data: wr_data_recv,
+            ack: wr_ack_send,
         });
 
-        pmu.add_reader(super::PMUReadBundle {
-            addr: read_addr_recv,
-            resp: read_data_send,
+        let (mut rd_addr_send, rd_addr_recv) = unbounded::<u16>();
+        let (rd_data_send, rd_data_recv) = unbounded::<u16>();
+        pmu.add_reader(PMUReadBundle {
+            addr: rd_addr_recv,
+            resp: rd_data_send,
         });
 
-        let mut parent = BasicParentContext::default();
-        println!("Finished setup!");
-        parent.add_child(&mut pmu);
-        parent.add_child(&mut write_issue);
-        parent.add_child(&mut read_issue);
+        let mut rd_addr_gen = FunctionContext::new();
+        wr_ack_recv.attach_receiver(&rd_addr_gen);
+        rd_addr_send.attach_sender(&rd_addr_gen);
+        rd_addr_gen.set_run(move |time| {
+            for ind in 0..TEST_SIZE {
+                dequeue(time, &mut wr_ack_recv).unwrap();
+                let send_time = time.tick();
+                enqueue(
+                    time,
+                    &mut rd_addr_send,
+                    ChannelElement {
+                        time: send_time,
+                        data: u16::try_from(ind).unwrap(),
+                    },
+                )
+                .unwrap();
+            }
+        });
+
+        parent.add_child(&mut rd_addr_gen);
+
+        let mut checker = CheckerContext::new(
+            || (0..TEST_SIZE).map(|x| u16::try_from(x).unwrap()),
+            rd_data_recv,
+        );
         parent.add_child(&mut checker);
+
+        parent.add_child(&mut pmu);
         parent.init();
         parent.run();
         parent.cleanup();
