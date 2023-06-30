@@ -79,11 +79,6 @@ impl<T: Copy> Sender<T> {
             .tick_lower_bound()
     }
 
-    // This drops the underlying channel
-    pub fn close(&mut self) {
-        self.underlying = SenderState::Closed;
-    }
-
     pub fn send(&mut self, elem: ChannelElement<T>) -> Result<(), Time> {
         if self.is_full() {
             match self.next_available {
@@ -166,9 +161,16 @@ impl<T: Copy> Sender<T> {
     }
 }
 
-impl<T: Copy> Cleanable for Sender<T> {
+impl<T> Cleanable for Sender<T> {
     fn cleanup(&mut self) {
         self.close();
+    }
+}
+
+impl<T> Sender<T> {
+    // This drops the underlying channel
+    pub fn close(&mut self) {
+        self.underlying = SenderState::Closed;
     }
 }
 
@@ -193,10 +195,6 @@ pub enum Recv<T> {
 }
 
 impl<T: Copy> Receiver<T> {
-    pub fn close(&mut self) {
-        self.underlying = ReceiverState::Closed;
-    }
-
     fn under(&mut self) -> &crossbeam::channel::Receiver<ChannelElement<T>> {
         match &self.underlying {
             ReceiverState::Open(chan) => chan,
@@ -284,7 +282,14 @@ impl<T: Copy> Receiver<T> {
     }
 }
 
-impl<T: Copy> Cleanable for Receiver<T> {
+impl<T> Receiver<T> {
+    // This drops the underlying channel
+    pub fn close(&mut self) {
+        self.underlying = ReceiverState::Closed;
+    }
+}
+
+impl<T> Cleanable for Receiver<T> {
     fn cleanup(&mut self) {
         self.close();
     }
