@@ -6,9 +6,9 @@
 //     s(String),
 // }
 
-use std::{cmp::max, process::Output};
+use std::cmp::max;
 
-use crate::{templates::ops::ALUOp, types::DAMType};
+use crate::types::DAMType;
 
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Token<ValType, StopType> {
@@ -20,8 +20,8 @@ pub enum Token<ValType, StopType> {
 
 impl<ValType: Default, StopType: Default> Default for Token<ValType, StopType> {
     fn default() -> Self {
-        // Token::Val(ValType::default())
-        panic!("Wrong default used for token");
+        Token::Val(ValType::default())
+        // panic!("Wrong default used for token");
     }
 }
 
@@ -33,21 +33,6 @@ impl<ValType: Default, StopType: Default> Default for Token<ValType, StopType> {
 //         }
 //     }
 // }
-
-impl<
-        ValType: Copy + std::ops::Add<Output = ValType>,
-        StopType: Copy + std::ops::Add<Output = StopType>,
-    > Token<ValType, StopType>
-{
-    fn add(self, rhs: Token<ValType, StopType>) -> Token<ValType, StopType> {
-        match rhs {
-            Token::Val(_) => todo!(),
-            Token::Stop(_) => todo!(),
-            Token::Empty => todo!(),
-            Token::Done => todo!(),
-        }
-    }
-}
 
 impl<ValType: DAMType, StopType: DAMType> DAMType for Token<ValType, StopType> {
     fn dam_size() -> usize {
