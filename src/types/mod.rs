@@ -1,24 +1,32 @@
+pub mod tensor;
+pub mod unevaluated;
+
 pub trait DAMType: Sync + Send + Copy + Default + core::fmt::Debug + std::cmp::PartialEq {
     // Returns the size of the object in BITS
-    fn dam_size() -> usize;
+    fn dam_size(&self) -> usize;
 }
 
-impl DAMType for bool {
-    fn dam_size() -> usize {
-        1
+pub trait StaticallySized:
+    Sync + Send + Copy + Default + core::fmt::Debug + std::cmp::PartialEq
+{
+    const SIZE: usize;
+}
+
+impl<T> DAMType for T
+where
+    T: StaticallySized,
+{
+    fn dam_size(&self) -> usize {
+        Self::SIZE
     }
 }
 
-impl DAMType for i32 {
-    fn dam_size() -> usize {
-        32
-    }
+impl StaticallySized for bool {
+    const SIZE: usize = 1;
 }
 
-impl DAMType for u16 {
-    fn dam_size() -> usize {
-        16
-    }
+impl StaticallySized for u16 {
+    const SIZE: usize = 16;
 }
 
 pub trait IndexLike: DAMType + TryInto<usize> + num::Num {

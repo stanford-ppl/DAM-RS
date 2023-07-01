@@ -233,9 +233,8 @@ impl<IType: IndexLike, T: DAMType, AT: DAMType> Context for DRAM<IType, T, AT> {
 
                         // The bandwidth-constrained transfer time
                         let transfer_time =
-                            u64::try_from((size * T::dam_size()) / self.config.bandwidth_in_bits)
+                            u64::try_from(write_buffer.iter().map(|x| x.dam_size()).sum::<usize>())
                                 .unwrap();
-
                         // This is when the write "actually happened"
                         let write_time = transfer_start_time + transfer_time;
                         write_buffer
@@ -280,15 +279,17 @@ impl<IType: IndexLike, T: DAMType, AT: DAMType> Context for DRAM<IType, T, AT> {
                             self.time.tick() + self.config.latency,
                             prev_transfer_time,
                         );
-                        let transfer_time = u64::try_from(
-                            (size.to_usize() * T::dam_size()) / self.config.bandwidth_in_bits,
-                        )
-                        .unwrap();
-                        let read_finish_time = read_time + transfer_time;
-                        // For the read, we should model it as a monolithic read at the START of the access.
-                        let read_vals = (address.to_usize()..address.to_usize() + size.to_usize())
-                            .map(|ind| self.datastore.read(ind, read_time));
 
+                        // For the read, we should model it as a monolithic read at the START of the access.
+                        let read_vals: Vec<_> = (address.to_usize()
+                            ..address.to_usize() + size.to_usize())
+                            .map(|ind| self.datastore.read(ind, read_time))
+                            .collect();
+
+                        let read_size: usize = read_vals.iter().map(|x| x.dam_size()).sum();
+                        let transfer_time =
+                            u64::try_from(read_size / self.config.bandwidth_in_bits).unwrap();
+                        let read_finish_time = read_time + transfer_time;
                         let mut result_time = read_finish_time;
 
                         for out in read_vals {
