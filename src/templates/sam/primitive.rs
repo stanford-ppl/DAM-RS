@@ -22,6 +22,8 @@ impl<ValType, StopType: core::str::FromStr> TryFrom<&str> for Token<ValType, Sto
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         if value.starts_with("D") {
             Ok(Self::Done)
+        } else if value.starts_with("N") {
+            Ok(Self::Empty)
         } else if value.starts_with("S") {
             value[1..].parse().map(Self::Stop).map_err(|_| ())
         } else {
