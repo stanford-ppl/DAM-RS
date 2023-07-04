@@ -119,11 +119,7 @@ mod tests {
         context::{
             generator_context::GeneratorContext, parent::BasicParentContext, Context, ParentContext,
         },
-        templates::sam::{
-            self,
-            primitive::{self, Token},
-        },
-        token_vec,
+        templates::sam::primitive::Token,
     };
 
     use super::CompressedWrScan;
@@ -134,13 +130,6 @@ mod tests {
         va.iter()
         .zip(vb)
         .all(|(a,b)| *a == *b)
-    }
-
-    #[test]
-    fn test_macro() {
-        let v = token_vec![u16; u16; 1, 2, 3, "s0", 4, 5, 6, "s1", "D"];
-
-        dbg!(v);
     }
 
     #[test]
