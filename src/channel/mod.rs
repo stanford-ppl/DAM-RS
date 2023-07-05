@@ -3,18 +3,23 @@ pub mod utils;
 use std::sync::{Arc, RwLock};
 
 use crate::context::Context;
+use crate::types::DAMType;
 use crate::{context::view::*, time::Time, types::Cleanable};
 use crossbeam::channel::{self, select, SendError};
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct ChannelElement<T> {
     pub time: Time,
     pub data: T,
 }
 
-impl<T: Copy> ChannelElement<T> {
+impl<T: DAMType> ChannelElement<T> {
     pub fn new(time: Time, data: T) -> ChannelElement<T> {
         ChannelElement { time, data }
+    }
+
+    pub fn update_time(&mut self, new_time: Time) {
+        self.time = std::cmp::max(self.time, new_time);
     }
 }
 
@@ -60,7 +65,7 @@ pub struct Sender<T> {
     next_available: Option<Time>,
 }
 
-impl<T: Copy> Sender<T> {
+impl<T: DAMType> Sender<T> {
     fn under_send(&mut self, elem: ChannelElement<T>) -> Result<(), SendError<ChannelElement<T>>> {
         match &self.underlying {
             SenderState::Open(sender) => sender.send(elem),
@@ -187,14 +192,14 @@ pub struct Receiver<T> {
     head: Option<Recv<T>>,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub enum Recv<T> {
     Something(ChannelElement<T>),
     Nothing(Time),
     Closed,
 }
 
-impl<T: Copy> Receiver<T> {
+impl<T: DAMType> Receiver<T> {
     fn under(&mut self) -> &crossbeam::channel::Receiver<ChannelElement<T>> {
         match &self.underlying {
             ReceiverState::Open(chan) => chan,
@@ -215,14 +220,14 @@ impl<T: Copy> Receiver<T> {
 
     pub fn peek(&mut self) -> Recv<T> {
         let recv_time = self.receiver_tlb();
-        match self.head {
-            Some(Recv::Nothing(time)) if time >= recv_time => {
-                return Recv::Nothing(time);
+        match &self.head {
+            Some(Recv::Nothing(time)) if *time >= recv_time => {
+                return Recv::Nothing(*time);
             }
             Some(Recv::Nothing(_)) => {
                 // Fallthrough, this is a stale Nothing
             }
-            Some(stuff) => return stuff,
+            Some(stuff) => return stuff.clone(),
             None => {}
         }
         let update_head = |recv: &crossbeam::channel::Receiver<ChannelElement<T>>| {
@@ -236,7 +241,7 @@ impl<T: Copy> Receiver<T> {
             }
         };
         if let Some(stuff) = update_head(self.under()) {
-            self.head = Some(stuff);
+            self.head = Some(stuff.clone());
             return stuff;
         }
 
@@ -252,7 +257,7 @@ impl<T: Copy> Receiver<T> {
         select! {
             recv(signal) -> send_time => {
                 if let Some(stuff) = update_head(self.under()) {
-                    self.head = Some(stuff);
+                    self.head = Some(stuff.clone());
                     return stuff;
                 }
                 self.head = Some(Recv::Nothing(send_time.unwrap()));
@@ -264,14 +269,14 @@ impl<T: Copy> Receiver<T> {
                 };
             }
         }
-        self.head.unwrap()
+        self.head.clone().unwrap()
     }
 
     pub fn recv(&mut self) -> Recv<T> {
         let res = self.peek();
         self.head = None;
-        if let Recv::Something(stuff) = res {
-            let ct = self.receiver_tlb();
+        if let Recv::Something(stuff) = &res {
+            let ct: Time = self.receiver_tlb();
             let _ = self.resp.send(ct.max(stuff.time));
         }
         res
@@ -297,7 +302,7 @@ impl<T> Cleanable for Receiver<T> {
 
 pub fn bounded<T>(capacity: usize) -> (Sender<T>, Receiver<T>)
 where
-    T: Copy,
+    T: DAMType,
 {
     let (tx, rx) = channel::bounded::<ChannelElement<T>>(capacity);
     let (resp_t, resp_r) = channel::bounded::<Time>(capacity);
@@ -322,7 +327,7 @@ where
 
 pub fn unbounded<T>() -> (Sender<T>, Receiver<T>)
 where
-    T: Copy,
+    T: DAMType,
 {
     let (tx, rx) = channel::unbounded::<ChannelElement<T>>();
     let (resp_t, resp_r) = channel::unbounded::<Time>();

@@ -1,13 +1,15 @@
+pub mod scalar;
 pub mod tensor;
 pub mod unevaluated;
 
-pub trait DAMType: Sync + Send + Copy + Default + core::fmt::Debug + std::cmp::PartialEq {
+//Sync + Send + Default + core::fmt::Debug + std::cmp::PartialEq + Clone;
+pub trait DAMType: Sync + Send + Default + core::fmt::Debug + std::cmp::PartialEq + Clone {
     // Returns the size of the object in BITS
     fn dam_size(&self) -> usize;
 }
 
 pub trait StaticallySized:
-    Sync + Send + Copy + Default + core::fmt::Debug + std::cmp::PartialEq
+    Sync + Send + Default + core::fmt::Debug + std::cmp::PartialEq + Clone
 {
     const SIZE: usize;
 }
@@ -21,17 +23,9 @@ where
     }
 }
 
-impl StaticallySized for bool {
-    const SIZE: usize = 1;
-}
-
-impl StaticallySized for u16 {
-    const SIZE: usize = 16;
-}
-
 pub trait IndexLike: DAMType + TryInto<usize> + num::Num {
-    fn to_usize(self) -> usize {
-        match self.try_into() {
+    fn to_usize(&self) -> usize {
+        match self.clone().try_into() {
             Ok(s) => s,
             Err(_) => panic!("Could not convert {self:?} to usize!"),
         }

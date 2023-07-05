@@ -34,7 +34,7 @@ impl<IT, DT> Cleanable for DRAMReadBundle<IT, DT> {
     }
 }
 
-impl<IT: Copy, DT> Peekable for DRAMReadBundle<IT, DT> {
+impl<IT: DAMType, DT> Peekable for DRAMReadBundle<IT, DT> {
     fn next_event(&mut self) -> crate::channel::utils::EventTime {
         [self.addr.next_event(), self.req_size.next_event()]
             .into_iter()
@@ -43,14 +43,14 @@ impl<IT: Copy, DT> Peekable for DRAMReadBundle<IT, DT> {
     }
 }
 
-pub struct DRAMWriteBundle<IT: Copy, DT: Copy, AT> {
+pub struct DRAMWriteBundle<IT: DAMType, DT: DAMType, AT> {
     addr: Receiver<IT>,
     request_size: Receiver<IT>,
     data: Receiver<DT>,
     ack: Sender<AT>,
 }
 
-impl<IT: Copy, DT: Copy, AT> Cleanable for DRAMWriteBundle<IT, DT, AT> {
+impl<IT: DAMType, DT: DAMType, AT> Cleanable for DRAMWriteBundle<IT, DT, AT> {
     fn cleanup(&mut self) {
         self.addr.cleanup();
         self.data.cleanup();
@@ -59,7 +59,7 @@ impl<IT: Copy, DT: Copy, AT> Cleanable for DRAMWriteBundle<IT, DT, AT> {
     }
 }
 
-impl<IT: Copy, DT: Copy, AT> Peekable for DRAMWriteBundle<IT, DT, AT> {
+impl<IT: DAMType, DT: DAMType, AT> Peekable for DRAMWriteBundle<IT, DT, AT> {
     fn next_event(&mut self) -> crate::channel::utils::EventTime {
         [
             self.addr.next_event(),
@@ -72,12 +72,12 @@ impl<IT: Copy, DT: Copy, AT> Peekable for DRAMWriteBundle<IT, DT, AT> {
     }
 }
 
-enum AccessBundle<IT: Copy, DT: Copy, AT> {
+enum AccessBundle<IT: DAMType, DT: DAMType, AT> {
     Write(DRAMWriteBundle<IT, DT, AT>),
     Read(DRAMReadBundle<IT, DT>),
 }
 
-impl<IT: Copy, DT: Copy, AT> Peekable for AccessBundle<IT, DT, AT> {
+impl<IT: DAMType, DT: DAMType, AT> Peekable for AccessBundle<IT, DT, AT> {
     fn next_event(&mut self) -> crate::channel::utils::EventTime {
         match self {
             AccessBundle::Write(wr) => wr.next_event(),
@@ -86,7 +86,7 @@ impl<IT: Copy, DT: Copy, AT> Peekable for AccessBundle<IT, DT, AT> {
     }
 }
 
-impl<IT: Copy, DT: Copy, AT> Cleanable for AccessBundle<IT, DT, AT> {
+impl<IT: DAMType, DT: DAMType, AT> Cleanable for AccessBundle<IT, DT, AT> {
     fn cleanup(&mut self) {
         match self {
             AccessBundle::Write(wr) => wr.cleanup(),
