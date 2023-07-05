@@ -7,17 +7,7 @@ use crate::{
 use super::primitive::Token;
 
 pub struct WrScanData<ValType, StopType> {
-    // curr_ref: Token,
-    // curr_crd: Stream,
     input: Receiver<Token<ValType, StopType>>,
-    // out_ref: Sender<Token<ValType, StopType>>,
-    // out_crd: Sender<Token<ValType, StopType>>,
-    // end_fiber: bool,
-    // emit_tkn: bool,
-    // meta_dim: i32,
-    // start_addr: i32,
-    // end_addr: i32,
-    // begin: bool,
 }
 
 impl<ValType: DAMType, StopType: DAMType> Cleanable for WrScanData<ValType, StopType> {
@@ -104,6 +94,70 @@ where
 
     fn cleanup(&mut self) {
         self.wr_scan_data.cleanup();
+        self.time.cleanup();
+    }
+
+    fn view(&self) -> Box<dyn crate::context::ContextView> {
+        Box::new(self.time.view())
+    }
+}
+
+pub struct ValsWrScan<ValType, StopType> {
+    vals_data: WrScanData<ValType, StopType>,
+    // meta_dim: ValType,
+    out_val: Vec<ValType>,
+    time: TimeManager,
+}
+
+impl<ValType: DAMType, StopType: DAMType> ValsWrScan<ValType, StopType>
+where
+    ValsWrScan<ValType, StopType>: Context,
+{
+    pub fn new(vals_data: WrScanData<ValType, StopType>, out_val: Vec<ValType>) -> Self {
+        let vals = ValsWrScan {
+            vals_data,
+            out_val,
+            time: TimeManager::default(),
+        };
+        (vals.vals_data.input).attach_receiver(&vals);
+
+        vals
+    }
+}
+
+impl<ValType, StopType> Context for ValsWrScan<ValType, StopType>
+where
+    ValType: DAMType
+        + std::ops::AddAssign<u32>
+        + std::ops::Mul<ValType, Output = ValType>
+        + std::ops::Add<ValType, Output = ValType>
+        + std::cmp::PartialOrd<ValType>,
+    StopType: DAMType + std::ops::Add<u32, Output = StopType>,
+{
+    fn init(&mut self) {}
+
+    fn run(&mut self) {
+        loop {
+            match dequeue(&mut self.time, &mut self.vals_data.input) {
+                Ok(curr_in) => match curr_in.data {
+                    Token::Val(val) => {
+                        self.out_val.push(val);
+                    }
+                    Token::Empty | Token::Stop(_) => {
+                        continue;
+                    }
+                    Token::Done => return,
+                },
+                Err(_) => {
+                    panic!("Unexpected end of stream");
+                }
+            }
+            self.time.incr_cycles(1);
+        }
+    }
+
+    fn cleanup(&mut self) {
+        self.vals_data.cleanup();
         self.time.cleanup();
     }
 
