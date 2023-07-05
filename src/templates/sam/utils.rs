@@ -6,7 +6,7 @@ fn set_tensor_path() {
     env::set_var("FROSTT_FORMATTED_PATH", "/home/rubensl/data");
 }
 
-fn read_inputs<T>(file_path: &str) -> Vec<T>
+fn read_inputs<T>(file_path: &&str) -> Vec<T>
 where
     // Vec<T>: FromIterator<u32>,
     T: std::str::FromStr,
@@ -40,15 +40,12 @@ mod tests {
     fn read_test() {
         set_tensor_path();
         let dirname = env::var("FROSTT_FORMATTED_PATH").unwrap();
-        let b_dirname = Path::new(&dirname)
+        let binding = Path::new(&dirname)
             .join("B_linear")
             .join("tensor3_dropout")
             .join("tensor_B_mode_0_crd");
-        // let b_dirname = [dirname, "B_linear".to_owned()].join("/");
-        dbg!(b_dirname);
+        let b_dirname = binding.to_str().unwrap();
 
-        // let st = b_dirname.to_str().unwrap().clone();
-
-        // let v = read_inputs::<u32>(&st);
+        let v = read_inputs::<u32>(&b_dirname);
     }
 }
