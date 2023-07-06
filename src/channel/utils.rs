@@ -1,5 +1,3 @@
-
-
 use crate::context::view::TimeManager;
 use crate::time::Time;
 use crate::types::DAMType;
