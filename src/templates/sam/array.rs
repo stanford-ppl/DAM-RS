@@ -47,7 +47,6 @@ where
 impl<ValType, StopType> Context for Array<ValType, StopType>
 where
     ValType: DAMType
-        + std::ops::AddAssign<u32>
         + std::ops::Mul<ValType, Output = ValType>
         + std::ops::Add<ValType, Output = ValType>
         + std::cmp::PartialOrd<ValType>,
@@ -65,7 +64,7 @@ where
                         let idx: usize = val.try_into().unwrap();
                         let channel_elem = ChannelElement::new(
                             self.time.tick() + 1,
-                            Token::Val(self.val_arr[idx]),
+                            Token::Val(self.val_arr[idx].clone()),
                         );
                         enqueue(&mut self.time, &mut self.array_data.out_val, channel_elem)
                             .unwrap();

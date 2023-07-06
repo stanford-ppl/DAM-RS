@@ -185,26 +185,27 @@ where
                         (tkn @ Token::Empty, Token::Val(_))
                         | (Token::Val(_), tkn @ Token::Empty)
                         | (tkn @ Token::Done, Token::Done) => {
-                            let channel_elem = ChannelElement::new(self.time.tick() + 1, tkn);
+                            let channel_elem =
+                                ChannelElement::new(self.time.tick() + 1, tkn.clone());
                             enqueue(
                                 &mut self.time,
                                 &mut self.intersect_data.out_crd,
-                                channel_elem,
+                                channel_elem.clone(),
                             )
                             .unwrap();
                             enqueue(
                                 &mut self.time,
                                 &mut self.intersect_data.out_ref1,
-                                channel_elem,
+                                channel_elem.clone(),
                             )
                             .unwrap();
                             enqueue(
                                 &mut self.time,
                                 &mut self.intersect_data.out_ref2,
-                                channel_elem,
+                                channel_elem.clone(),
                             )
                             .unwrap();
-                            if tkn == Token::Done {
+                            if tkn.clone() == Token::Done {
                                 return;
                             }
                         }
@@ -391,12 +392,24 @@ where
                         | (Token::Done, Token::Done) => {
                             let channel_elem =
                                 ChannelElement::new(self.time.tick() + 1, Token::Done);
-                            enqueue(&mut self.time, &mut self.union_data.out_crd, channel_elem)
-                                .unwrap();
-                            enqueue(&mut self.time, &mut self.union_data.out_ref1, channel_elem)
-                                .unwrap();
-                            enqueue(&mut self.time, &mut self.union_data.out_ref2, channel_elem)
-                                .unwrap();
+                            enqueue(
+                                &mut self.time,
+                                &mut self.union_data.out_crd,
+                                channel_elem.clone(),
+                            )
+                            .unwrap();
+                            enqueue(
+                                &mut self.time,
+                                &mut self.union_data.out_ref1,
+                                channel_elem.clone(),
+                            )
+                            .unwrap();
+                            enqueue(
+                                &mut self.time,
+                                &mut self.union_data.out_ref2,
+                                channel_elem.clone(),
+                            )
+                            .unwrap();
                             return;
                         }
                         (Token::Stop(_), Token::Val(crd2)) | (Token::Empty, Token::Val(crd2)) => {

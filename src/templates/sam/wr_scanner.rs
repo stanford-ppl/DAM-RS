@@ -72,7 +72,7 @@ where
                         end_fiber = false;
                     }
                     Token::Stop(_) if !end_fiber => {
-                        self.seg_arr.push(curr_crd_cnt);
+                        self.seg_arr.push(curr_crd_cnt.clone());
                         end_fiber = true;
                     }
                     Token::Empty | Token::Stop(_) => {

@@ -61,7 +61,9 @@ impl<ValType: Default, StopType: Default> Default for Token<ValType, StopType> {
 }
 
 impl<ValType: DAMType, StopType: DAMType> DAMType for Token<ValType, StopType> {
-    fn dam_size() -> usize {
-        max(ValType::dam_size(), StopType::dam_size()) + 1
+    fn dam_size(&self) -> usize {
+        // max(ValType::dam_size(), StopType::dam_size()) + 1
+        // ValType::dam_size(ValType)
+        0
     }
 }
