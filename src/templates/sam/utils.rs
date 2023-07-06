@@ -1,14 +1,14 @@
 use std::env;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
+use std::path::PathBuf;
 
 fn set_tensor_path() {
-    env::set_var("FROSTT_FORMATTED_PATH", "/home/rubensl/data");
+    env::set_var("FROSTT_FORMATTED_PATH", "/home/rubensl/Documents/data");
 }
 
-fn read_inputs<T>(file_path: &&str) -> Vec<T>
+pub fn read_inputs<T>(file_path: &PathBuf) -> Vec<T>
 where
-    // Vec<T>: FromIterator<u32>,
     T: std::str::FromStr,
 {
     let file = File::open(file_path).expect("file wasn't found.");
@@ -44,8 +44,9 @@ mod tests {
             .join("B_linear")
             .join("tensor3_dropout")
             .join("tensor_B_mode_0_crd");
-        let b_dirname = binding.to_str().unwrap();
+        // let b_dirname = binding.to_str().unwrap();
 
-        let v = read_inputs::<u32>(&b_dirname);
+        let v = read_inputs::<u32>(&binding);
+        dbg!(v);
     }
 }

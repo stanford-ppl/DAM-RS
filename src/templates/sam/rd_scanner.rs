@@ -10,17 +10,9 @@ use crate::{
 use super::primitive::Token;
 
 pub struct RdScanData<ValType, StopType> {
-    // curr_ref: Token,
-    // curr_crd: Stream,
-    in_ref: Receiver<Token<ValType, StopType>>,
-    out_ref: Sender<Token<ValType, StopType>>,
-    out_crd: Sender<Token<ValType, StopType>>,
-    // end_fiber: bool,
-    // emit_tkn: bool,
-    // meta_dim: i32,
-    // start_addr: i32,
-    // end_addr: i32,
-    // begin: bool,
+    pub in_ref: Receiver<Token<ValType, StopType>>,
+    pub out_ref: Sender<Token<ValType, StopType>>,
+    pub out_crd: Sender<Token<ValType, StopType>>,
 }
 
 impl<ValType: DAMType, StopType: DAMType> Cleanable for RdScanData<ValType, StopType> {

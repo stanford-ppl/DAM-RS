@@ -10,8 +10,8 @@ use crate::{
 use super::primitive::Token;
 
 pub struct ArrayData<ValType, StopType> {
-    in_ref: Receiver<Token<ValType, StopType>>,
-    out_val: Sender<Token<ValType, StopType>>,
+    pub in_ref: Receiver<Token<ValType, StopType>>,
+    pub out_val: Sender<Token<ValType, StopType>>,
 }
 
 impl<ValType: DAMType, StopType: DAMType> Cleanable for ArrayData<ValType, StopType> {

@@ -10,13 +10,13 @@ use crate::{
 use super::primitive::Token;
 
 pub struct CrdJoinerData<ValType, StopType> {
-    in_crd1: Receiver<Token<ValType, StopType>>,
-    in_ref1: Receiver<Token<ValType, StopType>>,
-    in_crd2: Receiver<Token<ValType, StopType>>,
-    in_ref2: Receiver<Token<ValType, StopType>>,
-    out_ref1: Sender<Token<ValType, StopType>>,
-    out_ref2: Sender<Token<ValType, StopType>>,
-    out_crd: Sender<Token<ValType, StopType>>,
+    pub in_crd1: Receiver<Token<ValType, StopType>>,
+    pub in_ref1: Receiver<Token<ValType, StopType>>,
+    pub in_crd2: Receiver<Token<ValType, StopType>>,
+    pub in_ref2: Receiver<Token<ValType, StopType>>,
+    pub out_ref1: Sender<Token<ValType, StopType>>,
+    pub out_ref2: Sender<Token<ValType, StopType>>,
+    pub out_crd: Sender<Token<ValType, StopType>>,
 }
 
 impl<ValType: DAMType, StopType: DAMType> Cleanable for CrdJoinerData<ValType, StopType> {
