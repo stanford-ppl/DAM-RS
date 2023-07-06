@@ -1,4 +1,4 @@
-use std::cmp::max;
+
 
 use crate::context::view::TimeManager;
 use crate::time::Time;
@@ -28,7 +28,7 @@ impl<T: DAMType> Peekable for RecvBundle<T> {
     }
 }
 
-impl<T: Copy> RecvBundle<T> {
+impl<T: DAMType> RecvBundle<T> {
     fn dequeue(
         &mut self,
         manager: &mut TimeManager,
@@ -40,7 +40,7 @@ impl<T: Copy> RecvBundle<T> {
     }
 }
 
-pub fn dequeue<T: Copy>(
+pub fn dequeue<T: DAMType>(
     manager: &mut TimeManager,
     recv: &mut Receiver<T>,
 ) -> Result<ChannelElement<T>, DequeueError> {
@@ -57,7 +57,7 @@ pub fn dequeue<T: Copy>(
     }
 }
 
-pub fn peek_next<T: Copy>(
+pub fn peek_next<T: DAMType>(
     manager: &mut TimeManager,
     recv: &mut Receiver<T>,
 ) -> Result<ChannelElement<T>, DequeueError> {
@@ -96,14 +96,15 @@ pub fn dequeue_bundle<T: DAMType>(
     }
 }
 
-pub fn enqueue<T: Copy>(
+pub fn enqueue<T: DAMType>(
     manager: &mut TimeManager,
     send: &mut Sender<T>,
     data: ChannelElement<T>,
 ) -> Result<(), EnqueueError> {
+    let mut data_copy = data.clone();
     loop {
-        let send_data = ChannelElement::new(max(data.time, manager.tick()), data.data);
-        let v = send.send(send_data);
+        data_copy.update_time(manager.tick());
+        let v = send.send(data_copy.clone());
         match v {
             Ok(()) => return Ok(()),
             Err(time) if time.is_infinite() => {
@@ -155,7 +156,7 @@ impl Peekable for EventTime {
     }
 }
 
-impl<T: Copy> Peekable for Receiver<T> {
+impl<T: DAMType> Peekable for Receiver<T> {
     fn next_event(&mut self) -> EventTime {
         match self.peek() {
             Recv::Closed => EventTime::Closed,

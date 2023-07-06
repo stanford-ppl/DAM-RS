@@ -19,7 +19,7 @@ pub struct PCUConfig {
 }
 
 #[derive(Debug)]
-pub struct PipelineStage<ET: Copy> {
+pub struct PipelineStage<ET: DAMType> {
     pub op: ALUOp<ET>,
     pub forward: Vec<(usize, usize)>,
     pub prev_register_ids: Vec<usize>,
@@ -36,12 +36,12 @@ impl<ET: DAMType> PipelineStage<ET> {
         let mapped_inputs: Vec<PipelineRegister<ET>> = self
             .prev_register_ids
             .iter()
-            .map(|ind| prev_registers[*ind])
+            .map(|ind| prev_registers[*ind].clone())
             .collect();
         let mapped_outputs: Vec<PipelineRegister<ET>> = self
             .next_register_ids
             .iter()
-            .map(|ind| next_registers[*ind])
+            .map(|ind| next_registers[*ind].clone())
             .collect();
         let func_outputs = (self.op.func)(&mapped_inputs, &mapped_outputs);
 
@@ -53,12 +53,12 @@ impl<ET: DAMType> PipelineStage<ET> {
             .iter()
             .enumerate()
             .for_each(|(src, dst)| {
-                outputs[*dst] = func_outputs[src];
+                outputs[*dst] = func_outputs[src].clone();
             });
 
         // Forward the appropriate prev_registers into the new next_registers
         self.forward.iter().for_each(|(src, dst)| {
-            outputs[*dst] = prev_registers[*src];
+            outputs[*dst] = prev_registers[*src].clone();
         });
 
         outputs
@@ -140,7 +140,7 @@ impl<ElementType: DAMType> PCU<ElementType> {
             if let Err(_) = read {
                 return false;
             }
-            regs[ind].data = read.as_ref().unwrap().data;
+            regs[ind].data = read.as_ref().unwrap().data.clone();
         }
 
         return true;
@@ -157,7 +157,7 @@ impl<ElementType: DAMType> PCU<ElementType> {
                     out_chan,
                     ChannelElement {
                         time: out_time,
-                        data: regs[ind].data,
+                        data: regs[ind].data.clone(),
                     },
                 )
                 .unwrap();

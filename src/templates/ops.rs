@@ -10,7 +10,7 @@ macro_rules! RegisterALUOp {
                 func: |in_regs, out_regs| -> Vec<PipelineRegister<T>> {
                     let mut prev_reg_ind: usize = 0;
                     $(
-                    let $prev_regs = in_regs[prev_reg_ind].data;
+                    let $prev_regs = in_regs[prev_reg_ind].data.clone();
                     prev_reg_ind += 1;
                     )*
 
@@ -32,14 +32,14 @@ macro_rules! RegisterALUOp {
 }
 
 #[derive(Debug)]
-pub struct ALUOp<T: Copy> {
+pub struct ALUOp<T: Clone> {
     // Func is (prev_regs, next_regs) -> new next_regs
     pub func: fn(&[PipelineRegister<T>], &[PipelineRegister<T>]) -> Vec<PipelineRegister<T>>,
     pub name: &'static str,
 }
 
-#[derive(Default, Debug, Copy, Clone)]
-pub struct PipelineRegister<T: Copy> {
+#[derive(Default, Debug, Clone)]
+pub struct PipelineRegister<T: Clone> {
     pub data: T,
 }
 

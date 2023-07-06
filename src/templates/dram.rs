@@ -34,7 +34,7 @@ impl<IT, DT> Cleanable for DRAMReadBundle<IT, DT> {
     }
 }
 
-impl<IT: Copy, DT> Peekable for DRAMReadBundle<IT, DT> {
+impl<IT: DAMType, DT> Peekable for DRAMReadBundle<IT, DT> {
     fn next_event(&mut self) -> crate::channel::utils::EventTime {
         [self.addr.next_event(), self.req_size.next_event()]
             .into_iter()
@@ -43,14 +43,14 @@ impl<IT: Copy, DT> Peekable for DRAMReadBundle<IT, DT> {
     }
 }
 
-pub struct DRAMWriteBundle<IT: Copy, DT: Copy, AT> {
+pub struct DRAMWriteBundle<IT: DAMType, DT: DAMType, AT> {
     addr: Receiver<IT>,
     request_size: Receiver<IT>,
     data: Receiver<DT>,
     ack: Sender<AT>,
 }
 
-impl<IT: Copy, DT: Copy, AT> Cleanable for DRAMWriteBundle<IT, DT, AT> {
+impl<IT: DAMType, DT: DAMType, AT> Cleanable for DRAMWriteBundle<IT, DT, AT> {
     fn cleanup(&mut self) {
         self.addr.cleanup();
         self.data.cleanup();
@@ -59,7 +59,7 @@ impl<IT: Copy, DT: Copy, AT> Cleanable for DRAMWriteBundle<IT, DT, AT> {
     }
 }
 
-impl<IT: Copy, DT: Copy, AT> Peekable for DRAMWriteBundle<IT, DT, AT> {
+impl<IT: DAMType, DT: DAMType, AT> Peekable for DRAMWriteBundle<IT, DT, AT> {
     fn next_event(&mut self) -> crate::channel::utils::EventTime {
         [
             self.addr.next_event(),
@@ -72,12 +72,12 @@ impl<IT: Copy, DT: Copy, AT> Peekable for DRAMWriteBundle<IT, DT, AT> {
     }
 }
 
-enum AccessBundle<IT: Copy, DT: Copy, AT> {
+enum AccessBundle<IT: DAMType, DT: DAMType, AT> {
     Write(DRAMWriteBundle<IT, DT, AT>),
     Read(DRAMReadBundle<IT, DT>),
 }
 
-impl<IT: Copy, DT: Copy, AT> Peekable for AccessBundle<IT, DT, AT> {
+impl<IT: DAMType, DT: DAMType, AT> Peekable for AccessBundle<IT, DT, AT> {
     fn next_event(&mut self) -> crate::channel::utils::EventTime {
         match self {
             AccessBundle::Write(wr) => wr.next_event(),
@@ -86,7 +86,7 @@ impl<IT: Copy, DT: Copy, AT> Peekable for AccessBundle<IT, DT, AT> {
     }
 }
 
-impl<IT: Copy, DT: Copy, AT> Cleanable for AccessBundle<IT, DT, AT> {
+impl<IT: DAMType, DT: DAMType, AT> Cleanable for AccessBundle<IT, DT, AT> {
     fn cleanup(&mut self) {
         match self {
             AccessBundle::Write(wr) => wr.cleanup(),
@@ -233,9 +233,8 @@ impl<IType: IndexLike, T: DAMType, AT: DAMType> Context for DRAM<IType, T, AT> {
 
                         // The bandwidth-constrained transfer time
                         let transfer_time =
-                            u64::try_from((size * T::dam_size()) / self.config.bandwidth_in_bits)
+                            u64::try_from(write_buffer.iter().map(|x| x.dam_size()).sum::<usize>())
                                 .unwrap();
-
                         // This is when the write "actually happened"
                         let write_time = transfer_start_time + transfer_time;
                         write_buffer
@@ -280,15 +279,17 @@ impl<IType: IndexLike, T: DAMType, AT: DAMType> Context for DRAM<IType, T, AT> {
                             self.time.tick() + self.config.latency,
                             prev_transfer_time,
                         );
-                        let transfer_time = u64::try_from(
-                            (size.to_usize() * T::dam_size()) / self.config.bandwidth_in_bits,
-                        )
-                        .unwrap();
-                        let read_finish_time = read_time + transfer_time;
-                        // For the read, we should model it as a monolithic read at the START of the access.
-                        let read_vals = (address.to_usize()..address.to_usize() + size.to_usize())
-                            .map(|ind| self.datastore.read(ind, read_time));
 
+                        // For the read, we should model it as a monolithic read at the START of the access.
+                        let read_vals: Vec<_> = (address.to_usize()
+                            ..address.to_usize() + size.to_usize())
+                            .map(|ind| self.datastore.read(ind, read_time))
+                            .collect();
+
+                        let read_size: usize = read_vals.iter().map(|x| x.dam_size()).sum();
+                        let transfer_time =
+                            u64::try_from(read_size / self.config.bandwidth_in_bits).unwrap();
+                        let read_finish_time = read_time + transfer_time;
                         let mut result_time = read_finish_time;
 
                         for out in read_vals {

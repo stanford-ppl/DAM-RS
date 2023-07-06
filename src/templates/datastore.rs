@@ -75,10 +75,10 @@ impl<T: DAMType> Datastore<T> {
                         panic!("Attempting to read a value before anything was written!")
                     }
                 }
-                Some(last_val) => last_val.data,
+                Some(last_val) => last_val.data.clone(),
             },
 
-            Some(x) => reader.get(x - 1).unwrap().data,
+            Some(x) => reader.get(x - 1).unwrap().data.clone(),
         }
     }
 }

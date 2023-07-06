@@ -277,7 +277,7 @@ mod tests {
 
     #[test]
     fn simple_pmu_test() {
-        const TEST_SIZE: usize = 128;
+        const TEST_SIZE: usize = 1024;
         let mut parent = BasicParentContext::default();
 
         let mut pmu = PMU::<u16, u16, bool>::new(
