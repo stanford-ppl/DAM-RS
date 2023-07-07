@@ -20,7 +20,7 @@ mod tests {
 
     #[test]
     fn test_mat_elemadd() {
-        let test_name = "mat_elemadd";
+        let test_name = "mat_elemadd2";
         let filename = home::home_dir().unwrap().join("sam_config.toml");
         let contents = fs::read_to_string(filename).unwrap();
         let data: Data = toml::from_str(&contents).unwrap();
@@ -203,12 +203,12 @@ mod tests {
         // let fil = formatted_dir.to_str().unwrap();
     }
 
-    #[test]
-    fn get_path() {
-        let filename = "/home/rubensl/sam_config.toml";
-        let contents = fs::read_to_string(filename).unwrap();
-        let data: Data = toml::from_str(&contents).unwrap();
+    // #[test]
+    // fn get_path() {
+    //     let filename = "/home/rubensl/sam_config.toml";
+    //     let contents = fs::read_to_string(filename).unwrap();
+    //     let data: Data = toml::from_str(&contents).unwrap();
 
-        dbg!(data);
-    }
+    //     dbg!(data);
+    // }
 }
