@@ -20,7 +20,7 @@ mod tests {
     use crate::token_vec;
 
     #[test]
-    fn test_mat_elemadd() {
+    fn test_matmul_ijk() {
         let test_name = "matmul_ijk";
         let filename = home::home_dir().unwrap().join("sam_config.toml");
         let contents = fs::read_to_string(filename).unwrap();
