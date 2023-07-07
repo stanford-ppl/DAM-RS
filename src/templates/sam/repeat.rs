@@ -61,7 +61,6 @@ where
             match dequeue(&mut self.time, &mut self.repeat_data.in_repsig) {
                 Ok(curr_in) => {
                     let curr_ref = in_ref.unwrap().data;
-                    dbg!(curr_ref.clone());
                     match curr_in.data {
                         Repsiggen::Repeat => {
                             let channel_elem = ChannelElement::new(self.time.tick() + 1, curr_ref);
@@ -74,7 +73,10 @@ where
                                 peek_next(&mut self.time, &mut self.repeat_data.in_ref).unwrap();
                             let output: Token<ValType, StopType> = match next_tkn.data {
                                 Token::Val(_) | Token::Empty => Token::Stop(StopType::default()),
-                                Token::Stop(stop_tkn) => Token::Stop(stop_tkn + 1),
+                                Token::Stop(stop_tkn) => {
+                                    dequeue(&mut self.time, &mut self.repeat_data.in_ref).unwrap();
+                                    Token::Stop(stop_tkn + 1)
+                                }
                                 Token::Done => {
                                     panic!("Invalid done token found");
                                 }
@@ -88,10 +90,9 @@ where
                             .unwrap();
                         }
                         Repsiggen::Done => {
-                            dequeue(&mut self.time, &mut self.repeat_data.in_ref).unwrap();
-                            let next_tkn =
-                                peek_next(&mut self.time, &mut self.repeat_data.in_ref).unwrap();
-                            match next_tkn.data {
+                            // let next_tkn =
+                            // peek_next(&mut self.time, &mut self.repeat_data.in_ref).unwrap();
+                            match curr_ref {
                                 Token::Done => {
                                     let channel_elem =
                                         ChannelElement::new(self.time.tick() + 1, Token::Done);
@@ -170,6 +171,7 @@ where
         + std::ops::Add<ValType, Output = ValType>
         + std::cmp::PartialOrd<ValType>,
     StopType: DAMType + std::ops::Add<u32, Output = StopType>,
+    Repsiggen: DAMType,
 {
     fn init(&mut self) {}
 
@@ -259,6 +261,13 @@ mod tests {
         repeat_test(in_ref, in_repsig, out_ref);
     }
 
+    #[test]
+    fn repsiggen_2d_test() {
+        let in_ref = || token_vec!(u32; u32; 0, 1, "S0", 2, "S0", 3, "S1", "D").into_iter();
+        let out_repsig = || repsig_vec!("R", "R", "S", "R", "S", "R", "S", "D").into_iter();
+        repsiggen_test(in_ref, out_repsig);
+    }
+
     fn repeat_test<IRT1, IRT2, ORT>(
         in_ref: fn() -> IRT1,
         in_repsig: fn() -> IRT2,
@@ -285,6 +294,30 @@ mod tests {
         parent.add_child(&mut gen2);
         parent.add_child(&mut val_checker);
         parent.add_child(&mut rep);
+        parent.init();
+        parent.run();
+        parent.cleanup();
+    }
+
+    fn repsiggen_test<IRT, ORT>(in_ref: fn() -> IRT, out_repsig: fn() -> ORT)
+    where
+        IRT: Iterator<Item = Token<u32, u32>> + 'static,
+        ORT: Iterator<Item = Repsiggen> + 'static,
+    {
+        let (in_ref_sender, in_ref_receiver) = unbounded::<Token<u32, u32>>();
+        let (out_repsig_sender, out_repsig_receiver) = unbounded::<Repsiggen>();
+        let data = RepSigGenData::<u32, u32> {
+            input: in_ref_receiver,
+            out_repsig: out_repsig_sender,
+        };
+
+        let mut repsig = RepeatSigGen::new(data);
+        let mut gen1 = GeneratorContext::new(in_ref, in_ref_sender);
+        let mut val_checker = CheckerContext::new(out_repsig, out_repsig_receiver);
+        let mut parent = BasicParentContext::default();
+        parent.add_child(&mut gen1);
+        parent.add_child(&mut val_checker);
+        parent.add_child(&mut repsig);
         parent.init();
         parent.run();
         parent.cleanup();

@@ -1,4 +1,4 @@
-use std::io::Repeat;
+
 
 use crate::types::DAMType;
 
@@ -10,7 +10,7 @@ pub enum Token<ValType, StopType> {
     Done,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Repsiggen {
     Repeat,
     Stop,
