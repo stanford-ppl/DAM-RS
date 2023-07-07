@@ -3,7 +3,10 @@ use crate::{
         utils::{dequeue, enqueue, peek_next},
         ChannelElement, Receiver, Sender,
     },
-    context::{view::TimeManager, Context},
+    context::{
+        view::{TimeManager, TimeView},
+        Context,
+    },
     types::{Cleanable, DAMType},
 };
 
@@ -126,8 +129,8 @@ where
         self.time.cleanup();
     }
 
-    fn view(&self) -> Box<dyn crate::context::ContextView> {
-        Box::new(self.time.view())
+    fn view(&self) -> TimeView {
+        self.time.view().into()
     }
 }
 
@@ -224,8 +227,8 @@ where
         self.time.cleanup();
     }
 
-    fn view(&self) -> Box<dyn crate::context::ContextView> {
-        Box::new(self.time.view())
+    fn view(&self) -> TimeView {
+        self.time.view().into()
     }
 }
 

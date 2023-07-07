@@ -5,7 +5,11 @@ use crate::{
         utils::{dequeue, enqueue, EventTime, Peekable},
         ChannelElement, Receiver, Sender,
     },
-    context::{self, view::TimeManager, Context, ContextView, ParentView},
+    context::{
+        self,
+        view::{TimeManager, TimeView},
+        Context, ContextView, ParentView,
+    },
     time::Time,
     types::{DAMType, IndexLike},
 };
@@ -38,10 +42,11 @@ impl<T: DAMType, IT: IndexLike, AT: DAMType> Context for PMU<T, IT, AT> {
 
     fn cleanup(&mut self) {} // No-op
 
-    fn view(&self) -> Box<dyn crate::context::ContextView> {
-        Box::new(ParentView {
+    fn view(&self) -> TimeView {
+        (ParentView {
             child_views: vec![self.writer.view(), self.reader.view()],
         })
+        .into()
     }
 }
 
@@ -90,7 +95,7 @@ struct ReadPipeline<T: DAMType, IT: DAMType> {
     time: TimeManager,
     readers: Vec<PMUReadBundle<T, IT>>,
     datastore: Arc<datastore::Datastore<T>>,
-    writer_view: Option<Box<dyn ContextView>>,
+    writer_view: Option<TimeView>,
 }
 
 impl<T: DAMType, IT: DAMType> ReadPipeline<T, IT>
@@ -166,8 +171,8 @@ impl<T: DAMType, IT: IndexLike> Context for ReadPipeline<T, IT> {
         self.time.cleanup();
     }
 
-    fn view(&self) -> Box<dyn crate::context::ContextView> {
-        Box::new(self.time.view())
+    fn view(&self) -> TimeView {
+        self.time.view().into()
     }
 }
 
@@ -246,8 +251,8 @@ impl<T: DAMType, IT: IndexLike, AT: DAMType> Context for WritePipeline<T, IT, AT
         self.time.cleanup();
     }
 
-    fn view(&self) -> Box<dyn crate::context::ContextView> {
-        Box::new(self.time.view())
+    fn view(&self) -> TimeView {
+        self.time.view().into()
     }
 }
 
@@ -262,7 +267,7 @@ mod tests {
         },
         context::{
             checker_context::CheckerContext, function_context::FunctionContext,
-            generator_context::GeneratorContext, parent::BasicParentContext, Context,
+            generator_context::GeneratorContext, parent::BasicParentContext, Context, ContextView,
             ParentContext,
         },
         templates::{
@@ -275,7 +280,7 @@ mod tests {
 
     #[test]
     fn simple_pmu_test() {
-        const TEST_SIZE: usize = 1024;
+        const TEST_SIZE: usize = 1024 * 64;
         let mut parent = BasicParentContext::default();
 
         let mut pmu = PMU::<u16, u16, bool>::new(

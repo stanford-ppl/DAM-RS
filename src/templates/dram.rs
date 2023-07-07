@@ -5,7 +5,10 @@ use crate::{
         utils::{dequeue, enqueue, EventTime, Peekable},
         ChannelElement, Receiver, Recv, Sender,
     },
-    context::{view::TimeManager, Context},
+    context::{
+        view::{TimeManager, TimeView},
+        Context,
+    },
     time::Time,
     types::{Cleanable, DAMType, IndexLike},
 };
@@ -311,8 +314,8 @@ impl<IType: IndexLike, T: DAMType, AT: DAMType> Context for DRAM<IType, T, AT> {
         self.bundles.iter_mut().for_each(|x| x.cleanup());
     }
 
-    fn view(&self) -> Box<dyn crate::context::ContextView> {
-        Box::new(self.time.view())
+    fn view(&self) -> TimeView {
+        self.time.view().into()
     }
 }
 

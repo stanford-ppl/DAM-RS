@@ -24,7 +24,7 @@ impl<T: DAMType> ChannelElement<T> {
     }
 }
 
-type ViewType = Option<Box<dyn ContextView>>;
+type ViewType = Option<TimeView>;
 
 enum SenderState<T> {
     Open(channel::Sender<T>),
