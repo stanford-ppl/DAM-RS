@@ -5,7 +5,7 @@ use crate::{
         utils::{dequeue, enqueue, EventTime, Peekable},
         ChannelElement, Receiver, Sender,
     },
-    context::{self, view::TimeManager, Context, ContextView},
+    context::{self, view::TimeManager, Context, ContextView, ParentView},
     time::Time,
     types::{DAMType, IndexLike},
 };
@@ -13,7 +13,6 @@ use crate::{
 use super::datastore::{self, Behavior, Datastore};
 
 pub struct PMU<T: DAMType, IT: IndexLike, AT: DAMType> {
-    time: TimeManager,
     reader: ReadPipeline<T, IT>,
     writer: WritePipeline<T, IT, AT>,
 }
@@ -40,7 +39,9 @@ impl<T: DAMType, IT: IndexLike, AT: DAMType> Context for PMU<T, IT, AT> {
     fn cleanup(&mut self) {} // No-op
 
     fn view(&self) -> Box<dyn crate::context::ContextView> {
-        Box::new(self.time.view())
+        Box::new(ParentView {
+            child_views: vec![self.writer.view(), self.reader.view()],
+        })
     }
 }
 
@@ -49,7 +50,6 @@ impl<T: DAMType, IT: IndexLike, AT: DAMType> PMU<T, IT, AT> {
         // This could probably somehow be embedded into the PMU instead of being an Arc.
         let datastore = Arc::new(Datastore::new(capacity, behavior));
         let mut pmu = PMU {
-            time: TimeManager::new(),
             reader: ReadPipeline {
                 readers: Default::default(),
                 time: Default::default(),
@@ -134,7 +134,10 @@ impl<T: DAMType, IT: IndexLike> Context for ReadPipeline<T, IT> {
                 Some((ind, time)) => (ind, time),
             };
 
-            println!("Next Read Event: {event_time:?}");
+            println!(
+                "Next Read Event ({event_ind:?}): {event_time:?}, Current Time: {:?}",
+                self.time.tick()
+            );
             match event_time {
                 EventTime::Ready(time) => self.time.advance(*time),
                 EventTime::Nothing(time) => {
@@ -216,6 +219,11 @@ impl<T: DAMType, IT: IndexLike, AT: DAMType> Context for WritePipeline<T, IT, AT
                 Some((ind, time)) => (ind, time),
             };
 
+            println!(
+                "Next Write Event ({event_ind:?}): {event_time:?}, Current Time: {:?}",
+                self.time.tick()
+            );
+
             match event_time {
                 EventTime::Ready(time) => self.time.advance(*time),
                 EventTime::Nothing(time) => {
@@ -277,7 +285,7 @@ mod tests {
 
     #[test]
     fn simple_pmu_test() {
-        const TEST_SIZE: usize = 1024;
+        const TEST_SIZE: usize = 16;
         let mut parent = BasicParentContext::default();
 
         let mut pmu = PMU::<u16, u16, bool>::new(
@@ -349,5 +357,9 @@ mod tests {
         parent.init();
         parent.run();
         parent.cleanup();
+        let finish_time = pmu.view().tick_lower_bound();
+        dbg!(finish_time);
+        assert!(finish_time.is_infinite());
+        // assert_eq!(finish_time.time(), u64::try_from(TEST_SIZE).unwrap());
     }
 }

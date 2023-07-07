@@ -7,6 +7,7 @@ use super::DequeueError;
 use super::EnqueueError;
 use super::Receiver;
 use super::Recv;
+use super::SendOptions;
 use super::Sender;
 
 use std::cmp::Ordering;
@@ -51,6 +52,7 @@ pub fn dequeue<T: DAMType>(
                 manager.advance(stuff.time);
                 return Ok(stuff);
             }
+            Recv::Unknown => panic!("Can't receive an Unknown!"),
         }
     }
 }
@@ -68,6 +70,7 @@ pub fn peek_next<T: DAMType>(
                 manager.advance(stuff.time);
                 return Ok(stuff);
             }
+            Recv::Unknown => panic!("Can't peek_next an unknown!"),
         }
     }
 }
@@ -101,17 +104,23 @@ pub fn enqueue<T: DAMType>(
 ) -> Result<(), EnqueueError> {
     let mut data_copy = data.clone();
     loop {
-        data_copy.update_time(manager.tick());
+        data_copy.update_time(manager.tick() + 1);
         let v = send.send(data_copy.clone());
         match v {
             Ok(()) => return Ok(()),
-            Err(time) if time.is_infinite() => {
+            Err(SendOptions::Never) => {
                 return Err(EnqueueError {});
             }
-            Err(time) => {
-                manager.advance(time + 1);
+            Err(SendOptions::CheckBackAt(time)) | Err(SendOptions::AvailableAt(time)) => {
+                // Have to make sure that we're making progress
+                assert!(time > manager.tick());
+                manager.advance(time);
+            }
+            Err(SendOptions::Unknown) => {
+                unreachable!("We should always know when to try again!")
             }
         }
+        println!("Retrying Enqueue!");
     }
 }
 
@@ -159,7 +168,9 @@ impl<T: DAMType> Peekable for Receiver<T> {
         match self.peek() {
             Recv::Closed => EventTime::Closed,
             Recv::Something(time) => EventTime::Ready(time.time),
+            Recv::Nothing(time) if time.is_infinite() => EventTime::Closed,
             Recv::Nothing(time) => EventTime::Nothing(time),
+            Recv::Unknown => panic!("Can't get an Unknown on a peek!"),
         }
     }
 }

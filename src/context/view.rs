@@ -53,8 +53,8 @@ impl TimeManager {
     }
 
     fn scan_and_write_signals(&mut self) {
-        let tlb = self.arc.tick_lower_bound();
         let mut write = self.arc.write().unwrap();
+        let tlb = write.time;
         write.signal_buffer.retain(|signal| {
             if signal.when <= tlb {
                 // If the signal time is in the present or past,
