@@ -4,9 +4,18 @@ use crossbeam::channel;
 
 use crate::time::Time;
 
-pub trait ContextView: Send + Sync {
+use super::ParentView;
+
+#[enum_delegate::register]
+pub trait ContextView {
     fn signal_when(&self, when: Time) -> channel::Receiver<Time>;
     fn tick_lower_bound(&self) -> Time;
+}
+
+#[enum_delegate::implement(ContextView)]
+pub enum TimeView {
+    BasicContextView(BasicContextView),
+    ParentView(ParentView),
 }
 
 #[derive(Clone, Default, Debug)]

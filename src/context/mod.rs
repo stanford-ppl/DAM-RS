@@ -1,6 +1,7 @@
 use crate::time::Time;
 
 pub use self::view::ContextView;
+use self::view::TimeView;
 
 pub mod checker_context;
 pub mod function_context;
@@ -13,7 +14,7 @@ pub trait Context: Send + Sync {
     fn init(&mut self);
     fn run(&mut self);
     fn cleanup(&mut self);
-    fn view(&self) -> Box<dyn ContextView>;
+    fn view(&self) -> TimeView;
 }
 
 type ChildType = dyn Context;
@@ -25,7 +26,7 @@ pub struct ChildManager<'a> {
 }
 
 pub struct ParentView {
-    pub child_views: Vec<Box<dyn ContextView>>,
+    pub child_views: Vec<TimeView>,
 }
 
 impl ContextView for ParentView {
@@ -77,9 +78,9 @@ impl<'a> ChildManager<'a> {
         });
     }
 
-    fn view(&self) -> Box<dyn ContextView> {
+    fn view(&self) -> TimeView {
         let child_views = self.children.iter().map(|child| child.view()).collect();
-        Box::new(ParentView { child_views })
+        (ParentView { child_views }).into()
     }
 }
 
@@ -111,7 +112,7 @@ impl<'a, T: ParentContext<'a>> Context for T {
 
     fn cleanup(&mut self) {}
 
-    fn view(&self) -> Box<dyn ContextView> {
+    fn view(&self) -> TimeView {
         self.manager().view()
     }
 }

@@ -11,3 +11,8 @@ rayon = "1.7.0"
 num = "0.4.0"
 ndarray = "0.15.6"
 ntest = "0.9.0"
+enum_delegate = "0.2.0"
+
+[profile.release-with-debug]
+inherits = "release"
+debug = true
