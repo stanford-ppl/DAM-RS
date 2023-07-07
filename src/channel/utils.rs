@@ -120,7 +120,6 @@ pub fn enqueue<T: DAMType>(
                 unreachable!("We should always know when to try again!")
             }
         }
-        println!("Retrying Enqueue!");
     }
 }
 

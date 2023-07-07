@@ -133,11 +133,6 @@ impl<T: DAMType, IT: IndexLike> Context for ReadPipeline<T, IT> {
                 }
                 Some((ind, time)) => (ind, time),
             };
-
-            println!(
-                "Next Read Event ({event_ind:?}): {event_time:?}, Current Time: {:?}",
-                self.time.tick()
-            );
             match event_time {
                 EventTime::Ready(time) => self.time.advance(*time),
                 EventTime::Nothing(time) => {
@@ -219,11 +214,6 @@ impl<T: DAMType, IT: IndexLike, AT: DAMType> Context for WritePipeline<T, IT, AT
                 Some((ind, time)) => (ind, time),
             };
 
-            println!(
-                "Next Write Event ({event_ind:?}): {event_time:?}, Current Time: {:?}",
-                self.time.tick()
-            );
-
             match event_time {
                 EventTime::Ready(time) => self.time.advance(*time),
                 EventTime::Nothing(time) => {
@@ -285,7 +275,7 @@ mod tests {
 
     #[test]
     fn simple_pmu_test() {
-        const TEST_SIZE: usize = 16;
+        const TEST_SIZE: usize = 1024;
         let mut parent = BasicParentContext::default();
 
         let mut pmu = PMU::<u16, u16, bool>::new(
@@ -360,6 +350,6 @@ mod tests {
         let finish_time = pmu.view().tick_lower_bound();
         dbg!(finish_time);
         assert!(finish_time.is_infinite());
-        // assert_eq!(finish_time.time(), u64::try_from(TEST_SIZE).unwrap());
+        assert_eq!(finish_time.time(), u64::try_from(TEST_SIZE).unwrap() + 1);
     }
 }

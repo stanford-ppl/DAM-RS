@@ -73,13 +73,13 @@ impl ViewStruct {
 
     pub fn register_send(&self) {
         self.real_send_receive_delta
-            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
     }
 
     pub fn register_recv(&self) {
         let old = self
             .real_send_receive_delta
-            .fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+            .fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
 
         // If we decremented an empty channel
         assert!(old > 0);
@@ -155,7 +155,7 @@ impl<T: DAMType> Sender<T> {
         let real_srd = self
             .view_struct
             .real_send_receive_delta
-            .load(std::sync::atomic::Ordering::SeqCst);
+            .load(std::sync::atomic::Ordering::Acquire);
 
         // The real_srd is decremented as soon as a read is processed, so it should be
         // strictly lower.
@@ -277,7 +277,7 @@ impl<T: DAMType> Receiver<T> {
         let srd = self
             .view_struct
             .real_send_receive_delta
-            .load(std::sync::atomic::Ordering::SeqCst);
+            .load(std::sync::atomic::Ordering::Acquire);
         if srd > 0 {
             self.head = match self.under().recv() {
                 Ok(data) => Recv::Something(data),
