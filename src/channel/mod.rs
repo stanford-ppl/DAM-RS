@@ -1,11 +1,12 @@
 pub mod utils;
 
+use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, RwLock};
 
 use crate::context::Context;
 use crate::types::DAMType;
 use crate::{context::view::*, time::Time, types::Cleanable};
-use crossbeam::channel::{self, select, SendError};
+use crossbeam::channel::{self, SendError};
 
 #[derive(Clone, Debug)]
 pub struct ChannelElement<T> {
@@ -36,13 +37,30 @@ struct ViewData {
     pub receiver: ViewType,
 }
 
-#[derive(Default)]
 struct ViewStruct {
     pub sender_views: RwLock<ViewData>,
     pub receiver_views: RwLock<ViewData>,
+
+    // Unlike the other SRD, this one reflects the actual state of the channel.
+    pub real_send_receive_delta: AtomicUsize,
+    pub channel_id: usize,
 }
 
+static ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
 impl ViewStruct {
+    fn next_id() -> usize {
+        ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    }
+
+    pub fn new() -> Self {
+        Self {
+            sender_views: Default::default(),
+            receiver_views: Default::default(),
+            real_send_receive_delta: Default::default(),
+            channel_id: ViewStruct::next_id(),
+        }
+    }
+
     pub fn attach_sender(&self, sender: &dyn Context) {
         self.sender_views.write().unwrap().sender = Some(sender.view());
         self.receiver_views.write().unwrap().sender = Some(sender.view());
@@ -52,8 +70,29 @@ impl ViewStruct {
         self.sender_views.write().unwrap().receiver = Some(receiver.view());
         self.receiver_views.write().unwrap().receiver = Some(receiver.view());
     }
+
+    pub fn register_send(&self) {
+        self.real_send_receive_delta
+            .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+    }
+
+    pub fn register_recv(&self) {
+        let old = self
+            .real_send_receive_delta
+            .fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
+
+        // If we decremented an empty channel
+        assert!(old > 0);
+    }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum SendOptions {
+    Unknown,
+    AvailableAt(Time),
+    CheckBackAt(Time),
+    Never,
+}
 pub struct Sender<T> {
     underlying: SenderState<ChannelElement<T>>,
     resp: channel::Receiver<Time>,
@@ -61,8 +100,7 @@ pub struct Sender<T> {
     capacity: usize,
 
     view_struct: Arc<ViewStruct>,
-    backlog: Option<Time>,
-    next_available: Option<Time>,
+    next_available: SendOptions,
 }
 
 impl<T: DAMType> Sender<T> {
@@ -84,18 +122,16 @@ impl<T: DAMType> Sender<T> {
             .tick_lower_bound()
     }
 
-    pub fn send(&mut self, elem: ChannelElement<T>) -> Result<(), Time> {
+    pub fn send(&mut self, elem: ChannelElement<T>) -> Result<(), SendOptions> {
         if self.is_full() {
-            match self.next_available {
-                Some(time) => return Result::Err(time),
-                None => return Result::Err(self.sender_tlb() + 1),
-            }
+            return Err(self.next_available);
         }
 
         assert!(self.send_receive_delta < self.capacity);
         assert!(elem.time >= self.sender_tlb());
         self.under_send(elem).unwrap();
         self.send_receive_delta += 1;
+        self.view_struct.register_send();
         Ok(())
     }
 
@@ -112,15 +148,54 @@ impl<T: DAMType> Sender<T> {
         self.send_receive_delta == self.capacity
     }
 
+    fn update_srd(&mut self) {
+        let send_time = self.sender_tlb();
+        // We don't know when it'll be available.
+        self.next_available = SendOptions::Unknown;
+        let real_srd = self
+            .view_struct
+            .real_send_receive_delta
+            .load(std::sync::atomic::Ordering::Acquire);
+
+        // The real_srd is decremented as soon as a read is processed, so it should be
+        // strictly lower.
+        assert!(self.send_receive_delta >= real_srd);
+        for _ in 0..(self.send_receive_delta - real_srd) {
+            // Loop until either:
+            // 1. These two agree on how many values are currently in the channel
+            //    In which case the sender is viewing "reality"
+            // 2. The next read is in the future
+            match self.resp.recv() {
+                Ok(time) if time <= send_time => {
+                    assert!(self.send_receive_delta > 0);
+                    self.send_receive_delta -= 1;
+                }
+                Ok(time) => {
+                    // Got a time in the future
+                    assert!(self.next_available == SendOptions::Unknown);
+                    self.next_available = SendOptions::AvailableAt(time);
+                    return;
+                }
+                Err(_) => {
+                    // The receiver is done reading. At this point we're done.
+                    self.next_available = SendOptions::Never;
+                    return;
+                }
+            }
+        }
+    }
+
     fn update_len(&mut self) {
         let send_time = self.sender_tlb();
-        if let Some(time) = self.backlog {
+        if let SendOptions::AvailableAt(time) = self.next_available {
             if time < send_time {
-                self.backlog = None;
+                // Next available time has already passed, so we pop an element off.
+                // Additionally, to avoid work, we don't update next_available immediately.
+                self.next_available = SendOptions::Unknown;
                 assert_ne!(self.send_receive_delta, 0);
                 self.send_receive_delta -= 1;
             } else {
-                self.next_available = Some(time);
+                // Next available time in the future, becomes a no-op.
                 return;
             }
         }
@@ -134,34 +209,13 @@ impl<T: DAMType> Sender<T> {
             .as_ref()
             .unwrap()
             .signal_when(send_time);
-        let mut update_srd = |time: Time, next_avail: &mut Option<Time>| {
-            if send_time < time {
-                *next_avail = Some(time);
-                false
-            } else {
-                assert_ne!(self.send_receive_delta, 0);
-                self.send_receive_delta -= 1;
-                true
-            }
-        };
 
-        loop {
-            select! {
-                recv(signal) -> _ => {
-                    while let Ok(recv_time) = self.resp.try_recv() {
-                        if !update_srd(recv_time, &mut self.next_available) {
-                            return
-                        }
-                    }
-                    self.next_available = Some(send_time + 1);
-                    return
-                },
-                recv(self.resp) -> recv_time => {
-                    if !update_srd(recv_time.unwrap(), &mut self.next_available) {
-                        return
-                    }
-                }
-            }
+        // Wait for producer to catch up
+        let new_time = signal.recv().unwrap();
+
+        self.update_srd();
+        if self.next_available == SendOptions::Unknown {
+            self.next_available = SendOptions::CheckBackAt(new_time + 1)
         }
     }
 }
@@ -189,14 +243,15 @@ pub struct Receiver<T> {
     resp: channel::Sender<Time>,
 
     view_struct: Arc<ViewStruct>,
-    head: Option<Recv<T>>,
+    head: Recv<T>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Recv<T> {
     Something(ChannelElement<T>),
     Nothing(Time),
     Closed,
+    Unknown,
 }
 
 impl<T: DAMType> Receiver<T> {
@@ -212,37 +267,40 @@ impl<T: DAMType> Receiver<T> {
             .receiver_views
             .read()
             .unwrap()
-            .sender
+            .receiver
             .as_ref()
             .unwrap()
             .tick_lower_bound()
     }
 
+    fn try_update_head(&mut self) -> bool {
+        let srd = self
+            .view_struct
+            .real_send_receive_delta
+            .load(std::sync::atomic::Ordering::Acquire);
+        if srd > 0 {
+            self.head = match self.under().recv() {
+                Ok(data) => Recv::Something(data),
+                Err(_) => Recv::Closed,
+            };
+            return true;
+        }
+        return false;
+    }
+
     pub fn peek(&mut self) -> Recv<T> {
         let recv_time = self.receiver_tlb();
-        match &self.head {
-            Some(Recv::Nothing(time)) if *time >= recv_time => {
-                return Recv::Nothing(*time);
+        match self.head {
+            Recv::Nothing(time) if time >= recv_time => {
+                // This is a valid nothing
+                return Recv::Nothing(time);
             }
-            Some(Recv::Nothing(_)) => {
-                // Fallthrough, this is a stale Nothing
-            }
-            Some(stuff) => return stuff.clone(),
-            None => {}
+            Recv::Nothing(_) | Recv::Unknown => {}
+            Recv::Something(_) => return self.head.clone(),
+            Recv::Closed => return Recv::Closed,
         }
-        let update_head = |recv: &crossbeam::channel::Receiver<ChannelElement<T>>| {
-            match recv.try_recv() {
-                Ok(data) => Some(Recv::Something(data)),
-                Err(channel::TryRecvError::Disconnected) => Some(Recv::Closed),
-                Err(channel::TryRecvError::Empty) => {
-                    // Fallthrough, time to do some waiting
-                    None
-                }
-            }
-        };
-        if let Some(stuff) = update_head(self.under()) {
-            self.head = Some(stuff.clone());
-            return stuff;
+        if self.try_update_head() {
+            return self.head.clone();
         }
 
         let signal = self
@@ -254,30 +312,34 @@ impl<T: DAMType> Receiver<T> {
             .as_ref()
             .unwrap()
             .signal_when(recv_time);
-        select! {
-            recv(signal) -> send_time => {
-                if let Some(stuff) = update_head(self.under()) {
-                    self.head = Some(stuff.clone());
-                    return stuff;
+        let sig_time = signal.recv().unwrap();
+        assert!(sig_time >= recv_time);
+        if self.try_update_head() {
+            return self.head.clone();
+        }
+        if sig_time.is_infinite() {
+            match &self.head {
+                Recv::Something(_) => {}
+                _ => {
+                    self.head = Recv::Closed;
+                    return Recv::Closed;
                 }
-                self.head = Some(Recv::Nothing(send_time.unwrap()));
-            }
-            recv(self.under()) -> data => {
-                self.head = match data {
-                    Ok(stuff) => Some(Recv::Something(stuff)),
-                    Err(channel::RecvError) =>  Some(Recv::Closed),
-                };
             }
         }
-        self.head.clone().unwrap()
+        Recv::Nothing(sig_time)
     }
 
     pub fn recv(&mut self) -> Recv<T> {
         let res = self.peek();
-        self.head = None;
-        if let Recv::Something(stuff) = &res {
-            let ct: Time = self.receiver_tlb();
-            let _ = self.resp.send(ct.max(stuff.time));
+        match &res {
+            Recv::Something(stuff) => {
+                let ct: Time = self.receiver_tlb();
+                let _ = self.resp.send(ct.max(stuff.time));
+                self.view_struct.register_recv();
+                self.head = Recv::Unknown;
+            }
+            Recv::Nothing(_) | Recv::Closed => {}
+            Recv::Unknown => unreachable!(),
         }
         res
     }
@@ -306,21 +368,20 @@ where
 {
     let (tx, rx) = channel::bounded::<ChannelElement<T>>(capacity);
     let (resp_t, resp_r) = channel::bounded::<Time>(capacity);
-    let view_struct = Arc::new(ViewStruct::default());
+    let view_struct = Arc::new(ViewStruct::new());
     let snd = Sender {
         underlying: SenderState::Open(tx),
         resp: resp_r,
         send_receive_delta: 0,
         capacity,
         view_struct: view_struct.clone(),
-        backlog: None,
-        next_available: None,
+        next_available: SendOptions::Unknown,
     };
     let rcv = Receiver {
         underlying: ReceiverState::Open(rx),
         resp: resp_t,
         view_struct,
-        head: None,
+        head: Recv::Unknown,
     };
     (snd, rcv)
 }
@@ -331,21 +392,20 @@ where
 {
     let (tx, rx) = channel::unbounded::<ChannelElement<T>>();
     let (resp_t, resp_r) = channel::unbounded::<Time>();
-    let view_struct = Arc::new(ViewStruct::default());
+    let view_struct = Arc::new(ViewStruct::new());
     let snd = Sender {
         underlying: SenderState::Open(tx),
         resp: resp_r,
         send_receive_delta: 0,
         capacity: usize::MAX,
         view_struct: view_struct.clone(),
-        backlog: None,
-        next_available: None,
+        next_available: SendOptions::Unknown,
     };
     let rcv = Receiver {
         underlying: ReceiverState::Open(rx),
         resp: resp_t,
         view_struct,
-        head: None,
+        head: Recv::Unknown,
     };
     (snd, rcv)
 }

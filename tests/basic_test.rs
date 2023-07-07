@@ -48,6 +48,9 @@ mod tests {
                         Recv::Closed => {
                             panic!("Channel was prematurely closed!");
                         }
+                        Recv::Unknown => {
+                            unreachable!();
+                        }
                     }
                 }
                 time.incr_cycles(1);

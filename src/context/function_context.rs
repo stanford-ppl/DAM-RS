@@ -1,5 +1,3 @@
-
-
 use super::{
     view::{ContextView, TimeManager},
     Context,

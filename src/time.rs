@@ -26,6 +26,10 @@ impl Time {
         self.done = true;
     }
 
+    pub fn time(&self) -> u64 {
+        self.time
+    }
+
     fn cmp(&self, other: &Self) -> Ordering {
         if self == other {
             Ordering::Equal
@@ -62,6 +66,16 @@ impl PartialOrd for Time {
 impl Ord for Time {
     fn cmp(&self, other: &Self) -> Ordering {
         self.cmp(other)
+    }
+}
+
+impl std::fmt::Display for Time {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.is_infinite() {
+            write!(f, "inf {}", self.time)
+        } else {
+            self.time.fmt(f)
+        }
     }
 }
 

@@ -24,8 +24,8 @@ pub struct ChildManager<'a> {
     children: Vec<&'a mut ChildType>,
 }
 
-struct ParentView {
-    child_views: Vec<Box<dyn ContextView>>,
+pub struct ParentView {
+    pub child_views: Vec<Box<dyn ContextView>>,
 }
 
 impl ContextView for ParentView {
