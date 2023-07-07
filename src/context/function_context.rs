@@ -1,9 +1,6 @@
+use crate::context::view::TimeView;
 
-
-use super::{
-    view::{ContextView, TimeManager},
-    Context,
-};
+use super::{view::TimeManager, Context};
 
 pub struct FunctionContext<RT>
 where
@@ -31,8 +28,8 @@ where
         self.time.cleanup();
     }
 
-    fn view(&self) -> Box<dyn ContextView> {
-        Box::new(self.time.view())
+    fn view(&self) -> TimeView {
+        self.time.view().into()
     }
 }
 impl<RT> FunctionContext<RT>

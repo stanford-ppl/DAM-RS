@@ -2,60 +2,57 @@ use std::sync::{Arc, RwLock};
 
 use crossbeam::channel;
 
-use crate::time::Time;
+use crate::time::{AtomicTime, Time};
 
-pub trait ContextView: Send + Sync {
+use super::ParentView;
+
+#[enum_delegate::register]
+pub trait ContextView {
     fn signal_when(&self, when: Time) -> channel::Receiver<Time>;
     fn tick_lower_bound(&self) -> Time;
 }
 
+#[enum_delegate::implement(ContextView)]
+pub enum TimeView {
+    BasicContextView(BasicContextView),
+    ParentView(ParentView),
+}
+
 #[derive(Clone, Default, Debug)]
 pub struct TimeManager {
-    arc: Arc<RwLock<TimeInfo>>,
+    underlying: Arc<TimeInfo>,
 }
 
 impl TimeManager {
     pub fn new() -> TimeManager {
         TimeManager {
-            arc: Arc::new(RwLock::default()),
+            underlying: Arc::new(TimeInfo::default()),
         }
     }
 
     pub fn view(&self) -> BasicContextView {
         BasicContextView {
-            under: self.arc.clone(),
+            under: self.underlying.clone(),
         }
     }
 }
 
 impl TimeManager {
-    pub fn incr_cycles<T>(&mut self, incr: T)
-    where
-        Time: std::ops::AddAssign<T>,
-    {
-        self.arc.write().unwrap().time += incr;
+    pub fn incr_cycles(&mut self, incr: u64) {
+        self.underlying.time.incr_cycles(incr);
         self.scan_and_write_signals();
     }
 
     pub fn advance(&mut self, new: Time) {
-        {
-            let mut write = self.arc.write().unwrap();
-            if write.time > new {
-                return;
-            }
-            if new.is_infinite() {
-                write.time.set_infinite();
-            } else {
-                write.time = new;
-            }
+        if self.underlying.time.try_advance(new) {
+            self.scan_and_write_signals();
         }
-        self.scan_and_write_signals();
     }
 
     fn scan_and_write_signals(&mut self) {
-        let tlb = self.arc.tick_lower_bound();
-        let mut write = self.arc.write().unwrap();
-        write.signal_buffer.retain(|signal| {
+        let mut signal_buffer = self.underlying.signal_buffer.write().unwrap();
+        let tlb = self.underlying.time.load();
+        signal_buffer.retain(|signal| {
             if signal.when <= tlb {
                 // If the signal time is in the present or past,
                 let _ = signal.how.send(tlb);
@@ -67,27 +64,18 @@ impl TimeManager {
     }
 
     pub fn tick(&self) -> Time {
-        self.arc.tick_lower_bound()
+        self.underlying.time.load()
     }
 
     pub fn cleanup(&mut self) {
-        self.advance(Time::infinite());
-    }
-}
-
-pub trait TickLowerBound {
-    fn tick_lower_bound(&self) -> Time;
-}
-
-impl TickLowerBound for Arc<RwLock<TimeInfo>> {
-    fn tick_lower_bound(&self) -> Time {
-        return self.read().unwrap().time;
+        self.underlying.time.set_infinite();
+        self.scan_and_write_signals();
     }
 }
 
 #[derive(Clone)]
 pub struct BasicContextView {
-    under: Arc<RwLock<TimeInfo>>,
+    under: Arc<TimeInfo>,
 }
 
 impl ContextView for BasicContextView {
@@ -95,23 +83,24 @@ impl ContextView for BasicContextView {
         let (tx, rx) = channel::bounded::<Time>(1);
 
         // Check time first. Since time is non-decreasing, if this cond is true, then it's always true.
-        let cur_time = self.under.tick_lower_bound();
+        let cur_time = self.under.time.load();
         if cur_time >= when {
             tx.send(cur_time).unwrap();
             rx
         } else {
-            let mut write = self.under.write().unwrap();
-            if write.time >= when {
-                tx.send(write.time).unwrap();
+            let mut signal_buffer = self.under.signal_buffer.write().unwrap();
+            let cur_time = self.under.time.load();
+            if cur_time >= when {
+                tx.send(cur_time).unwrap();
             } else {
-                write.signal_buffer.push(SignalElement { when, how: tx })
+                signal_buffer.push(SignalElement { when, how: tx })
             }
             rx
         }
     }
 
     fn tick_lower_bound(&self) -> Time {
-        self.under.tick_lower_bound()
+        self.under.time.load()
     }
 }
 
@@ -125,6 +114,6 @@ struct SignalElement {
 // Encapsulates the callback backlog and the current tick info to make BasicContextView work.
 #[derive(Default, Debug)]
 struct TimeInfo {
-    time: Time,
-    signal_buffer: Vec<SignalElement>,
+    time: AtomicTime,
+    signal_buffer: RwLock<Vec<SignalElement>>,
 }

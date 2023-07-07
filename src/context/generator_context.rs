@@ -3,7 +3,10 @@ use crate::{
     types::{Cleanable, DAMType},
 };
 
-use super::{view::TimeManager, Context};
+use super::{
+    view::{TimeManager, TimeView},
+    Context,
+};
 
 pub struct GeneratorContext<T, IType, FType>
 where
@@ -44,8 +47,8 @@ where
         self.time.cleanup();
     }
 
-    fn view(&self) -> Box<dyn super::ContextView> {
-        Box::new(self.time.view())
+    fn view(&self) -> TimeView {
+        self.time.view().into()
     }
 }
 
