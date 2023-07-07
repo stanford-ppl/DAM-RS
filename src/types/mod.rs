@@ -3,7 +3,7 @@ pub mod tensor;
 pub mod unevaluated;
 
 //Sync + Send + Default + core::fmt::Debug + std::cmp::PartialEq + Clone;
-pub trait DAMType: Sync + Send + Default + core::fmt::Debug + std::cmp::PartialEq + Clone {
+pub trait DAMType: Sync + Send + Default + core::fmt::Debug + Clone {
     // Returns the size of the object in BITS
     fn dam_size(&self) -> usize;
 }

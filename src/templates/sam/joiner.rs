@@ -66,8 +66,10 @@ where
         + std::ops::Mul<ValType, Output = ValType>
         + std::ops::Add<ValType, Output = ValType>
         + std::cmp::PartialOrd<ValType>,
-    StopType:
-        DAMType + std::ops::Add<u32, Output = StopType> + std::ops::Sub<u32, Output = StopType>,
+    StopType: DAMType
+        + std::ops::Add<u32, Output = StopType>
+        + std::ops::Sub<u32, Output = StopType>
+        + std::cmp::PartialEq,
 {
     fn init(&mut self) {}
 

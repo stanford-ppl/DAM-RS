@@ -9,29 +9,31 @@ use crate::{
 
 use super::primitive::Token;
 
-pub struct ArrayData<ValType, StopType> {
-    pub in_ref: Receiver<Token<ValType, StopType>>,
+pub struct ArrayData<RefType, ValType, StopType> {
+    pub in_ref: Receiver<Token<RefType, StopType>>,
     pub out_val: Sender<Token<ValType, StopType>>,
 }
 
-impl<ValType: DAMType, StopType: DAMType> Cleanable for ArrayData<ValType, StopType> {
+impl<RefType: DAMType, ValType: DAMType, StopType: DAMType> Cleanable
+    for ArrayData<RefType, ValType, StopType>
+{
     fn cleanup(&mut self) {
         self.in_ref.cleanup();
         self.out_val.cleanup();
     }
 }
 
-pub struct Array<ValType, StopType> {
-    array_data: ArrayData<ValType, StopType>,
+pub struct Array<RefType, ValType, StopType> {
+    array_data: ArrayData<RefType, ValType, StopType>,
     val_arr: Vec<ValType>,
     time: TimeManager,
 }
 
-impl<ValType: DAMType, StopType: DAMType> Array<ValType, StopType>
+impl<RefType: DAMType, ValType: DAMType, StopType: DAMType> Array<RefType, ValType, StopType>
 where
-    Array<ValType, StopType>: Context,
+    Array<RefType, ValType, StopType>: Context,
 {
-    pub fn new(array_data: ArrayData<ValType, StopType>, val_arr: Vec<ValType>) -> Self {
+    pub fn new(array_data: ArrayData<RefType, ValType, StopType>, val_arr: Vec<ValType>) -> Self {
         let arr = Array {
             array_data,
             val_arr,
@@ -44,14 +46,14 @@ where
     }
 }
 
-impl<ValType, StopType> Context for Array<ValType, StopType>
+impl<RefType, ValType, StopType> Context for Array<RefType, ValType, StopType>
 where
-    ValType: DAMType
-        + std::ops::Mul<ValType, Output = ValType>
-        + std::ops::Add<ValType, Output = ValType>
-        + std::cmp::PartialOrd<ValType>,
-    ValType: TryInto<usize>,
-    <ValType as TryInto<usize>>::Error: std::fmt::Debug,
+    RefType: DAMType
+        + std::ops::Mul<RefType, Output = RefType>
+        + std::ops::Add<RefType, Output = RefType>,
+    RefType: TryInto<usize>,
+    <RefType as TryInto<usize>>::Error: std::fmt::Debug,
+    ValType: DAMType,
     StopType: DAMType + std::ops::Add<u32, Output = StopType>,
 {
     fn init(&mut self) {}
@@ -68,6 +70,7 @@ where
                         );
                         enqueue(&mut self.time, &mut self.array_data.out_val, channel_elem)
                             .unwrap();
+                        // dbg!(self.val_arr[idx].clone());
                     }
                     Token::Stop(stkn) => {
                         let channel_elem =
@@ -143,7 +146,7 @@ mod tests {
     {
         let (in_ref_sender, in_ref_receiver) = unbounded::<Token<u32, u32>>();
         let (out_val_sender, out_val_receiver) = unbounded::<Token<u32, u32>>();
-        let data = ArrayData::<u32, u32> {
+        let data = ArrayData::<u32, u32, u32> {
             in_ref: in_ref_receiver,
             out_val: out_val_sender,
         };

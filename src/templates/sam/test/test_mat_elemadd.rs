@@ -1,20 +1,23 @@
-use super::config;
+
 
 #[cfg(test)]
 mod tests {
-    use std::fmt::format;
+    
     use std::{fs, path::Path};
 
     use crate::channel::unbounded;
     use crate::context::generator_context::GeneratorContext;
     use crate::context::parent::BasicParentContext;
     use crate::context::{Context, ParentContext};
+    use crate::templates::ops::ALUAddOp;
+    use crate::templates::sam::alu::make_alu;
     use crate::templates::sam::array::{Array, ArrayData};
     use crate::templates::sam::joiner::{CrdJoinerData, Union};
     use crate::templates::sam::primitive::Token;
     use crate::templates::sam::rd_scanner::{CompressedCrdRdScan, RdScanData};
-    use crate::templates::sam::test::config::{Config, Data};
+    use crate::templates::sam::test::config::{Data};
     use crate::templates::sam::utils::read_inputs;
+    use crate::templates::sam::wr_scanner::{CompressedWrScan, ValsWrScan, WrScanData};
     use crate::token_vec;
 
     #[test]
@@ -46,87 +49,158 @@ mod tests {
         let c1_seg = read_inputs::<u32>(&c1_seg_filename);
         let c1_crd = read_inputs::<u32>(&c1_crd_filename);
         let c_vals = read_inputs::<f32>(&c_vals_filename);
-        let (ref_sender, ref_receiver) = unbounded::<Token<u32, u32>>();
-        let (crd_sender, crd_receiver) = unbounded::<Token<u32, u32>>();
-        let (in_ref_sender, in_ref_receiver) = unbounded::<Token<u32, u32>>();
-        let data = RdScanData::<u32, u32> {
-            in_ref: in_ref_receiver,
-            out_ref: ref_sender,
-            out_crd: crd_sender,
+
+        // fiberlookup_bi
+        let (bi_out_ref_sender, bi_out_ref_receiver) = unbounded::<Token<u32, u32>>();
+        let (bi_out_crd_sender, bi_out_crd_receiver) = unbounded::<Token<u32, u32>>();
+        let (bi_in_ref_sender, bi_in_ref_receiver) = unbounded::<Token<u32, u32>>();
+        let bi_data = RdScanData::<u32, u32> {
+            in_ref: bi_in_ref_receiver,
+            out_ref: bi_out_ref_sender,
+            out_crd: bi_out_crd_sender,
         };
 
-        let mut gen1 =
-            GeneratorContext::new(|| token_vec!(u32; u32; 0, "D").into_iter(), in_ref_sender);
-        let mut fiberlookup_bi = CompressedCrdRdScan::new(data, b0_seg, b0_crd);
-        let (crd_sender1, crd_receiver1) = unbounded::<Token<u32, u32>>();
-        let (ref_sender1, ref_receiver1) = unbounded::<Token<u32, u32>>();
-        let data1 = RdScanData::<u32, u32> {
-            in_ref: ref_receiver,
-            out_ref: ref_sender1,
-            out_crd: crd_sender1,
-        };
-        let mut fiberlookup_bj = CompressedCrdRdScan::new(data1, b1_seg, b1_crd);
-        let (crd_sender2, crd_receiver2) = unbounded::<Token<u32, u32>>();
-        let (ref_sender2, ref_receiver2) = unbounded::<Token<u32, u32>>();
-        let (in_ref_sender2, in_ref_receiver2) = unbounded::<Token<u32, u32>>();
-        let mut gen2 =
-            GeneratorContext::new(|| token_vec!(u32; u32; 0, "D").into_iter(), in_ref_sender2);
-        let data2 = RdScanData::<u32, u32> {
-            in_ref: in_ref_receiver2,
-            out_ref: ref_sender2,
-            out_crd: crd_sender2,
-        };
-        let mut fiberlookup_ci = CompressedCrdRdScan::new(data2, c0_seg, c0_crd);
-        let (crd_sender3, crd_receiver3) = unbounded::<Token<u32, u32>>();
-        let (ref_sender3, ref_receiver3) = unbounded::<Token<u32, u32>>();
-        let data3 = RdScanData::<u32, u32> {
-            in_ref: ref_receiver2,
-            out_ref: ref_sender3,
-            out_crd: crd_sender3,
-        };
-        let mut fiberlookup_cj = CompressedCrdRdScan::new(data3, c1_seg, c1_crd);
+        let mut b_gen = GeneratorContext::new(
+            || token_vec!(u32; u32; 0, "D").into_iter(),
+            bi_in_ref_sender,
+        );
+        let mut bi_rdscanner = CompressedCrdRdScan::new(bi_data, b0_seg, b0_crd);
 
-        let (out_crd_sender, out_crd_receiver) = unbounded::<Token<u32, u32>>();
-        let (out_ref1_sender, out_ref1_receiver) = unbounded::<Token<u32, u32>>();
-        let (out_ref2_sender, out_ref2_receiver) = unbounded::<Token<u32, u32>>();
-        let union_data = CrdJoinerData::<u32, u32> {
-            in_crd1: crd_receiver1,
-            in_ref1: ref_receiver1,
-            in_crd2: crd_receiver3,
-            in_ref2: ref_receiver3,
-            out_crd: out_crd_sender,
-            out_ref1: out_ref1_sender,
-            out_ref2: out_ref2_sender,
+        // fiberlookup_ci
+        let (ci_out_crd_sender, ci_out_crd_receiver) = unbounded::<Token<u32, u32>>();
+        let (ci_out_ref_sender, ci_out_ref_receiver) = unbounded::<Token<u32, u32>>();
+        let (ci_in_ref_sender, ci_in_ref_receiver) = unbounded::<Token<u32, u32>>();
+        let ci_data = RdScanData::<u32, u32> {
+            in_ref: ci_in_ref_receiver,
+            out_ref: ci_out_ref_sender,
+            out_crd: ci_out_crd_sender,
         };
-        let mut union_j = Union::new(union_data);
+        let mut c_gen = GeneratorContext::new(
+            || token_vec!(u32; u32; 0, "D").into_iter(),
+            ci_in_ref_sender,
+        );
+        let mut ci_rdscanner = CompressedCrdRdScan::new(ci_data, c0_seg, c0_crd);
 
-        let (out_val_sender, out_val_receiver) = unbounded::<Token<u32, u32>>();
-        let (out_val1_sender, out_val1_receiver) = unbounded::<Token<u32, u32>>();
+        // union_i
+        let (unioni_out_crd_sender, unioni_out_crd_receiver) = unbounded::<Token<u32, u32>>();
+        let (unioni_out_ref1_sender, unioni_out_ref1_receiver) = unbounded::<Token<u32, u32>>();
+        let (unioni_out_ref2_sender, unioni_out_ref2_receiver) = unbounded::<Token<u32, u32>>();
+        let unioni_data = CrdJoinerData::<u32, u32> {
+            in_crd1: bi_out_crd_receiver,
+            in_ref1: bi_out_ref_receiver,
+            in_crd2: ci_out_crd_receiver,
+            in_ref2: ci_out_ref_receiver,
+            out_crd: unioni_out_crd_sender,
+            out_ref1: unioni_out_ref1_sender,
+            out_ref2: unioni_out_ref2_sender,
+        };
+        let mut union_i = Union::new(unioni_data);
 
-        let arr_data = ArrayData::<u32, u32> {
-            in_ref: out_ref1_receiver,
-            out_val: out_val_sender,
+        // fiberwrite_X0
+        let x0_seg: Vec<u32> = Vec::new();
+        let x0_crd: Vec<u32> = Vec::new();
+        let x0_wrscanner_data = WrScanData::<u32, u32> {
+            input: unioni_out_crd_receiver,
         };
-        let mut arr_b = Array::<f32, u32>::new(arr_data, b_vals);
-        let arr1_data = ArrayData::<u32, u32> {
-            in_ref: out_ref2_receiver,
-            out_val: out_val1_sender,
+        let mut x0_wrscanner = CompressedWrScan::new(x0_wrscanner_data, x0_seg, x0_crd);
+
+        // fiberlookup_bj
+        let (bj_out_crd_sender, bj_out_crd_receiver) = unbounded::<Token<u32, u32>>();
+        let (bj_out_ref_sender, bj_out_ref_receiver) = unbounded::<Token<u32, u32>>();
+        let bj_data = RdScanData::<u32, u32> {
+            in_ref: unioni_out_ref1_receiver,
+            out_ref: bj_out_ref_sender,
+            out_crd: bj_out_crd_sender,
         };
-        let mut arr_c = Array::<f32, u32>::new(arr1_data, c_vals);
+        let mut bj_rdscanner = CompressedCrdRdScan::new(bj_data, b1_seg, b1_crd);
+
+        // fiberlookup_cj
+        let (cj_out_crd_sender, cj_out_crd_receiver) = unbounded::<Token<u32, u32>>();
+        let (cj_out_ref_sender, cj_out_ref_receiver) = unbounded::<Token<u32, u32>>();
+        let cj_data = RdScanData::<u32, u32> {
+            in_ref: unioni_out_ref2_receiver,
+            out_ref: cj_out_ref_sender,
+            out_crd: cj_out_crd_sender,
+        };
+        let mut cj_rdscanner = CompressedCrdRdScan::new(cj_data, c1_seg, c1_crd);
+
+        // union_j
+        let (unionj_out_crd_sender, unionj_out_crd_receiver) = unbounded::<Token<u32, u32>>();
+        let (unionj_out_ref1_sender, unionj_out_ref1_receiver) = unbounded::<Token<u32, u32>>();
+        let (unionj_out_ref2_sender, unionj_out_ref2_receiver) = unbounded::<Token<u32, u32>>();
+        let unionj_data = CrdJoinerData::<u32, u32> {
+            in_crd1: bj_out_crd_receiver,
+            in_ref1: bj_out_ref_receiver,
+            in_crd2: cj_out_crd_receiver,
+            in_ref2: cj_out_ref_receiver,
+            out_crd: unionj_out_crd_sender,
+            out_ref1: unionj_out_ref1_sender,
+            out_ref2: unionj_out_ref2_sender,
+        };
+        let mut union_j = Union::new(unionj_data);
+
+        // fiberwrite_x1
+        let x1_seg: Vec<u32> = Vec::new();
+        let x1_crd: Vec<u32> = Vec::new();
+        let x1_wrscanner_data = WrScanData::<u32, u32> {
+            input: unionj_out_crd_receiver,
+        };
+        let mut x1_wrscanner = CompressedWrScan::new(x1_wrscanner_data, x1_seg, x1_crd);
+
+        // arrayvals_b
+        let (b_out_val_sender, b_out_val_receiver) = unbounded::<Token<f32, u32>>();
+        let arrayvals_b_data = ArrayData::<u32, f32, u32> {
+            in_ref: unionj_out_ref1_receiver,
+            out_val: b_out_val_sender,
+        };
+        let mut arrayvals_b = Array::<u32, f32, u32>::new(arrayvals_b_data, b_vals);
+
+        // arrayvals_c
+        let (c_out_val_sender, c_out_val_receiver) = unbounded::<Token<f32, u32>>();
+        let arrayvals_c_data = ArrayData::<u32, f32, u32> {
+            in_ref: unionj_out_ref2_receiver,
+            out_val: c_out_val_sender,
+        };
+        let mut arrayvals_c = Array::<u32, f32, u32>::new(arrayvals_c_data, c_vals);
+
+        // Add ALU
+        let (add_out_sender, add_out_receiver) = unbounded::<Token<f32, u32>>();
+        let mut add = make_alu(
+            b_out_val_receiver,
+            c_out_val_receiver,
+            add_out_sender,
+            ALUAddOp(),
+        );
+
+        // fiberwrite_Xvals
+        let out_vals: Vec<f32> = Vec::new();
+        let xvals_data = WrScanData::<f32, u32> {
+            input: add_out_receiver,
+        };
+        let mut xvals = ValsWrScan::<f32, u32>::new(xvals_data, out_vals);
 
         let mut parent = BasicParentContext::default();
-        parent.add_child(&mut gen1);
-        parent.add_child(&mut fiberlookup_bi);
-        parent.add_child(&mut fiberlookup_bj);
-        parent.add_child(&mut fiberlookup_ci);
-        parent.add_child(&mut fiberlookup_cj);
+        parent.add_child(&mut b_gen);
+        parent.add_child(&mut c_gen);
+        parent.add_child(&mut bi_rdscanner);
+        parent.add_child(&mut bj_rdscanner);
+        parent.add_child(&mut union_i);
+        parent.add_child(&mut x0_wrscanner);
+        parent.add_child(&mut ci_rdscanner);
+        parent.add_child(&mut cj_rdscanner);
         parent.add_child(&mut union_j);
-        parent.add_child(arr_b);
-        parent.add_child(arr_c);
+        parent.add_child(&mut x1_wrscanner);
+        parent.add_child(&mut arrayvals_b);
+        parent.add_child(&mut arrayvals_c);
+        parent.add_child(&mut add);
+        parent.add_child(&mut xvals);
 
         parent.init();
         parent.run();
         parent.cleanup();
+
+        // dbg!(x0_wrscanner.crd_arr);
+        // dbg!(xvals.out_val);
 
         // let fil = formatted_dir.to_str().unwrap();
     }

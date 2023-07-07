@@ -15,7 +15,7 @@ where
     input: Receiver<T>,
 }
 
-impl<T: DAMType, IType, FType> Context for CheckerContext<T, IType, FType>
+impl<T: DAMType + std::cmp::PartialEq, IType, FType> Context for CheckerContext<T, IType, FType>
 where
     IType: Iterator<Item = T>,
     FType: FnOnce() -> IType + Send + Sync,
@@ -53,6 +53,7 @@ impl<T: DAMType, IType, FType> CheckerContext<T, IType, FType>
 where
     IType: Iterator<Item = T>,
     FType: FnOnce() -> IType + Send + Sync,
+    CheckerContext<T, IType, FType>: Context,
 {
     pub fn new(iterator: FType, input: Receiver<T>) -> CheckerContext<T, IType, FType> {
         let gc = CheckerContext {

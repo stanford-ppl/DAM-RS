@@ -1,7 +1,7 @@
-use home;
+
 use serde_derive::Deserialize;
-use std::fs;
-use std::io::Result;
+
+
 
 #[derive(Debug, Deserialize)]
 pub struct Data {
@@ -15,10 +15,10 @@ pub struct Config {
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
+    
 
     use super::Config;
-    use super::Data;
+    
     #[test]
     fn get_path() {
         let config: Config = toml::from_str("sam_path = '$HOME'").unwrap();

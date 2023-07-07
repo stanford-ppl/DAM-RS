@@ -7,7 +7,7 @@ use crate::{
 use super::primitive::Token;
 
 pub struct WrScanData<ValType, StopType> {
-    input: Receiver<Token<ValType, StopType>>,
+    pub input: Receiver<Token<ValType, StopType>>,
 }
 
 impl<ValType: DAMType, StopType: DAMType> Cleanable for WrScanData<ValType, StopType> {
@@ -19,8 +19,8 @@ impl<ValType: DAMType, StopType: DAMType> Cleanable for WrScanData<ValType, Stop
 pub struct CompressedWrScan<ValType, StopType> {
     wr_scan_data: WrScanData<ValType, StopType>,
     // meta_dim: ValType,
-    seg_arr: Vec<ValType>,
-    crd_arr: Vec<ValType>,
+    pub seg_arr: Vec<ValType>,
+    pub crd_arr: Vec<ValType>,
     time: TimeManager,
 }
 
@@ -105,7 +105,7 @@ where
 pub struct ValsWrScan<ValType, StopType> {
     vals_data: WrScanData<ValType, StopType>,
     // meta_dim: ValType,
-    out_val: Vec<ValType>,
+    pub out_val: Vec<ValType>,
     time: TimeManager,
 }
 
@@ -128,7 +128,6 @@ where
 impl<ValType, StopType> Context for ValsWrScan<ValType, StopType>
 where
     ValType: DAMType
-        + std::ops::AddAssign<u32>
         + std::ops::Mul<ValType, Output = ValType>
         + std::ops::Add<ValType, Output = ValType>
         + std::cmp::PartialOrd<ValType>,

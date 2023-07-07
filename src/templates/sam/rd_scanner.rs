@@ -254,6 +254,7 @@ where
                             // let read_addr: usize = usize::try_from(curr_addr).unwrap();
                             let coord = self.crd_arr[read_addr].clone();
                             let curr_time = self.time.tick();
+                            // dbg!(coord.clone());
                             enqueue(
                                 &mut self.time,
                                 &mut self.rd_scan_data.out_crd,
@@ -333,6 +334,7 @@ where
                             channel_elem.clone(),
                         )
                         .unwrap();
+                        // dbg!(Token::<ValType, StopType>::Done);
                         return;
                     }
                     Token::Empty => {
