@@ -1,4 +1,7 @@
-use std::cmp::Ordering;
+use std::{
+    cmp::Ordering,
+    sync::atomic::{AtomicBool, AtomicU64},
+};
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct Time {
@@ -110,6 +113,53 @@ impl std::ops::AddAssign<Time> for Time {
     fn add_assign(&mut self, rhs: Time) {
         self.time += rhs.time;
         self.done |= rhs.done;
+    }
+}
+
+// This is used for TimeManagers to avoid rwlock.
+#[derive(Debug, Default)]
+pub struct AtomicTime {
+    time: AtomicU64,
+    done: AtomicBool,
+}
+
+impl AtomicTime {
+    const LOAD_ORDERING: std::sync::atomic::Ordering = std::sync::atomic::Ordering::SeqCst;
+    const UPDATE_ORDERING: std::sync::atomic::Ordering = std::sync::atomic::Ordering::SeqCst;
+
+    pub fn load(&self) -> Time {
+        let time = self.time.load(Self::LOAD_ORDERING);
+        let done = self.done.load(Self::LOAD_ORDERING);
+        Time { time, done }
+    }
+
+    pub fn set_infinite(&self) {
+        self.done.fetch_or(true, Self::UPDATE_ORDERING);
+    }
+
+    pub fn try_advance(&self, rhs: Time) -> bool {
+        let old_done = self.done.fetch_or(rhs.done, Self::UPDATE_ORDERING);
+        match (old_done, rhs.done) {
+            (true, _) => {
+                // If we're both done, then just finish.
+                // If we were done, but the new time isn't, then ignore.
+                false
+            }
+            (false, true) => {
+                // If we weren't done, but they were.
+                true
+            }
+            (false, false) => {
+                // If we weren't done, and neither were they.
+                let old_time = self.time.fetch_max(rhs.time, Self::UPDATE_ORDERING);
+
+                old_time < rhs.time
+            }
+        }
+    }
+
+    pub fn incr_cycles(&self, rhs: u64) {
+        self.time.fetch_add(rhs, Self::UPDATE_ORDERING);
     }
 }
 
