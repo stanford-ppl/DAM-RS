@@ -4,13 +4,14 @@ mod tests {
     use std::{fs, path::Path};
 
     use crate::channel::unbounded;
+    use crate::context::broadcast_context::BroadcastContext;
     use crate::context::generator_context::GeneratorContext;
     use crate::context::parent::BasicParentContext;
     use crate::context::{Context, ParentContext};
-    use crate::templates::ops::{ALUAddOp, ALUMulOp};
+    use crate::templates::ops::ALUMulOp;
     use crate::templates::sam::alu::make_alu;
     use crate::templates::sam::array::{Array, ArrayData};
-    use crate::templates::sam::joiner::{CrdJoinerData, Intersect, Union};
+    use crate::templates::sam::joiner::{CrdJoinerData, Intersect};
     use crate::templates::sam::primitive::{Repsiggen, Token};
     use crate::templates::sam::rd_scanner::{CompressedCrdRdScan, RdScanData};
     use crate::templates::sam::repeat::{RepSigGenData, Repeat, RepeatData, RepeatSigGen};
@@ -38,6 +39,8 @@ mod tests {
         let c1_crd_filename = base_path.join("tensor_C_mode_1_crd");
         let c_vals_filename = base_path.join("tensor_C_mode_vals");
 
+        dbg!(b0_crd_filename.clone());
+
         let b0_seg = read_inputs::<u32>(&b0_seg_filename);
         let b0_crd = read_inputs::<u32>(&b0_crd_filename);
         let b1_seg = read_inputs::<u32>(&b1_seg_filename);
@@ -53,16 +56,20 @@ mod tests {
         let (bi_out_ref_sender, bi_out_ref_receiver) = unbounded::<Token<u32, u32>>();
         let (bi_out_crd_sender, bi_out_crd_receiver) = unbounded::<Token<u32, u32>>();
         let (bi_in_ref_sender, bi_in_ref_receiver) = unbounded::<Token<u32, u32>>();
-        let bi_data = RdScanData::<u32, u32> {
-            in_ref: bi_in_ref_receiver,
-            out_ref: bi_out_ref_sender,
-            out_crd: bi_out_crd_sender,
-        };
+        let (bc_bi_in_ref_sender, bc_bi_in_ref_receiver) = unbounded::<Token<u32, u32>>();
+        let (bc1_bi_in_ref_sender, bc1_bi_in_ref_receiver) = unbounded::<Token<u32, u32>>();
 
         let mut b_gen = GeneratorContext::new(
             || token_vec!(u32; u32; 0, "D").into_iter(),
             bi_in_ref_sender,
         );
+        let bi_data = RdScanData::<u32, u32> {
+            // in_ref: bc_bi_in_ref_receiver,
+            in_ref: bi_in_ref_receiver,
+            out_ref: bi_out_ref_sender,
+            out_crd: bi_out_crd_sender,
+        };
+
         let mut bi_rdscanner = CompressedCrdRdScan::new(bi_data, b0_seg, b0_crd);
 
         // fiberwrite_X0
@@ -74,9 +81,14 @@ mod tests {
         let mut x0_wrscanner = CompressedWrScan::new(x0_wrscanner_data, x0_seg, x0_crd);
 
         // repeatsiggen
+        let (bc_bi_out_ref_sender, bc_bi_out_ref_receiver) = unbounded::<Token<u32, u32>>();
+        let (bc1_bi_out_ref_sender, bc1_bi_out_ref_receiver) = unbounded::<Token<u32, u32>>();
+        let mut broadcast = BroadcastContext::new(bi_out_ref_receiver);
+        broadcast.add_target(bc_bi_out_ref_sender);
+        broadcast.add_target(bc1_bi_out_ref_sender);
         let (out_repsig_sender, out_repsig_receiver) = unbounded::<Repsiggen>();
         let repsig_data = RepSigGenData::<u32, u32> {
-            input: bi_out_ref_receiver,
+            input: bc_bi_out_ref_receiver,
             out_repsig: out_repsig_sender,
         };
         let mut repsig_i = RepeatSigGen::new(repsig_data);
@@ -105,11 +117,17 @@ mod tests {
         };
         let mut cj_rdscanner = CompressedCrdRdScan::new(cj_data, c0_seg, c0_crd);
 
+        let (bc_cj_out_ref_sender, bc_cj_out_ref_receiver) = unbounded::<Token<u32, u32>>();
+        let (bc1_cj_out_ref_sender, bc1_cj_out_ref_receiver) = unbounded::<Token<u32, u32>>();
+        let mut broadcast1 = BroadcastContext::new(cj_out_ref_receiver);
+        broadcast1.add_target(bc_cj_out_ref_sender);
+        broadcast1.add_target(bc1_cj_out_ref_sender);
+
         // fiberlookup_ck
         let (ck_out_crd_sender, ck_out_crd_receiver) = unbounded::<Token<u32, u32>>();
         let (ck_out_ref_sender, ck_out_ref_receiver) = unbounded::<Token<u32, u32>>();
         let ck_data = RdScanData::<u32, u32> {
-            in_ref: cj_out_ref_receiver,
+            in_ref: bc_cj_out_ref_receiver,
             out_ref: ck_out_ref_sender,
             out_crd: ck_out_crd_sender,
         };
@@ -118,7 +136,7 @@ mod tests {
         // repeatsiggen
         let (out_repsig_j_sender, out_repsig_j_receiver) = unbounded::<Repsiggen>();
         let repsig_j_data = RepSigGenData::<u32, u32> {
-            input: cj_out_ref_receiver,
+            input: bc1_cj_out_ref_receiver,
             out_repsig: out_repsig_j_sender,
         };
         let mut repsig_j = RepeatSigGen::new(repsig_j_data);
@@ -126,7 +144,7 @@ mod tests {
         // repeat
         let (out_repeat_bj_sender, out_repeat_bj_receiver) = unbounded::<Token<u32, u32>>();
         let bj_repeat_data = RepeatData::<u32, u32> {
-            in_ref: bi_in_ref_receiver,
+            in_ref: bc1_bi_out_ref_receiver,
             in_repsig: out_repsig_j_receiver,
             out_ref: out_repeat_bj_sender,
         };
@@ -202,6 +220,8 @@ mod tests {
 
         let mut parent = BasicParentContext::default();
         parent.add_child(&mut b_gen);
+        parent.add_child(&mut broadcast);
+        parent.add_child(&mut broadcast1);
         parent.add_child(&mut c_gen);
         parent.add_child(&mut bi_rdscanner);
         parent.add_child(&mut repsig_i);

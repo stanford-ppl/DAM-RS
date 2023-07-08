@@ -19,7 +19,7 @@ impl<T: DAMType> Context for BroadcastContext<T> {
 
     fn run(&mut self) {
         loop {
-            println!("Running Broadcast Loop");
+            // println!("Running Broadcast Loop");
             let value = dequeue(&mut self.time, &mut self.receiver);
             match value {
                 Ok(mut data) => {

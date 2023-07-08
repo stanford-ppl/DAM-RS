@@ -191,6 +191,7 @@ where
                             channel_elem,
                         )
                         .unwrap();
+                        dbg!(Repsiggen::Repeat);
                     }
                     Token::Stop(_) => {
                         let channel_elem =
@@ -201,6 +202,7 @@ where
                             channel_elem,
                         )
                         .unwrap();
+                        dbg!(Repsiggen::Stop);
                     }
                     Token::Done => {
                         let channel_elem =
@@ -211,6 +213,7 @@ where
                             channel_elem,
                         )
                         .unwrap();
+                        dbg!(Repsiggen::Done);
                         return;
                     }
                 },
