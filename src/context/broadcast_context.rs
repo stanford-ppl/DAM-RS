@@ -77,7 +77,7 @@ mod tests {
     #[test]
     fn test_broadcast() {
         let test_size = 32;
-        let num_checkers = 8;
+        let num_checkers = 256;
         let (init_send, init_recv) = bounded(8);
 
         let mut parent = BasicParentContext::default();

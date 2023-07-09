@@ -73,13 +73,13 @@ impl ViewStruct {
 
     pub fn register_send(&self) {
         self.real_send_receive_delta
-            .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+            .fetch_add(1, std::sync::atomic::Ordering::Release);
     }
 
     pub fn register_recv(&self) {
         let old = self
             .real_send_receive_delta
-            .fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
+            .fetch_sub(1, std::sync::atomic::Ordering::Release);
 
         // If we decremented an empty channel
         assert!(old > 0);

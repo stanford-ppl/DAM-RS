@@ -28,12 +28,12 @@ impl<T: DAMType, IT: IndexLike, AT: DAMType> Context for PMU<T, IT, AT> {
     }
 
     fn run(&mut self) {
-        rayon::in_place_scope(|s| {
-            s.spawn(|_| {
+        std::thread::scope(|s| {
+            s.spawn(|| {
                 self.reader.run();
                 self.reader.cleanup();
             });
-            s.spawn(|_| {
+            s.spawn(|| {
                 self.writer.run();
                 self.writer.cleanup();
             });
