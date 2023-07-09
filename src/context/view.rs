@@ -1,13 +1,13 @@
-use std::sync::{Arc, Condvar, Mutex};
+use std::{
+    sync::{atomic::AtomicBool, Arc, Condvar, Mutex},
+    thread::Thread,
+};
+
+use crossbeam::epoch::Atomic;
 
 use crate::time::{AtomicTime, Time};
 
 use super::ParentView;
-
-enum Signal {
-    Done(Time),     // Immediately finished.
-    Later(Condvar), // Check back later
-}
 
 #[enum_delegate::register]
 pub trait ContextView {
@@ -57,8 +57,10 @@ impl TimeManager {
         let tlb = self.underlying.time.load();
         signal_buffer.retain(|signal| {
             if signal.when <= tlb {
-                // If the signal time is in the present or past,
-                signal.how.notify_one();
+                signal
+                    .done
+                    .store(true, std::sync::atomic::Ordering::Release);
+                signal.thread.unpark();
                 false
             } else {
                 true
@@ -94,12 +96,19 @@ impl ContextView for BasicContextView {
         if cur_time >= when {
             return cur_time;
         } else {
-            let cvar = Arc::new(Condvar::new());
+            let done = Arc::new(AtomicBool::new(false));
             signal_buffer.push(SignalElement {
                 when,
-                how: cvar.clone(),
+                done: done.clone(),
+                thread: std::thread::current(),
             });
-            let _ = cvar.wait_while(signal_buffer, |_| self.under.time.load() < when);
+            // Unlock the signal buffer
+            drop(signal_buffer);
+
+            while !done.load(std::sync::atomic::Ordering::Acquire) {
+                std::thread::park();
+            }
+
             return self.under.time.load();
         }
     }
@@ -110,10 +119,19 @@ impl ContextView for BasicContextView {
 }
 
 // Private bookkeeping constructs
+
+#[derive(Debug)]
+struct Signal {
+    thread: Thread,
+    done: AtomicBool,
+}
+
 #[derive(Debug)]
 struct SignalElement {
     when: Time,
-    how: Arc<Condvar>,
+
+    done: Arc<AtomicBool>,
+    thread: std::thread::Thread,
 }
 
 // Encapsulates the callback backlog and the current tick info to make BasicContextView work.
