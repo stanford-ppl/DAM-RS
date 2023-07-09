@@ -1,11 +1,8 @@
-use parking_lot::Mutex;
-use std::sync::Arc;
+use std::sync::{Arc, Condvar, Mutex};
 
 use crate::time::{AtomicTime, Time};
 
 use super::ParentView;
-
-use parking_lot::Condvar;
 
 enum Signal {
     Done(Time),     // Immediately finished.
@@ -56,7 +53,7 @@ impl TimeManager {
     }
 
     fn scan_and_write_signals(&mut self) {
-        let mut signal_buffer = self.underlying.signal_buffer.lock();
+        let mut signal_buffer = self.underlying.signal_buffer.lock().unwrap();
         let tlb = self.underlying.time.load();
         signal_buffer.retain(|signal| {
             if signal.when <= tlb {
@@ -92,7 +89,7 @@ impl ContextView for BasicContextView {
             return cur_time;
         }
 
-        let mut signal_buffer = self.under.signal_buffer.lock();
+        let mut signal_buffer = self.under.signal_buffer.lock().unwrap();
         let cur_time = self.under.time.load();
         if cur_time >= when {
             return cur_time;
@@ -102,7 +99,7 @@ impl ContextView for BasicContextView {
                 when,
                 how: cvar.clone(),
             });
-            cvar.wait(&mut signal_buffer);
+            let _ = cvar.wait_while(signal_buffer, |_| self.under.time.load() < when);
             return self.under.time.load();
         }
     }

@@ -1,8 +1,7 @@
 pub mod utils;
 
-use parking_lot::RwLock;
 use std::sync::atomic::AtomicUsize;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use crate::context::Context;
 use crate::types::DAMType;
@@ -63,13 +62,13 @@ impl ViewStruct {
     }
 
     pub fn attach_sender(&self, sender: &dyn Context) {
-        self.sender_views.write().sender = Some(sender.view());
-        self.receiver_views.write().sender = Some(sender.view());
+        self.sender_views.write().unwrap().sender = Some(sender.view());
+        self.receiver_views.write().unwrap().sender = Some(sender.view());
     }
 
     pub fn attach_receiver(&self, receiver: &dyn Context) {
-        self.sender_views.write().receiver = Some(receiver.view());
-        self.receiver_views.write().receiver = Some(receiver.view());
+        self.sender_views.write().unwrap().receiver = Some(receiver.view());
+        self.receiver_views.write().unwrap().receiver = Some(receiver.view());
     }
 
     pub fn register_send(&self) {
@@ -116,6 +115,7 @@ impl<T: DAMType> Sender<T> {
         self.view_struct
             .sender_views
             .read()
+            .unwrap()
             .sender
             .as_ref()
             .unwrap()
@@ -204,6 +204,7 @@ impl<T: DAMType> Sender<T> {
             .view_struct
             .sender_views
             .read()
+            .unwrap()
             .receiver
             .as_ref()
             .unwrap()
@@ -262,6 +263,7 @@ impl<T: DAMType> Receiver<T> {
         self.view_struct
             .receiver_views
             .read()
+            .unwrap()
             .receiver
             .as_ref()
             .unwrap()
@@ -302,6 +304,7 @@ impl<T: DAMType> Receiver<T> {
             .view_struct
             .receiver_views
             .read()
+            .unwrap()
             .sender
             .as_ref()
             .unwrap()
