@@ -1,6 +1,9 @@
-use std::sync::{Arc, RwLock};
+use std::{
+    sync::{atomic::AtomicBool, Arc, Condvar, Mutex},
+    thread::Thread,
+};
 
-use crossbeam::channel;
+use crossbeam::epoch::Atomic;
 
 use crate::time::{AtomicTime, Time};
 
@@ -8,7 +11,7 @@ use super::ParentView;
 
 #[enum_delegate::register]
 pub trait ContextView {
-    fn signal_when(&self, when: Time) -> channel::Receiver<Time>;
+    fn wait_until(&self, when: Time) -> Time;
     fn tick_lower_bound(&self) -> Time;
 }
 
@@ -50,12 +53,14 @@ impl TimeManager {
     }
 
     fn scan_and_write_signals(&mut self) {
-        let mut signal_buffer = self.underlying.signal_buffer.write().unwrap();
+        let mut signal_buffer = self.underlying.signal_buffer.lock().unwrap();
         let tlb = self.underlying.time.load();
         signal_buffer.retain(|signal| {
             if signal.when <= tlb {
-                // If the signal time is in the present or past,
-                let _ = signal.how.send(tlb);
+                signal
+                    .done
+                    .store(true, std::sync::atomic::Ordering::Release);
+                signal.thread.unpark();
                 false
             } else {
                 true
@@ -79,23 +84,32 @@ pub struct BasicContextView {
 }
 
 impl ContextView for BasicContextView {
-    fn signal_when(&self, when: Time) -> channel::Receiver<Time> {
-        let (tx, rx) = channel::bounded::<Time>(1);
-
+    fn wait_until(&self, when: Time) -> Time {
         // Check time first. Since time is non-decreasing, if this cond is true, then it's always true.
         let cur_time = self.under.time.load();
         if cur_time >= when {
-            tx.send(cur_time).unwrap();
-            rx
+            return cur_time;
+        }
+
+        let mut signal_buffer = self.under.signal_buffer.lock().unwrap();
+        let cur_time = self.under.time.load();
+        if cur_time >= when {
+            return cur_time;
         } else {
-            let mut signal_buffer = self.under.signal_buffer.write().unwrap();
-            let cur_time = self.under.time.load();
-            if cur_time >= when {
-                tx.send(cur_time).unwrap();
-            } else {
-                signal_buffer.push(SignalElement { when, how: tx })
+            let done = Arc::new(AtomicBool::new(false));
+            signal_buffer.push(SignalElement {
+                when,
+                done: done.clone(),
+                thread: std::thread::current(),
+            });
+            // Unlock the signal buffer
+            drop(signal_buffer);
+
+            while !done.load(std::sync::atomic::Ordering::Acquire) {
+                std::thread::park();
             }
-            rx
+
+            return self.under.time.load();
         }
     }
 
@@ -105,15 +119,24 @@ impl ContextView for BasicContextView {
 }
 
 // Private bookkeeping constructs
+
+#[derive(Debug)]
+struct Signal {
+    thread: Thread,
+    done: AtomicBool,
+}
+
 #[derive(Debug)]
 struct SignalElement {
     when: Time,
-    how: channel::Sender<Time>,
+
+    done: Arc<AtomicBool>,
+    thread: std::thread::Thread,
 }
 
 // Encapsulates the callback backlog and the current tick info to make BasicContextView work.
 #[derive(Default, Debug)]
 struct TimeInfo {
     time: AtomicTime,
-    signal_buffer: RwLock<Vec<SignalElement>>,
+    signal_buffer: Mutex<Vec<SignalElement>>,
 }

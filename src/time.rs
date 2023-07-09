@@ -124,12 +124,12 @@ pub struct AtomicTime {
 }
 
 impl AtomicTime {
-    const LOAD_ORDERING: std::sync::atomic::Ordering = std::sync::atomic::Ordering::SeqCst;
-    const UPDATE_ORDERING: std::sync::atomic::Ordering = std::sync::atomic::Ordering::SeqCst;
+    const UPDATE_ORDERING: std::sync::atomic::Ordering = std::sync::atomic::Ordering::AcqRel;
 
+    // Relaxed is fine since updates are AcqRel
     pub fn load(&self) -> Time {
-        let time = self.time.load(Self::LOAD_ORDERING);
-        let done = self.done.load(Self::LOAD_ORDERING);
+        let time = self.time.load(std::sync::atomic::Ordering::Relaxed);
+        let done = self.done.load(std::sync::atomic::Ordering::Relaxed);
         Time { time, done }
     }
 

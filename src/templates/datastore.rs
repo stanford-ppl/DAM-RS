@@ -1,4 +1,3 @@
-use core::panic;
 use std::sync::RwLock;
 
 use crate::{time::Time, types::DAMType};

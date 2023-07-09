@@ -73,13 +73,13 @@ impl ViewStruct {
 
     pub fn register_send(&self) {
         self.real_send_receive_delta
-            .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+            .fetch_add(1, std::sync::atomic::Ordering::Release);
     }
 
     pub fn register_recv(&self) {
         let old = self
             .real_send_receive_delta
-            .fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
+            .fetch_sub(1, std::sync::atomic::Ordering::Release);
 
         // If we decremented an empty channel
         assert!(old > 0);
@@ -200,7 +200,7 @@ impl<T: DAMType> Sender<T> {
             }
         }
 
-        let signal = self
+        let new_time = self
             .view_struct
             .sender_views
             .read()
@@ -208,10 +208,7 @@ impl<T: DAMType> Sender<T> {
             .receiver
             .as_ref()
             .unwrap()
-            .signal_when(send_time);
-
-        // Wait for producer to catch up
-        let new_time = signal.recv().unwrap();
+            .wait_until(send_time);
 
         self.update_srd();
         if self.next_available == SendOptions::Unknown {
@@ -303,7 +300,7 @@ impl<T: DAMType> Receiver<T> {
             return self.head.clone();
         }
 
-        let signal = self
+        let sig_time = self
             .view_struct
             .receiver_views
             .read()
@@ -311,8 +308,7 @@ impl<T: DAMType> Receiver<T> {
             .sender
             .as_ref()
             .unwrap()
-            .signal_when(recv_time);
-        let sig_time = signal.recv().unwrap();
+            .wait_until(recv_time);
         assert!(sig_time >= recv_time);
         if self.try_update_head() {
             return self.head.clone();
