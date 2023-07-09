@@ -1,5 +1,3 @@
-use std::sync::{Arc, Mutex};
-
 use crate::{
     channel::{
         utils::{dequeue, enqueue},
@@ -75,8 +73,8 @@ pub struct PipelineState {
     valid: bool,
 }
 
-type InputChannelsType<ElementType> = Arc<Mutex<Vec<Receiver<ElementType>>>>;
-type OutputChannelsType<ElementType> = Arc<Mutex<Vec<Sender<ElementType>>>>;
+type InputChannelsType<ElementType> = Vec<Receiver<ElementType>>;
+type OutputChannelsType<ElementType> = Vec<Sender<ElementType>>;
 type IngressOpType<ElementType> = fn(
     &mut InputChannelsType<ElementType>,
     &mut Vec<PipelineRegister<ElementType>>,
@@ -124,20 +122,15 @@ impl<ElementType: DAMType> PCU<ElementType> {
             configuration,
             registers,
             stages: Vec::with_capacity(pipe_depth),
-            input_channels: Arc::new(Mutex::new(vec![])),
-            output_channels: Arc::new(Mutex::new(vec![])),
+            input_channels: vec![],
+            output_channels: vec![],
             ingress_op,
             egress_op,
         }
     }
 
     pub const READ_ALL_INPUTS: IngressOpType<ElementType> = |ics, regs, time| {
-        let mut reads: Vec<_> = ics
-            .lock()
-            .unwrap()
-            .iter_mut()
-            .map(|recv| dequeue(time, recv))
-            .collect();
+        let mut reads: Vec<_> = ics.iter_mut().map(|recv| dequeue(time, recv)).collect();
 
         for (ind, read) in reads.iter_mut().enumerate() {
             if let Err(_) = read {
@@ -150,21 +143,17 @@ impl<ElementType: DAMType> PCU<ElementType> {
     };
 
     pub const WRITE_ALL_RESULTS: EgressOpType<ElementType> = |ocs, regs, out_time, manager| {
-        ocs.lock()
-            .unwrap()
-            .iter_mut()
-            .enumerate()
-            .for_each(|(ind, out_chan)| {
-                enqueue(
-                    manager,
-                    out_chan,
-                    ChannelElement {
-                        time: out_time,
-                        data: regs[ind].data.clone(),
-                    },
-                )
-                .unwrap();
-            });
+        ocs.iter_mut().enumerate().for_each(|(ind, out_chan)| {
+            enqueue(
+                manager,
+                out_chan,
+                ChannelElement {
+                    time: out_time,
+                    data: regs[ind].data.clone(),
+                },
+            )
+            .unwrap();
+        });
     };
 
     pub fn push_stage(&mut self, stage: PipelineStage<ElementType>) {
@@ -174,12 +163,12 @@ impl<ElementType: DAMType> PCU<ElementType> {
 
     pub fn add_input_channel(&mut self, recv: Receiver<ElementType>) {
         recv.attach_receiver(self);
-        self.input_channels.lock().unwrap().push(recv);
+        self.input_channels.push(recv);
     }
 
     pub fn add_output_channel(&mut self, send: Sender<ElementType>) {
         send.attach_sender(self);
-        self.output_channels.lock().unwrap().push(send);
+        self.output_channels.push(send);
     }
 }
 
@@ -223,13 +212,9 @@ impl<ElementType: DAMType> Context for PCU<ElementType> {
     }
 
     fn cleanup(&mut self) {
-        self.input_channels
-            .lock()
-            .unwrap()
-            .iter_mut()
-            .for_each(|chan| {
-                chan.close();
-            });
+        self.input_channels.iter_mut().for_each(|chan| {
+            chan.close();
+        });
         self.time.cleanup();
     }
 

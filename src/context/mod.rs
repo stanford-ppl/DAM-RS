@@ -31,21 +31,13 @@ pub struct ParentView {
 }
 
 impl ContextView for ParentView {
-    fn signal_when(&self, when: Time) -> crossbeam::channel::Receiver<Time> {
-        let (tx, rx) = crossbeam::channel::bounded::<Time>(1);
-        let individual_signals: Vec<crossbeam::channel::Receiver<Time>> = self
+    fn wait_until(&self, when: Time) -> Time {
+        let individual_signals: Vec<_> = self
             .child_views
             .iter()
-            .map(|child| child.signal_when(when))
+            .map(|child| child.wait_until(when))
             .collect();
-        std::thread::spawn(move || {
-            let local_times = individual_signals
-                .iter()
-                .map(|signal| signal.recv().unwrap_or(Time::infinite()));
-            let min_time = local_times.min().unwrap_or(Time::infinite());
-            let _ = tx.send(min_time);
-        });
-        rx
+        individual_signals.into_iter().min().unwrap_or(when)
     }
 
     fn tick_lower_bound(&self) -> Time {

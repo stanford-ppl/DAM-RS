@@ -109,11 +109,11 @@ where
         self.readers.push(rd);
     }
 
-    fn await_writer(&mut self) -> crossbeam::channel::Receiver<Time> {
+    fn await_writer(&mut self) -> Time {
         self.writer_view
             .as_mut()
             .unwrap()
-            .signal_when(self.time.tick())
+            .wait_until(self.time.tick())
     }
 }
 
@@ -148,7 +148,7 @@ impl<T: DAMType, IT: IndexLike> Context for ReadPipeline<T, IT> {
             }
             // Wait for the writer to catch up. At this point in time, self.tick should be the same as the ready time
             // so the subsequent dequeue shouldn't actually change the tick time.
-            let _ = self.await_writer().recv().unwrap();
+            let _ = self.await_writer();
             // At this point, we have advanced to the time of the ready!
             let deq_reader = self.readers.get_mut(event_ind).unwrap();
             let elem = dequeue(&mut self.time, &mut deq_reader.addr).unwrap();

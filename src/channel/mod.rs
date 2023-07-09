@@ -1,7 +1,8 @@
 pub mod utils;
 
+use parking_lot::RwLock;
 use std::sync::atomic::AtomicUsize;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 use crate::context::Context;
 use crate::types::DAMType;
@@ -62,13 +63,13 @@ impl ViewStruct {
     }
 
     pub fn attach_sender(&self, sender: &dyn Context) {
-        self.sender_views.write().unwrap().sender = Some(sender.view());
-        self.receiver_views.write().unwrap().sender = Some(sender.view());
+        self.sender_views.write().sender = Some(sender.view());
+        self.receiver_views.write().sender = Some(sender.view());
     }
 
     pub fn attach_receiver(&self, receiver: &dyn Context) {
-        self.sender_views.write().unwrap().receiver = Some(receiver.view());
-        self.receiver_views.write().unwrap().receiver = Some(receiver.view());
+        self.sender_views.write().receiver = Some(receiver.view());
+        self.receiver_views.write().receiver = Some(receiver.view());
     }
 
     pub fn register_send(&self) {
@@ -115,7 +116,6 @@ impl<T: DAMType> Sender<T> {
         self.view_struct
             .sender_views
             .read()
-            .unwrap()
             .sender
             .as_ref()
             .unwrap()
@@ -200,18 +200,14 @@ impl<T: DAMType> Sender<T> {
             }
         }
 
-        let signal = self
+        let new_time = self
             .view_struct
             .sender_views
             .read()
-            .unwrap()
             .receiver
             .as_ref()
             .unwrap()
-            .signal_when(send_time);
-
-        // Wait for producer to catch up
-        let new_time = signal.recv().unwrap();
+            .wait_until(send_time);
 
         self.update_srd();
         if self.next_available == SendOptions::Unknown {
@@ -266,7 +262,6 @@ impl<T: DAMType> Receiver<T> {
         self.view_struct
             .receiver_views
             .read()
-            .unwrap()
             .receiver
             .as_ref()
             .unwrap()
@@ -303,16 +298,14 @@ impl<T: DAMType> Receiver<T> {
             return self.head.clone();
         }
 
-        let signal = self
+        let sig_time = self
             .view_struct
             .receiver_views
             .read()
-            .unwrap()
             .sender
             .as_ref()
             .unwrap()
-            .signal_when(recv_time);
-        let sig_time = signal.recv().unwrap();
+            .wait_until(recv_time);
         assert!(sig_time >= recv_time);
         if self.try_update_head() {
             return self.head.clone();
