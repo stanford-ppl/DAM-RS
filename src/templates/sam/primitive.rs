@@ -1,8 +1,8 @@
-
+use core::fmt;
 
 use crate::types::DAMType;
 
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, Copy, PartialEq)]
 pub enum Token<ValType, StopType> {
     Val(ValType),
     Stop(StopType),
@@ -20,6 +20,25 @@ pub enum Repsiggen {
 impl<ValType: DAMType, StopType> From<ValType> for Token<ValType, StopType> {
     fn from(value: ValType) -> Self {
         Self::Val(value)
+    }
+}
+
+impl<ValType: DAMType, StopType: DAMType> fmt::Debug for Token<ValType, StopType> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Token::Val(val) => {
+                write!(f, "{:#?}", val)
+            }
+            Token::Stop(tkn) => {
+                write!(f, "S{:#?}", tkn)
+            }
+            Token::Empty => {
+                write!(f, "N")
+            }
+            Token::Done => {
+                write!(f, "D")
+            }
+        }
     }
 }
 

@@ -15,8 +15,8 @@ use super::primitive::Token;
 pub struct ReduceData<ValType, StopType> {
     // curr_ref: Token,
     // curr_crd: Stream,
-    in_val: Receiver<Token<ValType, StopType>>,
-    out_val: Sender<Token<ValType, StopType>>,
+    pub in_val: Receiver<Token<ValType, StopType>>,
+    pub out_val: Sender<Token<ValType, StopType>>,
     // out_crd: Sender<Token<ValType, StopType>>,
     // end_fiber: bool,
     // emit_tkn: bool,
@@ -58,7 +58,6 @@ where
 impl<ValType, StopType> Context for Reduce<ValType, StopType>
 where
     ValType: DAMType
-        + std::ops::AddAssign<u32>
         + std::ops::AddAssign<ValType>
         + std::ops::Mul<ValType, Output = ValType>
         + std::ops::Add<ValType, Output = ValType>
