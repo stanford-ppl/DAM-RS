@@ -38,7 +38,7 @@ impl ContextView for ParentView {
             .iter()
             .map(|child| child.signal_when(when))
             .collect();
-        rayon::spawn_fifo(move || {
+        std::thread::spawn(move || {
             let local_times = individual_signals
                 .iter()
                 .map(|signal| signal.recv().unwrap_or(Time::infinite()));
@@ -71,10 +71,16 @@ impl<'a> ChildManager<'a> {
         self.children.push(child);
     }
 
-    fn for_each_child(&mut self, map_f: impl Fn(&mut ChildType) + Sync) {
-        rayon::in_place_scope(|s: &rayon::Scope| {
+    fn for_each_child_single_threaded(&mut self, map_f: impl Fn(&mut ChildType) + Sync) {
+        self.children.iter_mut().for_each(|child| {
+            map_f(*child);
+        });
+    }
+
+    fn for_each_child_parallel(&mut self, map_f: impl Fn(&mut ChildType) + Sync) {
+        std::thread::scope(|scope| {
             self.children.iter_mut().for_each(|child| {
-                s.spawn(|_| map_f(*child));
+                scope.spawn(|| map_f(*child));
             });
         });
     }
@@ -99,13 +105,13 @@ pub trait ParentContext<'a>: Context {
 
 impl<'a, T: ParentContext<'a>> Context for T {
     fn init(&mut self) {
-        self.manager_mut().for_each_child(|child| {
+        self.manager_mut().for_each_child_single_threaded(|child| {
             child.init();
         })
     }
 
     fn run(&mut self) {
-        self.manager_mut().for_each_child(|child| {
+        self.manager_mut().for_each_child_parallel(|child| {
             child.run();
             child.cleanup();
         })
