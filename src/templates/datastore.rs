@@ -1,4 +1,4 @@
-use parking_lot::RwLock;
+use std::sync::RwLock;
 
 use crate::{time::Time, types::DAMType};
 
@@ -47,7 +47,7 @@ impl<T: DAMType> Datastore<T> {
 
     pub fn write(&self, addr: usize, data: T, time: Time) {
         let history = self.underlying.get(self.safe_addr(addr)).unwrap();
-        let mut hist = history.write();
+        let mut hist = history.write().unwrap();
         let entry = StoreElement { time, data };
         match hist.last() {
             Some(last) if last.time >= time => {
@@ -62,7 +62,7 @@ impl<T: DAMType> Datastore<T> {
 
     pub fn read(&self, addr: usize, time: Time) -> T {
         let history = self.underlying.get(self.safe_addr(addr)).unwrap();
-        let reader = history.read();
+        let reader = history.read().unwrap();
         // next_pos holds the location of the first element after the read time.
         let next_pos = reader.iter().position(|elem| elem.time > time);
         match next_pos {
