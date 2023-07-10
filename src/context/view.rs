@@ -1,9 +1,9 @@
 use std::{
-    sync::{atomic::AtomicBool, Arc, Condvar, Mutex},
+    sync::{atomic::AtomicBool, Arc, Mutex},
     thread::Thread,
 };
 
-use crossbeam::epoch::Atomic;
+
 
 use crate::time::{AtomicTime, Time};
 

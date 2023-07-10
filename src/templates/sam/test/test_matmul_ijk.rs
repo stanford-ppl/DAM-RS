@@ -42,21 +42,21 @@ mod tests {
 
         let b0_seg = read_inputs::<u32>(&b0_seg_filename);
         let b0_crd = read_inputs::<u32>(&b0_crd_filename);
-        let b1_seg = read_inputs::<u32>(&b1_seg_filename);
-        let b1_crd = read_inputs::<u32>(&b1_crd_filename);
-        let b_vals = read_inputs::<f32>(&b_vals_filename);
-        let c0_seg = read_inputs::<u32>(&c0_seg_filename);
-        let c0_crd = read_inputs::<u32>(&c0_crd_filename);
-        let c1_seg = read_inputs::<u32>(&c1_seg_filename);
-        let c1_crd = read_inputs::<u32>(&c1_crd_filename);
-        let c_vals = read_inputs::<f32>(&c_vals_filename);
+        let _b1_seg = read_inputs::<u32>(&b1_seg_filename);
+        let _b1_crd = read_inputs::<u32>(&b1_crd_filename);
+        let _b_vals = read_inputs::<f32>(&b_vals_filename);
+        let _c0_seg = read_inputs::<u32>(&c0_seg_filename);
+        let _c0_crd = read_inputs::<u32>(&c0_crd_filename);
+        let _c1_seg = read_inputs::<u32>(&c1_seg_filename);
+        let _c1_crd = read_inputs::<u32>(&c1_crd_filename);
+        let _c_vals = read_inputs::<f32>(&c_vals_filename);
 
         // fiberlookup_bi
         let (bi_out_ref_sender, bi_out_ref_receiver) = unbounded::<Token<u32, u32>>();
         let (bi_out_crd_sender, bi_out_crd_receiver) = unbounded::<Token<u32, u32>>();
         let (bi_in_ref_sender, bi_in_ref_receiver) = unbounded::<Token<u32, u32>>();
-        let (bc_bi_in_ref_sender, bc_bi_in_ref_receiver) = unbounded::<Token<u32, u32>>();
-        let (bc1_bi_in_ref_sender, bc1_bi_in_ref_receiver) = unbounded::<Token<u32, u32>>();
+        let (_bc_bi_in_ref_sender, _bc_bi_in_ref_receiver) = unbounded::<Token<u32, u32>>();
+        let (_bc1_bi_in_ref_sender, _bc1_bi_in_ref_receiver) = unbounded::<Token<u32, u32>>();
 
         let mut b_gen = GeneratorContext::new(
             || token_vec!(u32; u32; 0, "D").into_iter(),
@@ -99,7 +99,7 @@ mod tests {
             ci_in_ref_sender,
         );
 
-        let (out_repeat_sender, out_repeat_receiver) = unbounded::<Token<u32, u32>>();
+        let (out_repeat_sender, _out_repeat_receiver) = unbounded::<Token<u32, u32>>();
         let ci_repeat_data = RepeatData::<u32, u32> {
             in_ref: ci_in_ref_receiver,
             in_repsig: out_repsig_receiver,
@@ -168,8 +168,8 @@ mod tests {
         let (bi_out_ref_sender, bi_out_ref_receiver) = unbounded::<Token<u32, u32>>();
         let (bi_out_crd_sender, bi_out_crd_receiver) = unbounded::<Token<u32, u32>>();
         let (bi_in_ref_sender, bi_in_ref_receiver) = unbounded::<Token<u32, u32>>();
-        let (bc_bi_in_ref_sender, bc_bi_in_ref_receiver) = unbounded::<Token<u32, u32>>();
-        let (bc1_bi_in_ref_sender, bc1_bi_in_ref_receiver) = unbounded::<Token<u32, u32>>();
+        let (_bc_bi_in_ref_sender, _bc_bi_in_ref_receiver) = unbounded::<Token<u32, u32>>();
+        let (_bc1_bi_in_ref_sender, _bc1_bi_in_ref_receiver) = unbounded::<Token<u32, u32>>();
 
         let mut b_gen = GeneratorContext::new(
             || token_vec!(u32; u32; 0, "D").into_iter(),
@@ -273,7 +273,7 @@ mod tests {
         let mut bk_rdscanner = CompressedCrdRdScan::new(bk_data, b1_seg, b1_crd);
 
         // interset_i
-        let (intersecti_out_crd_sender, intersecti_out_crd_receiver) =
+        let (intersecti_out_crd_sender, _intersecti_out_crd_receiver) =
             unbounded::<Token<u32, u32>>();
         let (intersecti_out_ref1_sender, intersecti_out_ref1_receiver) =
             unbounded::<Token<u32, u32>>();
