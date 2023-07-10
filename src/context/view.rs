@@ -62,28 +62,17 @@ impl TimeManager {
     fn scan_and_write_signals(&mut self) {
         let mut signal_buffer = self.underlying.signal_buffer.lock().unwrap();
         let tlb = self.underlying.time.load();
-
-        let mut cur_ind = 0;
-        let total_size = signal_buffer.len();
-
-        let mut to_signal = Vec::with_capacity(total_size);
-
-        for _ in 0..total_size {
-            let inspected = &signal_buffer[cur_ind];
-            if inspected.when <= tlb {
-                to_signal.push(signal_buffer.swap_remove(cur_ind));
+        signal_buffer.retain(|signal| {
+            if signal.when <= tlb {
+                signal
+                    .done
+                    .store(true, std::sync::atomic::Ordering::Release);
+                signal.thread.unpark();
+                false
             } else {
-                cur_ind += 1;
+                true
             }
-        }
-        drop(signal_buffer);
-
-        to_signal.into_iter().for_each(|signal| {
-            signal
-                .done
-                .store(true, std::sync::atomic::Ordering::Release);
-            signal.thread.unpark();
-        });
+        })
     }
 
     pub fn tick(&self) -> Time {
