@@ -16,6 +16,9 @@ pub trait Context: Send + Sync {
     fn run(&mut self);
     fn cleanup(&mut self);
     fn view(&self) -> TimeView;
+    fn name(&self) -> &'static str {
+        std::any::type_name::<Self>()
+    }
 }
 
 type ChildType = dyn Context;
@@ -103,6 +106,9 @@ impl<'a, T: ParentContext<'a>> Context for T {
     }
 
     fn run(&mut self) {
+        // self.manager_mut().for_each_child_single_threaded(|child| {
+        //     println!("Starting run: {}", child.name());
+        // });
         self.manager_mut().for_each_child_parallel(|child| {
             child.run();
             child.cleanup();
