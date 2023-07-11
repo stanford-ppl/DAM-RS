@@ -5,14 +5,12 @@ use crate::{
         utils::{dequeue, enqueue, EventTime, Peekable},
         ChannelElement, Receiver, Sender,
     },
-    context::{
-        self,
-        view::{TimeManager, TimeView},
-        Context, ContextView, ParentView,
-    },
-    time::Time,
+    context::{self, Context},
     types::{DAMType, IndexLike},
 };
+
+use dam_core::{time::Time, ContextView, ParentView, TimeManaged, TimeView, TimeViewable};
+use dam_macros::{cleanup, identifiable, time_managed};
 
 use super::datastore::{self, Behavior, Datastore};
 
@@ -41,7 +39,9 @@ impl<T: DAMType, IT: IndexLike, AT: DAMType> Context for PMU<T, IT, AT> {
     }
 
     fn cleanup(&mut self) {} // No-op
+}
 
+impl<T: DAMType, IT: IndexLike, AT: DAMType> TimeViewable for PMU<T, IT, AT> {
     fn view(&self) -> TimeView {
         (ParentView {
             child_views: vec![self.writer.view(), self.reader.view()],
@@ -57,14 +57,16 @@ impl<T: DAMType, IT: IndexLike, AT: DAMType> PMU<T, IT, AT> {
         let mut pmu = PMU {
             reader: ReadPipeline {
                 readers: Default::default(),
-                time: Default::default(),
                 datastore: datastore.clone(),
                 writer_view: None,
+                identifier: Default::default(),
+                time: Default::default(),
             },
             writer: WritePipeline {
                 writers: Default::default(),
-                time: Default::default(),
                 datastore,
+                identifier: Default::default(),
+                time: Default::default(),
             },
         };
         pmu.reader.writer_view = Some(pmu.writer.view());
@@ -91,14 +93,19 @@ pub struct PMUWriteBundle<T, IT, AT> {
     pub ack: Sender<AT>,
 }
 
-struct ReadPipeline<T: DAMType, IT: DAMType> {
-    time: TimeManager,
+#[identifiable]
+#[time_managed]
+struct ReadPipeline<T, IT>
+where
+    T: DAMType,
+    IT: IndexLike,
+{
     readers: Vec<PMUReadBundle<T, IT>>,
     datastore: Arc<datastore::Datastore<T>>,
     writer_view: Option<TimeView>,
 }
 
-impl<T: DAMType, IT: DAMType> ReadPipeline<T, IT>
+impl<T: DAMType, IT: IndexLike> ReadPipeline<T, IT>
 where
     ReadPipeline<T, IT>: context::Context,
 {
@@ -139,9 +146,9 @@ impl<T: DAMType, IT: IndexLike> Context for ReadPipeline<T, IT> {
                 Some((ind, time)) => (ind, time),
             };
             match event_time {
-                EventTime::Ready(time) => self.time.advance(*time),
+                EventTime::Ready(time) => self.time_manager_mut().advance(*time),
                 EventTime::Nothing(time) => {
-                    self.time.advance(*time + 1);
+                    self.time_manager_mut().advance(*time + 1);
                     continue;
                 }
                 EventTime::Closed => unreachable!(),
@@ -162,22 +169,19 @@ impl<T: DAMType, IT: IndexLike> Context for ReadPipeline<T, IT> {
                 ChannelElement::new(cur_time, rv),
             )
             .unwrap();
-            self.time.incr_cycles(1);
+            self.time_manager_mut().incr_cycles(1);
         }
     }
 
+    #[cleanup(time_managed)]
     fn cleanup(&mut self) {
         self.readers.clear();
-        self.time.cleanup();
-    }
-
-    fn view(&self) -> TimeView {
-        self.time.view().into()
     }
 }
 
+#[identifiable]
+#[time_managed]
 struct WritePipeline<T: DAMType, IT: DAMType, AT: DAMType> {
-    time: TimeManager,
     writers: Vec<PMUWriteBundle<T, IT, AT>>,
     datastore: Arc<Datastore<T>>,
 }
@@ -246,18 +250,16 @@ impl<T: DAMType, IT: IndexLike, AT: DAMType> Context for WritePipeline<T, IT, AT
         }
     }
 
+    #[cleanup(time_managed)]
     fn cleanup(&mut self) {
         self.writers.clear();
-        self.time.cleanup();
-    }
-
-    fn view(&self) -> TimeView {
-        self.time.view().into()
     }
 }
 
 #[cfg(test)]
 mod tests {
+
+    use dam_core::{ContextView, TimeViewable};
 
     use crate::{
         channel::{
@@ -267,7 +269,7 @@ mod tests {
         },
         context::{
             checker_context::CheckerContext, function_context::FunctionContext,
-            generator_context::GeneratorContext, parent::BasicParentContext, Context, ContextView,
+            generator_context::GeneratorContext, parent::BasicParentContext, Context,
             ParentContext,
         },
         templates::{

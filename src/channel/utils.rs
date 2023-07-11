@@ -1,6 +1,6 @@
-use crate::context::view::TimeManager;
-use crate::time::Time;
 use crate::types::DAMType;
+use dam_core::time::Time;
+use dam_core::TimeManager;
 
 use super::ChannelElement;
 use super::DequeueError;

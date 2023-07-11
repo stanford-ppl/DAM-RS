@@ -1,6 +1,7 @@
 use std::sync::RwLock;
 
-use crate::{time::Time, types::DAMType};
+use crate::types::DAMType;
+use dam_core::time::Time;
 
 #[derive(Clone, Copy, Debug)]
 struct StoreElement<T> {

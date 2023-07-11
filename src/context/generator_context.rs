@@ -1,19 +1,19 @@
+use dam_macros::{cleanup, identifiable, time_managed};
+
 use crate::{
     channel::{utils::enqueue, ChannelElement, Sender},
     types::{Cleanable, DAMType},
 };
 
-use super::{
-    view::{TimeManager, TimeView},
-    Context,
-};
+use super::Context;
 
+#[identifiable]
+#[time_managed]
 pub struct GeneratorContext<T, IType, FType>
 where
     IType: Iterator<Item = T>,
     FType: FnOnce() -> IType + Send + Sync,
 {
-    time: TimeManager,
     iterator: Option<FType>,
     output: Sender<T>,
 }
@@ -42,13 +42,9 @@ where
         }
     }
 
+    #[cleanup(time_managed)]
     fn cleanup(&mut self) {
         self.output.cleanup();
-        self.time.cleanup();
-    }
-
-    fn view(&self) -> TimeView {
-        self.time.view().into()
     }
 }
 
@@ -59,9 +55,10 @@ where
 {
     pub fn new(iterator: FType, output: Sender<T>) -> GeneratorContext<T, IType, FType> {
         let gc = GeneratorContext {
-            time: TimeManager::new(),
             iterator: Some(iterator),
             output,
+            identifier: Default::default(),
+            time: Default::default(),
         };
         gc.output.attach_sender(&gc);
         gc

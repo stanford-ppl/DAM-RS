@@ -5,13 +5,12 @@ use crate::{
         utils::{dequeue, enqueue, EventTime, Peekable},
         ChannelElement, Receiver, Recv, Sender,
     },
-    context::{
-        view::{TimeManager, TimeView},
-        Context,
-    },
-    time::Time,
+    context::Context,
     types::{Cleanable, DAMType, IndexLike},
 };
+
+use dam_core::{time::Time, TimeManager, TimeView, TimeViewable};
+use dam_macros::cleanup;
 
 use super::datastore::{Behavior, Datastore};
 
@@ -309,11 +308,13 @@ impl<IType: IndexLike, T: DAMType, AT: DAMType> Context for DRAM<IType, T, AT> {
         }
     }
 
+    #[cleanup(time_managed)]
     fn cleanup(&mut self) {
-        self.time.cleanup();
         self.bundles.iter_mut().for_each(|x| x.cleanup());
     }
+}
 
+impl<IType: DAMType, T: DAMType, AT: DAMType> TimeViewable for DRAM<IType, T, AT> {
     fn view(&self) -> TimeView {
         self.time.view().into()
     }
@@ -337,8 +338,9 @@ pub mod tests {
             datastore::Behavior,
             dram::{DRAMConfig, DRAMReadBundle, DRAMWriteBundle, DRAM},
         },
-        time::Time,
     };
+
+    use dam_core::time::Time;
 
     #[test]
     fn test_dram_rw() {

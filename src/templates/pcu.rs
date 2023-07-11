@@ -3,15 +3,13 @@ use crate::{
         utils::{dequeue, enqueue},
         ChannelElement, Receiver, Sender,
     },
-    context::{
-        view::{TimeManager, TimeView},
-        Context,
-    },
-    time::Time,
+    context::Context,
     types::DAMType,
 };
 
 use super::ops::{ALUOp, PipelineRegister};
+use dam_core::{time::Time, TimeManager};
+use dam_macros::{cleanup, identifiable, time_managed};
 
 #[derive(Debug)]
 pub struct PCUConfig {
@@ -20,7 +18,7 @@ pub struct PCUConfig {
 }
 
 #[derive(Debug)]
-pub struct PipelineStage<ET: DAMType> {
+pub struct PipelineStage<ET> {
     pub op: ALUOp<ET>,
     pub forward: Vec<(usize, usize)>,
     pub prev_register_ids: Vec<usize>,
@@ -88,8 +86,9 @@ type EgressOpType<ElementType> = fn(
     &mut TimeManager,
 );
 
-pub struct PCU<ElementType: DAMType> {
-    time: TimeManager,
+#[time_managed]
+#[identifiable]
+pub struct PCU<ElementType> {
     configuration: PCUConfig,
     registers: Vec<Vec<PipelineRegister<ElementType>>>,
 
@@ -118,7 +117,6 @@ impl<ElementType: DAMType> PCU<ElementType> {
             pipe_regs
         });
         PCU::<ElementType> {
-            time: TimeManager::default(),
             configuration,
             registers,
             stages: Vec::with_capacity(pipe_depth),
@@ -126,6 +124,8 @@ impl<ElementType: DAMType> PCU<ElementType> {
             output_channels: vec![],
             ingress_op,
             egress_op,
+            time: Default::default(),
+            identifier: Default::default(),
         }
     }
 
@@ -211,15 +211,11 @@ impl<ElementType: DAMType> Context for PCU<ElementType> {
         }
     }
 
+    #[cleanup(time_managed)]
     fn cleanup(&mut self) {
         self.input_channels.iter_mut().for_each(|chan| {
             chan.close();
         });
-        self.time.cleanup();
-    }
-
-    fn view(&self) -> TimeView {
-        self.time.view().into()
     }
 }
 

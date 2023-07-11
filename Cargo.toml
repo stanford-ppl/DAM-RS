@@ -11,6 +11,8 @@ num = "0.4.0"
 ndarray = "0.15.6"
 ntest = "0.9.0"
 enum_delegate = "0.2.0"
+dam-macros = { version = "0.1.0", path = "dam-macros" }
+dam-core = { version = "0.1.0", path = "dam-core" }
 
 [profile.release-with-debug]
 inherits = "release"

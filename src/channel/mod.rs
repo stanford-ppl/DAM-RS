@@ -4,9 +4,12 @@ use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, RwLock};
 
 use crate::context::Context;
+use crate::types::Cleanable;
 use crate::types::DAMType;
-use crate::{context::view::*, time::Time, types::Cleanable};
 use crossbeam::channel::{self, SendError};
+use dam_core::*;
+
+use dam_core::time::Time;
 
 #[derive(Clone, Debug)]
 pub struct ChannelElement<T> {

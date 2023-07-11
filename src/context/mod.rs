@@ -1,21 +1,16 @@
-use crate::time::Time;
-
-pub use self::view::ContextView;
-use self::view::TimeView;
+use dam_core::{ParentView, TimeView, TimeViewable};
 
 pub mod broadcast_context;
 pub mod checker_context;
 pub mod function_context;
 pub mod generator_context;
 pub mod parent;
-pub mod view;
 
 type ParentType<'a> = dyn ParentContext<'a>;
-pub trait Context: Send + Sync {
+pub trait Context: Send + Sync + TimeViewable {
     fn init(&mut self);
     fn run(&mut self);
     fn cleanup(&mut self);
-    fn view(&self) -> TimeView;
     fn name(&self) -> &'static str {
         std::any::type_name::<Self>()
     }
@@ -27,33 +22,6 @@ type ChildType = dyn Context;
 pub struct ChildManager<'a> {
     next_id: usize,
     children: Vec<&'a mut ChildType>,
-}
-
-pub struct ParentView {
-    pub child_views: Vec<TimeView>,
-}
-
-impl ContextView for ParentView {
-    fn wait_until(&self, when: Time) -> Time {
-        let individual_signals: Vec<_> = self
-            .child_views
-            .iter()
-            .map(|child| child.wait_until(when))
-            .collect();
-        individual_signals.into_iter().min().unwrap_or(when)
-    }
-
-    fn tick_lower_bound(&self) -> Time {
-        let min_time = self
-            .child_views
-            .iter()
-            .map(|child| child.tick_lower_bound())
-            .min();
-        match min_time {
-            Some(time) => time,
-            None => Time::infinite(),
-        }
-    }
 }
 
 impl<'a> ChildManager<'a> {
@@ -116,8 +84,4 @@ impl<'a, T: ParentContext<'a>> Context for T {
     }
 
     fn cleanup(&mut self) {}
-
-    fn view(&self) -> TimeView {
-        self.manager().view()
-    }
 }

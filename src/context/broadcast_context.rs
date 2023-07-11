@@ -1,3 +1,5 @@
+use dam_macros::{cleanup, identifiable, time_managed};
+
 use crate::{
     channel::{
         utils::{dequeue, enqueue},
@@ -6,12 +8,13 @@ use crate::{
     types::{Cleanable, DAMType},
 };
 
-use super::{view::TimeManager, Context};
+use super::Context;
 
+#[time_managed]
+#[identifiable]
 pub struct BroadcastContext<T> {
     receiver: Receiver<T>,
     targets: Vec<Sender<T>>,
-    time: TimeManager,
 }
 
 impl<T: DAMType> Context for BroadcastContext<T> {
@@ -19,7 +22,6 @@ impl<T: DAMType> Context for BroadcastContext<T> {
 
     fn run(&mut self) {
         loop {
-            println!("Running Broadcast Loop");
             let value = dequeue(&mut self.time, &mut self.receiver);
             match value {
                 Ok(mut data) => {
@@ -34,14 +36,10 @@ impl<T: DAMType> Context for BroadcastContext<T> {
         }
     }
 
+    #[cleanup(time_managed)]
     fn cleanup(&mut self) {
         self.receiver.cleanup();
         self.targets.iter_mut().for_each(|target| target.cleanup());
-        self.time.cleanup();
-    }
-
-    fn view(&self) -> super::view::TimeView {
-        self.time.view().into()
     }
 }
 
@@ -50,7 +48,9 @@ impl<T: DAMType> BroadcastContext<T> {
         let x = Self {
             receiver,
             targets: vec![],
-            time: TimeManager::default(),
+
+            identifier: Default::default(),
+            time: Default::default(),
         };
         x.receiver.attach_receiver(&x);
         x
@@ -64,13 +64,15 @@ impl<T: DAMType> BroadcastContext<T> {
 
 #[cfg(test)]
 mod tests {
+    use dam_core::{ContextView, TimeViewable};
+
     use super::BroadcastContext;
 
     use crate::{
         channel::bounded,
         context::{
             checker_context::CheckerContext, generator_context::GeneratorContext,
-            parent::BasicParentContext, Context, ContextView, ParentContext,
+            parent::BasicParentContext, Context, ParentContext,
         },
     };
 

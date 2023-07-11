@@ -1,3 +1,5 @@
+use dam_core::{TimeView, TimeViewable};
+
 use super::ParentContext;
 
 #[derive(Default)]
@@ -12,5 +14,11 @@ impl<'a> ParentContext<'a> for BasicParentContext<'a> {
 
     fn manager(&self) -> &super::ChildManager<'a> {
         &self.child_manager
+    }
+}
+
+impl<'a> TimeViewable for BasicParentContext<'a> {
+    fn view(&self) -> TimeView {
+        self.child_manager.view()
     }
 }
