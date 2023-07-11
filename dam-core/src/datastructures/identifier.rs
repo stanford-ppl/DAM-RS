@@ -1,17 +1,18 @@
 use std::sync::atomic::AtomicUsize;
 
+use crate::log_graph::get_graph;
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Copy)]
 pub struct Identifier {
     id: usize,
 }
-
+static COUNTER: AtomicUsize = AtomicUsize::new(0);
 impl Identifier {
-    const COUNTER: AtomicUsize = AtomicUsize::new(0);
-
     pub fn new() -> Self {
-        Self {
-            id: Identifier::COUNTER.fetch_add(1, std::sync::atomic::Ordering::AcqRel),
-        }
+        let id = COUNTER.fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+        let res = Self { id };
+        get_graph().add_id(res);
+        res
     }
 }
 

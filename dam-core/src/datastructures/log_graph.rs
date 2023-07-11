@@ -1,5 +1,5 @@
 use std::{
-    collections::{hash_map::DefaultHasher, HashMap},
+    collections::{hash_map::DefaultHasher, HashMap, HashSet},
     fs::File,
     hash::{Hash, Hasher},
     io::BufWriter,
@@ -11,13 +11,35 @@ use super::identifier::Identifier;
 
 type CPTType = HashMap<Identifier, Identifier>;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct LogGraph {
     // Maps children to their parents
     child_parent_tree: RwLock<CPTType>,
 
     // Maps threads to file paths
     logging_paths: RwLock<HashMap<Identifier, PathBuf>>,
+    // All identifiers
+    all_identifiers: RwLock<HashSet<Identifier>>,
+}
+
+impl LogGraph {
+    pub fn dump(&self) {
+        let cpt = self.child_parent_tree.read().unwrap();
+        for (k, v) in cpt.iter() {
+            println!("Child({k:?}) -> Parent({v:?})");
+        }
+
+        let ids = self.all_identifiers.read().unwrap();
+        for id in ids.iter() {
+            if !cpt.contains_key(id) {
+                println!("Orphan ID: {id:?}");
+            }
+        }
+    }
+
+    pub fn add_id(&self, id: Identifier) {
+        self.all_identifiers.write().unwrap().insert(id);
+    }
 }
 
 pub struct LogGraphHandle<'a> {
@@ -27,8 +49,12 @@ pub struct LogGraphHandle<'a> {
 
 impl<'a> LogGraphHandle<'a> {
     pub fn add_child(&mut self, child: Identifier) {
-        self.under.insert(self.self_id, child);
+        self.under.insert(child, self.self_id);
     }
+}
+
+pub fn get_graph() -> &'static LogGraph {
+    GRAPH.get_or_init(Default::default)
 }
 
 static GRAPH: OnceLock<LogGraph> = OnceLock::new();

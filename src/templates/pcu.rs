@@ -8,7 +8,7 @@ use crate::{
 };
 
 use super::ops::{ALUOp, PipelineRegister};
-use dam_core::{time::Time, TimeManager};
+use dam_core::{identifier::Identifier, time::Time, TimeManager};
 use dam_macros::{cleanup, identifiable, time_managed};
 
 #[derive(Debug)]
@@ -125,7 +125,7 @@ impl<ElementType: DAMType> PCU<ElementType> {
             ingress_op,
             egress_op,
             time: Default::default(),
-            identifier: Default::default(),
+            identifier: Identifier::new(),
         }
     }
 
@@ -289,7 +289,7 @@ mod tests {
             pcu_out_recv,
         );
 
-        let mut parent = BasicParentContext::default();
+        let mut parent = BasicParentContext::new();
         parent.add_child(&mut gen1);
         parent.add_child(&mut gen2);
         parent.add_child(&mut gen3);

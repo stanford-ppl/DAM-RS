@@ -1,3 +1,4 @@
+use dam_core::identifier::Identifier;
 use dam_macros::{cleanup, identifiable, time_managed};
 
 use crate::{
@@ -57,7 +58,7 @@ where
         let gc = GeneratorContext {
             iterator: Some(iterator),
             output,
-            identifier: Default::default(),
+            identifier: Identifier::new(),
             time: Default::default(),
         };
         gc.output.attach_sender(&gc);

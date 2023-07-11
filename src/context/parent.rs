@@ -1,8 +1,9 @@
-use dam_core::{TimeView, TimeViewable};
+use dam_core::{identifier::Identifier, TimeView, TimeViewable};
+use dam_macros::identifiable;
 
-use super::ParentContext;
+use super::{ChildManager, ParentContext};
 
-#[derive(Default)]
+#[identifiable]
 pub struct BasicParentContext<'a> {
     child_manager: super::ChildManager<'a>,
 }
@@ -20,5 +21,20 @@ impl<'a> ParentContext<'a> for BasicParentContext<'a> {
 impl<'a> TimeViewable for BasicParentContext<'a> {
     fn view(&self) -> TimeView {
         self.child_manager.view()
+    }
+}
+
+impl<'a> BasicParentContext<'a> {
+    pub fn new() -> Self {
+        Self {
+            child_manager: ChildManager::default(),
+            identifier: Identifier::new(),
+        }
+    }
+}
+
+impl<'a> Default for BasicParentContext<'a> {
+    fn default() -> Self {
+        Self::new()
     }
 }

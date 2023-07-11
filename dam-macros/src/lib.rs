@@ -1,12 +1,9 @@
-
-use std::collections::{HashSet};
+use std::collections::HashSet;
 
 use phf::phf_map;
 use proc_macro::{self, TokenStream};
 use quote::{quote, ToTokens};
-use syn::{
-    parse::Parser, parse_macro_input, parse_str, DeriveInput, ImplItemFn,
-};
+use syn::{parse::Parser, parse_macro_input, parse_str, DeriveInput, ImplItemFn};
 
 #[proc_macro_attribute]
 pub fn identifiable(_attrs: TokenStream, item: TokenStream) -> TokenStream {

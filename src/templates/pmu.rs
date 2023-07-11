@@ -9,11 +9,16 @@ use crate::{
     types::{DAMType, IndexLike},
 };
 
-use dam_core::{time::Time, ContextView, ParentView, TimeManaged, TimeView, TimeViewable};
+use dam_core::{
+    identifier::{Identifiable, Identifier},
+    time::Time,
+    ContextView, ParentView, TimeManaged, TimeView, TimeViewable,
+};
 use dam_macros::{cleanup, identifiable, time_managed};
 
 use super::datastore::{self, Behavior, Datastore};
 
+#[identifiable]
 pub struct PMU<T: DAMType, IT: IndexLike, AT: DAMType> {
     reader: ReadPipeline<T, IT>,
     writer: WritePipeline<T, IT, AT>,
@@ -59,17 +64,21 @@ impl<T: DAMType, IT: IndexLike, AT: DAMType> PMU<T, IT, AT> {
                 readers: Default::default(),
                 datastore: datastore.clone(),
                 writer_view: None,
-                identifier: Default::default(),
+                identifier: Identifier::new(),
                 time: Default::default(),
             },
             writer: WritePipeline {
                 writers: Default::default(),
                 datastore,
-                identifier: Default::default(),
+                identifier: Identifier::new(),
                 time: Default::default(),
             },
+            identifier: Identifier::new(),
         };
         pmu.reader.writer_view = Some(pmu.writer.view());
+        let mut handle = dam_core::log_graph::register_handle(pmu.id());
+        handle.add_child(pmu.reader.id());
+        handle.add_child(pmu.writer.id());
         pmu
     }
 
@@ -259,7 +268,7 @@ impl<T: DAMType, IT: IndexLike, AT: DAMType> Context for WritePipeline<T, IT, AT
 #[cfg(test)]
 mod tests {
 
-    use dam_core::{ContextView, TimeViewable};
+    use dam_core::{log_graph::get_graph, ContextView, TimeViewable};
 
     use crate::{
         channel::{
@@ -358,5 +367,7 @@ mod tests {
         dbg!(finish_time);
         assert!(finish_time.is_infinite());
         assert_eq!(finish_time.time(), u64::try_from(TEST_SIZE).unwrap() + 1);
+
+        get_graph().dump();
     }
 }

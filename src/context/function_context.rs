@@ -1,4 +1,4 @@
-use dam_core::TimeManager;
+use dam_core::{identifier::Identifier, TimeManager};
 use dam_macros::{cleanup, identifiable, time_managed};
 
 use super::Context;
@@ -31,20 +31,14 @@ where
     RT: FnOnce(&mut TimeManager) + Send + Sync,
 {
     pub fn new() -> Self {
-        Default::default()
+        Self {
+            run_fn: Default::default(),
+            identifier: Identifier::new(),
+            time: Default::default(),
+        }
     }
 
     pub fn set_run(&mut self, run_fn: RT) {
         self.run_fn = Some(run_fn);
-    }
-}
-
-impl<RT> Default for FunctionContext<RT> {
-    fn default() -> Self {
-        Self {
-            run_fn: Default::default(),
-            identifier: Default::default(),
-            time: Default::default(),
-        }
     }
 }

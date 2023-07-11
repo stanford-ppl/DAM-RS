@@ -1,3 +1,4 @@
+use dam_core::identifier::Identifier;
 use dam_macros::{cleanup, identifiable, time_managed};
 
 use crate::{
@@ -49,7 +50,7 @@ impl<T: DAMType> BroadcastContext<T> {
             receiver,
             targets: vec![],
 
-            identifier: Default::default(),
+            identifier: Identifier::new(),
             time: Default::default(),
         };
         x.receiver.attach_receiver(&x);

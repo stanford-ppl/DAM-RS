@@ -27,9 +27,3 @@ pub trait TimeManaged {
     fn time_manager_mut(&mut self) -> &mut TimeManager;
     fn time_manager(&self) -> &TimeManager;
 }
-
-// impl<T: TimeManaged> TimeViewable for T {
-//     fn view(&self) -> TimeView {
-//         self.time_manager().view().into()
-//     }
-// }

@@ -1,3 +1,4 @@
+use dam_core::identifier::Identifier;
 use dam_macros::{cleanup, identifiable, time_managed};
 
 use crate::{
@@ -57,7 +58,7 @@ where
             iterator: Some(iterator),
             input,
             time: Default::default(),
-            identifier: Default::default(),
+            identifier: Identifier::new(),
         };
         gc.input.attach_receiver(&gc);
         gc

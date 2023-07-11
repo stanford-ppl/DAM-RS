@@ -1,4 +1,4 @@
-use dam_core::{ParentView, TimeView, TimeViewable};
+use dam_core::{identifier::Identifiable, ParentView, TimeView, TimeViewable};
 
 pub mod broadcast_context;
 pub mod checker_context;
@@ -7,7 +7,7 @@ pub mod generator_context;
 pub mod parent;
 
 type ParentType<'a> = dyn ParentContext<'a>;
-pub trait Context: Send + Sync + TimeViewable {
+pub trait Context: Send + Sync + TimeViewable + Identifiable {
     fn init(&mut self);
     fn run(&mut self);
     fn cleanup(&mut self);
@@ -62,11 +62,14 @@ pub trait ParentContext<'a>: Context {
     }
 
     fn add_child(&mut self, child: &'a mut ChildType) {
+        let mut handle = dam_core::log_graph::register_handle(self.id());
+        handle.add_child(child.id());
+        println!("Registering: {:?} => {:?}", self.id(), child.id());
         self.manager_mut().add_child(child);
     }
 }
 
-impl<'a, T: ParentContext<'a>> Context for T {
+impl<'a, T: ParentContext<'a> + Identifiable> Context for T {
     fn init(&mut self) {
         self.manager_mut().for_each_child_single_threaded(|child| {
             child.init();
@@ -74,9 +77,6 @@ impl<'a, T: ParentContext<'a>> Context for T {
     }
 
     fn run(&mut self) {
-        // self.manager_mut().for_each_child_single_threaded(|child| {
-        //     println!("Starting run: {}", child.name());
-        // });
         self.manager_mut().for_each_child_parallel(|child| {
             child.run();
             child.cleanup();
