@@ -3,7 +3,7 @@ mod tests {
 
     use std::{fs, path::Path};
 
-    use crate::channel::unbounded;
+    use crate::channel::{bounded, unbounded};
     use crate::context::broadcast_context::BroadcastContext;
     use crate::context::generator_context::GeneratorContext;
     use crate::context::parent::BasicParentContext;
@@ -136,7 +136,7 @@ mod tests {
 
     #[test]
     fn test_matmul_ijk() {
-        let test_name = "matmul_ijk1";
+        let test_name = "mat_elemadd2";
         let filename = home::home_dir().unwrap().join("sam_config.toml");
         let contents = fs::read_to_string(filename).unwrap();
         let data: Data = toml::from_str(&contents).unwrap();
@@ -164,12 +164,15 @@ mod tests {
         let c1_crd = read_inputs::<u32>(&c1_crd_filename);
         let c_vals = read_inputs::<f32>(&c_vals_filename);
 
+        let chan_size = 2048;
+
         // fiberlookup_bi
-        let (bi_out_ref_sender, bi_out_ref_receiver) = unbounded::<Token<u32, u32>>();
-        let (bi_out_crd_sender, bi_out_crd_receiver) = unbounded::<Token<u32, u32>>();
-        let (bi_in_ref_sender, bi_in_ref_receiver) = unbounded::<Token<u32, u32>>();
-        let (_bc_bi_in_ref_sender, _bc_bi_in_ref_receiver) = unbounded::<Token<u32, u32>>();
-        let (_bc1_bi_in_ref_sender, _bc1_bi_in_ref_receiver) = unbounded::<Token<u32, u32>>();
+        let (bi_out_ref_sender, bi_out_ref_receiver) = bounded::<Token<u32, u32>>(chan_size);
+        let (bi_out_crd_sender, bi_out_crd_receiver) = bounded::<Token<u32, u32>>(chan_size);
+        let (bi_in_ref_sender, bi_in_ref_receiver) = bounded::<Token<u32, u32>>(chan_size);
+        let (_bc_bi_in_ref_sender, _bc_bi_in_ref_receiver) = bounded::<Token<u32, u32>>(chan_size);
+        let (_bc1_bi_in_ref_sender, _bc1_bi_in_ref_receiver) =
+            bounded::<Token<u32, u32>>(chan_size);
 
         let mut b_gen = GeneratorContext::new(
             || token_vec!(u32; u32; 0, "D").into_iter(),
@@ -193,8 +196,9 @@ mod tests {
         let mut x0_wrscanner = CompressedWrScan::new(x0_wrscanner_data, x0_seg, x0_crd);
 
         // repeatsiggen
-        let (bc_bi_out_ref_sender, bc_bi_out_ref_receiver) = unbounded::<Token<u32, u32>>();
-        let (bc1_bi_out_ref_sender, bc1_bi_out_ref_receiver) = unbounded::<Token<u32, u32>>();
+        let (bc_bi_out_ref_sender, bc_bi_out_ref_receiver) = bounded::<Token<u32, u32>>(chan_size);
+        let (bc1_bi_out_ref_sender, bc1_bi_out_ref_receiver) =
+            bounded::<Token<u32, u32>>(chan_size);
         let mut broadcast = BroadcastContext::new(bi_out_ref_receiver);
         broadcast.add_target(bc_bi_out_ref_sender);
         broadcast.add_target(bc1_bi_out_ref_sender);
