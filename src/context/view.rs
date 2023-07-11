@@ -3,7 +3,7 @@ use std::{
     thread::Thread,
 };
 
-
+use crate::event_log::EventLog;
 
 use crate::time::{AtomicTime, Time};
 
@@ -21,15 +21,22 @@ pub enum TimeView {
     ParentView(ParentView),
 }
 
+#[derive(Debug, Clone, Copy)]
+enum TimeEvents {
+    Init,
+}
+
 #[derive(Clone, Default, Debug)]
 pub struct TimeManager {
     underlying: Arc<TimeInfo>,
+    log: EventLog<TimeEvents>,
 }
 
 impl TimeManager {
     pub fn new() -> TimeManager {
         TimeManager {
             underlying: Arc::new(TimeInfo::default()),
+            log: Default::default(),
         }
     }
 
@@ -126,7 +133,7 @@ struct Signal {
     done: AtomicBool,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct SignalElement {
     when: Time,
 
