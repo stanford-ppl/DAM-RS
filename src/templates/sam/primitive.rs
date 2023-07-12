@@ -1,8 +1,12 @@
 use core::fmt;
 
-use crate::types::DAMType;
+use crate::{
+    templates::ops::{ALUOp, PipelineRegister},
+    types::DAMType,
+    RegisterALUOp,
+};
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, PartialOrd)]
 pub enum Token<ValType, StopType> {
     Val(ValType),
     Stop(StopType),
@@ -15,6 +19,30 @@ pub enum Repsiggen {
     Repeat,
     Stop,
     Done,
+}
+
+pub trait Exp {
+    fn exp(self) -> Self;
+}
+
+RegisterALUOp!(ALUExpOp, |(i0), ()| [i0.exp()], T: DAMType + Exp);
+
+impl<ValType: DAMType, StopType: DAMType> Exp for Token<ValType, StopType>
+where
+    ValType: Exp,
+{
+    fn exp(self) -> Self {
+        match self {
+            Token::Val(val) => Token::Val(val.exp()),
+            _ => self,
+        }
+    }
+}
+
+impl<T: num::Float> Exp for T {
+    fn exp(self) -> Self {
+        num::Float::exp(self)
+    }
 }
 
 impl<ValType: DAMType, StopType> From<ValType> for Token<ValType, StopType> {
@@ -104,7 +132,19 @@ macro_rules! repsig_vec {
     };
 }
 
-// pub(crate) use tvec;
+impl<ValType: DAMType, StopType: DAMType> std::ops::Neg for Token<ValType, StopType>
+where
+    ValType: std::ops::Neg<Output = ValType>,
+{
+    type Output = Self;
+
+    fn neg(self) -> Self::Output {
+        match self {
+            Token::Val(val) => Token::Val(val.neg()),
+            _ => self,
+        }
+    }
+}
 
 fn tmp() {
     let _ = token_vec![u16; u16; 1, 2, 3, "S0", 4, 5, 6, "S1", "D"];

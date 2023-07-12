@@ -1,3 +1,5 @@
+use std::cmp::max;
+
 use crate::{
     channel::{
         utils::{dequeue, enqueue},
@@ -129,6 +131,107 @@ where
     }
 }
 
+pub struct MaxReduce<ValType, StopType> {
+    max_reduce_data: ReduceData<ValType, StopType>,
+    min_val: ValType,
+    time: TimeManager,
+}
+
+impl<ValType: DAMType, StopType: DAMType> MaxReduce<ValType, StopType>
+where
+    MaxReduce<ValType, StopType>: Context,
+{
+    pub fn new(max_reduce_data: ReduceData<ValType, StopType>, min_val: ValType) -> Self {
+        let red = MaxReduce {
+            max_reduce_data,
+            min_val,
+            time: TimeManager::default(),
+        };
+        (red.max_reduce_data.in_val).attach_receiver(&red);
+        (red.max_reduce_data.out_val).attach_sender(&red);
+
+        red
+    }
+}
+
+impl<ValType, StopType> Context for MaxReduce<ValType, StopType>
+where
+    ValType: DAMType
+        + std::ops::AddAssign<ValType>
+        + std::ops::Mul<ValType, Output = ValType>
+        + std::ops::Add<ValType, Output = ValType>
+        + std::cmp::PartialOrd<ValType>,
+    StopType: DAMType
+        + std::ops::Add<u32, Output = StopType>
+        + std::ops::Sub<u32, Output = StopType>
+        + std::cmp::PartialEq,
+{
+    fn init(&mut self) {}
+
+    fn run(&mut self) {
+        let mut max_elem = self.min_val.clone();
+        loop {
+            match dequeue(&mut self.time, &mut self.max_reduce_data.in_val) {
+                Ok(curr_in) => match curr_in.data {
+                    Token::Val(val) => {
+                        // max_elem = max(val, max_elem);
+                        match val.lt(&max_elem) {
+                            true => (),
+                            false => max_elem = val,
+                        }
+                    }
+                    Token::Stop(stkn) => {
+                        let curr_time = self.time.tick();
+                        enqueue(
+                            &mut self.time,
+                            &mut self.max_reduce_data.out_val,
+                            ChannelElement::new(curr_time + 1, Token::Val(max_elem)),
+                        )
+                        .unwrap();
+                        max_elem = ValType::default();
+                        if stkn != StopType::default() {
+                            enqueue(
+                                &mut self.time,
+                                &mut self.max_reduce_data.out_val,
+                                ChannelElement::new(curr_time + 1, Token::Stop(stkn - 1)),
+                            )
+                            .unwrap();
+                        }
+                    }
+                    Token::Empty => {
+                        continue;
+                    }
+                    Token::Done => {
+                        let curr_time = self.time.tick();
+                        enqueue(
+                            &mut self.time,
+                            &mut self.max_reduce_data.out_val,
+                            ChannelElement::new(curr_time + 1, Token::Done),
+                        )
+                        .unwrap();
+                        return;
+                    }
+                },
+                Err(_) => {
+                    panic!("Unexpected end of stream");
+                }
+            }
+            // println!("seg: {:?}", self.seg_arr);
+            // println!("crd: {:?}", self.crd_arr);
+            self.time.incr_cycles(1);
+        }
+    }
+
+    fn cleanup(&mut self) {
+        self.max_reduce_data.cleanup();
+        self.time.cleanup();
+    }
+
+    fn view(&self) -> TimeView {
+        self.time.view().into()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::{
@@ -138,34 +241,30 @@ mod tests {
             parent::BasicParentContext, Context, ParentContext,
         },
         templates::sam::primitive::Token,
+        token_vec,
     };
 
-    use super::Reduce;
     use super::ReduceData;
+    use super::{MaxReduce, Reduce};
 
     #[test]
     fn reduce_2d_test() {
         let in_val = || {
-            vec![5u32, 5]
+            token_vec!(u32; u32; 5, 5, "S0", 5, "S0", 4, 8, "S0", 4, 3, "S0", 4, 3, "S1", "D")
                 .into_iter()
-                .map(Token::Val)
-                .chain([Token::Stop(0u32)])
-                .chain(vec![5].into_iter().map(Token::Val))
-                .chain([Token::Stop(0u32)])
-                .chain(vec![4, 8].into_iter().map(Token::Val))
-                .chain([Token::Stop(0u32)])
-                .chain(vec![4, 3].into_iter().map(Token::Val))
-                .chain([Token::Stop(0u32)])
-                .chain(vec![4, 3].into_iter().map(Token::Val))
-                .chain([Token::Stop(1), Token::Done])
         };
-        let out_val = || {
-            vec![10u32, 5, 12, 7, 7]
-                .into_iter()
-                .map(Token::Val)
-                .chain([Token::Stop(0u32), Token::Done])
-        };
+        let out_val = || token_vec!(u32; u32; 10, 5, 12, 7, 7, "S0", "D").into_iter();
         reduce_test(in_val, out_val);
+    }
+
+    #[test]
+    fn max_reduce_2d_test() {
+        let in_val = || {
+            token_vec!(f32; u32; 5.0, 5.0, "S0", 5.0, "S0", 4.0, 8.0, "S0", 4.0, 3.0, "S0", 4.0, 3.0, "S1", "D")
+                .into_iter()
+        };
+        let out_val = || token_vec!(f32; u32; 5.0, 5.0, 8.0, 4.0, 4.0, "S0", "D").into_iter();
+        max_reduce_test(in_val, out_val);
     }
 
     fn reduce_test<IRT, ORT>(in_val: fn() -> IRT, out_val: fn() -> ORT)
@@ -180,6 +279,29 @@ mod tests {
             out_val: out_val_sender,
         };
         let mut red = Reduce::new(data);
+        let mut gen1 = GeneratorContext::new(in_val, in_val_sender);
+        let mut val_checker = CheckerContext::new(out_val, out_val_receiver);
+        let mut parent = BasicParentContext::default();
+        parent.add_child(&mut gen1);
+        parent.add_child(&mut val_checker);
+        parent.add_child(&mut red);
+        parent.init();
+        parent.run();
+        parent.cleanup();
+    }
+
+    fn max_reduce_test<IRT, ORT>(in_val: fn() -> IRT, out_val: fn() -> ORT)
+    where
+        IRT: Iterator<Item = Token<f32, u32>> + 'static,
+        ORT: Iterator<Item = Token<f32, u32>> + 'static,
+    {
+        let (in_val_sender, in_val_receiver) = unbounded::<Token<f32, u32>>();
+        let (out_val_sender, out_val_receiver) = unbounded::<Token<f32, u32>>();
+        let data = ReduceData::<f32, u32> {
+            in_val: in_val_receiver,
+            out_val: out_val_sender,
+        };
+        let mut red = MaxReduce::new(data, f32::MIN);
         let mut gen1 = GeneratorContext::new(in_val, in_val_sender);
         let mut val_checker = CheckerContext::new(out_val, out_val_receiver);
         let mut parent = BasicParentContext::default();

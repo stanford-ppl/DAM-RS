@@ -5,7 +5,7 @@ use crate::{
         ops::ALUOp,
         pcu::{PCUConfig, PipelineStage, PCU},
     },
-    types::DAMType,
+    types::{self, DAMType},
 };
 
 use super::primitive::Token;
@@ -22,11 +22,18 @@ macro_rules! RegisterArithmeticOp {
         where
             Token<ValType, StopType>: Copy,
             ValType: num::Num,
+            ValType: types::StaticallySized,
+            StopType: types::StaticallySized,
         {
             type Output = Token<ValType, StopType>;
             fn $name(self, rhs: Token<ValType, StopType>) -> Token<ValType, StopType> {
                 match (self, rhs) {
-                    (Token::Val(in1), Token::Val(in2)) => Token::Val(in1.$name(in2)),
+                    (Token::Val(in1), Token::Val(in2)) => {
+                        // println!("t1: {:?}", in1);
+                        // println!("t2: {:?}", in2);
+                        // println!("");
+                        Token::Val(in1.$name(in2))
+                    }
                     (Token::Stop(in1), Token::Stop(in2)) => {
                         assert_eq!(in1, in2);
                         Token::Stop(in1)
@@ -39,7 +46,12 @@ macro_rules! RegisterArithmeticOp {
                         Token::Val(val.$name(num::$identity::<ValType>()))
                     }
                     _ => {
-                        panic!("Invalid case in {:?}", stringify!($name));
+                        panic!(
+                            "Incorrect {:?} and {:?} tokens found in {:?}",
+                            self,
+                            rhs,
+                            stringify!($name)
+                        );
                     }
                 }
             }
@@ -84,6 +96,36 @@ pub fn make_alu<ValType: DAMType, StopType: DAMType>(
     pcu
 }
 
+pub fn make_unary_alu<ValType: DAMType, StopType: DAMType>(
+    arg1: Receiver<Token<ValType, StopType>>,
+    res: Sender<Token<ValType, StopType>>,
+    op: ALUOp<Token<ValType, StopType>>,
+) -> impl Context {
+    let ingress_op = PCU::<Token<ValType, StopType>>::READ_ALL_INPUTS;
+    let egress_op = PCU::<Token<ValType, StopType>>::WRITE_ALL_RESULTS;
+
+    let mut pcu = PCU::new(
+        PCUConfig {
+            pipeline_depth: 5,
+            num_registers: 1,
+        },
+        ingress_op,
+        egress_op,
+    );
+
+    pcu.push_stage(PipelineStage {
+        op,
+        forward: vec![],
+        prev_register_ids: vec![0],
+        next_register_ids: vec![],
+        output_register_ids: vec![0],
+    });
+    pcu.add_input_channel(arg1);
+    pcu.add_output_channel(res);
+
+    pcu
+}
+
 #[cfg(test)]
 mod tests {
     use crate::{
@@ -92,7 +134,14 @@ mod tests {
             checker_context::CheckerContext, generator_context::GeneratorContext,
             parent::BasicParentContext, Context, ContextView, ParentContext,
         },
-        templates::{ops::ALUAddOp, sam::primitive::Token},
+        templates::{
+            ops::ALUAddOp,
+            sam::{
+                alu::make_unary_alu,
+                primitive::{ALUExpOp, Exp, Token},
+            },
+        },
+        token_vec,
     };
 
     use super::make_alu;
@@ -110,6 +159,7 @@ mod tests {
         let (arg1_send, arg1_recv) = unbounded::<Token<u32, u32>>();
         let (arg2_send, arg2_recv) = unbounded::<Token<u32, u32>>();
         let (pcu_out_send, pcu_out_recv) = unbounded::<Token<u32, u32>>();
+        // let mut alu = make_alu(arg1_recv, arg2_recv, pcu_out_send, ALUAddOp());
         let mut alu = make_alu(arg1_recv, arg2_recv, pcu_out_send, ALUAddOp());
         let mut gen1 = GeneratorContext::new(
             || {
@@ -146,5 +196,32 @@ mod tests {
         parent.run();
         parent.cleanup();
         dbg!(alu.view().tick_lower_bound());
+    }
+
+    #[test]
+    fn exp_test() {
+        let (arg1_send, arg1_recv) = unbounded::<Token<f32, u32>>();
+        let (pcu_out_send, pcu_out_recv) = unbounded::<Token<f32, u32>>();
+        let mut unary_alu = make_unary_alu(arg1_recv, pcu_out_send, ALUExpOp());
+        let mut gen1 = GeneratorContext::new(
+            || token_vec!(f32; u32; 0.0, 2.0, 3.0, 4.0, 5.0, 3.0, "S0", "D0").into_iter(),
+            arg1_send,
+        );
+        let mut checker = CheckerContext::new(
+            || {
+                token_vec!(f32; u32; 0.0, 2.0, 3.0, 4.0, 5.0, 3.0, "S0", "D0")
+                    .into_iter()
+                    .map(|a| a.exp())
+            },
+            pcu_out_recv,
+        );
+        let mut parent = BasicParentContext::default();
+        parent.add_child(&mut gen1);
+        parent.add_child(&mut unary_alu);
+        parent.add_child(&mut checker);
+        parent.init();
+        parent.run();
+        parent.cleanup();
+        dbg!(unary_alu.view().tick_lower_bound());
     }
 }

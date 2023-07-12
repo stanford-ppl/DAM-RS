@@ -52,6 +52,7 @@ impl<ValType, StopType> Context for CompressedWrScan<ValType, StopType>
 where
     ValType: DAMType
         + std::ops::AddAssign<u32>
+        + std::ops::AddAssign<ValType>
         + std::ops::Mul<ValType, Output = ValType>
         + std::ops::Add<ValType, Output = ValType>
         + std::cmp::PartialOrd<ValType>,
