@@ -1,8 +1,23 @@
 use std::sync::{atomic::AtomicBool, Arc, Mutex};
 
-use crate::time::{AtomicTime, Time};
+use serde::{Deserialize, Serialize};
+
+use crate::{
+    identifier::Identifier,
+    log_graph::get_identifier,
+    time::{AtomicTime, Time},
+    DAMLog_core,
+};
 
 use super::ContextView;
+
+#[derive(Serialize, Deserialize, Debug)]
+enum TimeEvent {
+    Incr(u64),
+    Advance(Time),
+    ScanAndWrite(Vec<Identifier>),
+    Finish(Time),
+}
 
 #[derive(Default, Debug)]
 pub struct TimeManager {
@@ -25,14 +40,14 @@ impl TimeManager {
 
 impl TimeManager {
     pub fn incr_cycles(&mut self, incr: u64) {
-        // self.log.push(TimeEvent::Incr(incr));
+        DAMLog_core!().log(TimeEvent::Incr(incr));
         self.underlying.time.incr_cycles(incr);
         self.scan_and_write_signals();
     }
 
     pub fn advance(&mut self, new: Time) {
         if self.underlying.time.try_advance(new) {
-            // self.log.push(TimeEvent::Advance(new));
+            DAMLog_core!().log(TimeEvent::Advance(new));
             self.scan_and_write_signals();
         }
     }
@@ -56,7 +71,9 @@ impl TimeManager {
 
         drop(signal_buffer);
         if !released.is_empty() {
-            // self.log.push(TimeEvent::ScanAndWrite(released));
+            DAMLog_core!().log(TimeEvent::ScanAndWrite(
+                released.into_iter().map(get_identifier).collect(),
+            ));
         }
     }
 
@@ -66,8 +83,7 @@ impl TimeManager {
 
     pub fn cleanup(&mut self) {
         self.underlying.time.set_infinite();
-        // self.log
-        //     .push(TimeEvent::Finish(self.underlying.time.load()));
+        DAMLog_core!().log(TimeEvent::Finish(self.underlying.time.load()));
         self.scan_and_write_signals();
     }
 }

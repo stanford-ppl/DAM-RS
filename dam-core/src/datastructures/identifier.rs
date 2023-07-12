@@ -1,8 +1,10 @@
 use std::sync::atomic::AtomicUsize;
 
+use serde::{Deserialize, Serialize};
+
 use crate::log_graph::get_graph;
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash, Copy)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Copy, Serialize, Deserialize)]
 pub struct Identifier {
     id: usize,
 }
@@ -22,6 +24,14 @@ impl Default for Identifier {
     }
 }
 
+impl std::fmt::Display for Identifier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ID_{}", self.id)
+    }
+}
+
 pub trait Identifiable {
     fn id(&self) -> Identifier;
+
+    fn name(&self) -> String;
 }

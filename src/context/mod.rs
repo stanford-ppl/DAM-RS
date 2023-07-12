@@ -1,4 +1,8 @@
-use dam_core::{identifier::Identifiable, ParentView, TimeView, TimeViewable};
+use dam_core::{
+    identifier::Identifiable,
+    log_graph::{self, drop_subgraph, is_orphan},
+    ParentView, TimeView, TimeViewable,
+};
 
 pub mod broadcast_context;
 pub mod checker_context;
@@ -11,8 +15,9 @@ pub trait Context: Send + Sync + TimeViewable + Identifiable {
     fn init(&mut self);
     fn run(&mut self);
     fn cleanup(&mut self);
-    fn name(&self) -> &'static str {
-        std::any::type_name::<Self>()
+
+    fn register(&self) {
+        log_graph::register(self.id(), self.name());
     }
 }
 
@@ -64,7 +69,6 @@ pub trait ParentContext<'a>: Context {
     fn add_child(&mut self, child: &'a mut ChildType) {
         let mut handle = dam_core::log_graph::register_handle(self.id());
         handle.add_child(child.id());
-        println!("Registering: {:?} => {:?}", self.id(), child.id());
         self.manager_mut().add_child(child);
     }
 }
@@ -74,14 +78,23 @@ impl<'a, T: ParentContext<'a> + Identifiable> Context for T {
         self.manager_mut().for_each_child_single_threaded(|child| {
             child.init();
         })
+
+        // Check if we're the orphan, if so, dump the graph to our log.
     }
 
     fn run(&mut self) {
+        self.register();
         self.manager_mut().for_each_child_parallel(|child| {
+            child.register();
             child.run();
             child.cleanup();
         })
     }
 
-    fn cleanup(&mut self) {}
+    fn cleanup(&mut self) {
+        // if we're an orphan, drop the graph.
+        if is_orphan(self.id()) {
+            drop_subgraph(self.id());
+        }
+    }
 }

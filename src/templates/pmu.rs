@@ -33,10 +33,12 @@ impl<T: DAMType, IT: IndexLike, AT: DAMType> Context for PMU<T, IT, AT> {
     fn run(&mut self) {
         std::thread::scope(|s| {
             s.spawn(|| {
+                self.reader.register();
                 self.reader.run();
                 self.reader.cleanup();
             });
             s.spawn(|| {
+                self.writer.register();
                 self.writer.run();
                 self.writer.cleanup();
             });
@@ -268,7 +270,11 @@ impl<T: DAMType, IT: IndexLike, AT: DAMType> Context for WritePipeline<T, IT, AT
 #[cfg(test)]
 mod tests {
 
-    use dam_core::{log_graph::get_graph, ContextView, TimeViewable};
+    use dam_core::{
+        identifier::Identifiable,
+        log_graph::{get_graph, set_log_path},
+        ContextView, TimeViewable,
+    };
 
     use crate::{
         channel::{
@@ -293,6 +299,7 @@ mod tests {
     fn simple_pmu_test() {
         const TEST_SIZE: usize = 1024 * 64;
         let mut parent = BasicParentContext::default();
+        set_log_path(parent.id(), "/home/nzhang/pmu".into());
 
         let mut pmu = PMU::<u16, u16, bool>::new(
             TEST_SIZE,

@@ -24,12 +24,17 @@ pub fn identifiable(_attrs: TokenStream, item: TokenStream) -> TokenStream {
                 _ => (),
             }
 
+            let ident_string = name.to_string();
             return quote! {
                 #ast
 
                 impl #impl_generics dam_core::identifier::Identifiable for #name #ty_generics #where_clause {
                     fn id(&self) -> dam_core::identifier::Identifier {
                         self.identifier
+                    }
+
+                    fn name(&self) -> String {
+                        (#ident_string).into()
                     }
                 }
             }
