@@ -8,4 +8,5 @@ pub mod rd_scanner;
 pub mod repeat;
 pub mod test;
 pub mod utils;
+pub mod val_dropper;
 pub mod wr_scanner;
