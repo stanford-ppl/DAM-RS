@@ -128,9 +128,11 @@ mod tests {
 
         let (bc_bl_out_ref_sender, bc_bl_out_ref_receiver) = unbounded::<Token<u32, u32>>();
         let (bc1_bl_out_ref_sender, bc1_bl_out_ref_receiver) = unbounded::<Token<u32, u32>>();
+        let (bc2_bl_out_ref_sender, _bc2_bl_out_ref_receiver) = unbounded::<Token<u32, u32>>();
         let mut broadcast3 = BroadcastContext::new(bl_out_ref_receiver);
         broadcast3.add_target(bc_bl_out_ref_sender);
         broadcast3.add_target(bc1_bl_out_ref_sender);
+        broadcast3.add_target(bc2_bl_out_ref_sender);
 
         // arrayvals_b
         let (b_out_val_sender, b_out_val_receiver) = unbounded::<Token<f32, u32>>();
@@ -255,8 +257,8 @@ mod tests {
         parent.run();
         parent.cleanup();
 
-        dbg!(x0_wrscanner.crd_arr);
-        dbg!(xvals.out_val);
+        println!("{:?}", x0_wrscanner.crd_arr);
+        println!("{:?}", xvals.out_val);
 
         // let fil = formatted_dir.to_str().unwrap();
     }
