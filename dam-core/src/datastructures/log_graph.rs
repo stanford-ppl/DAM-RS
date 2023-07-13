@@ -4,7 +4,7 @@ use std::{
     hash::{Hash, Hasher},
     io::{BufWriter, Write},
     path::PathBuf,
-    sync::{Arc, Mutex, OnceLock},
+    sync::{Arc, Mutex, Once, OnceLock},
     thread::ThreadId,
     time::{Duration, Instant},
 };
@@ -229,7 +229,6 @@ impl LogGraph {
         self.get_log(LogType::Base(root))
             .log(RegistryEvent::Cleaned(time_since_init().as_micros()));
         let can_drop = self.get_subgraph(root);
-        println!("Dropping: {can_drop:?}");
         self.all_identifiers
             .retain(|identifier| !can_drop.contains(identifier));
 
@@ -257,7 +256,29 @@ impl<'a> LogGraphHandle<'a> {
 pub fn get_graph() -> &'static LogGraph {
     // Initialize time here as well
     INIT_TIME.get_or_init(Instant::now);
-    GRAPH.get_or_init(Default::default)
+    let result = GRAPH.get_or_init(Default::default);
+    start_static_hook();
+    result
+}
+
+static PANIC_HOOK: Once = Once::new();
+fn start_static_hook() {
+    PANIC_HOOK.call_once(|| {
+        // Also hook into the global panic chain.
+        let prev_hook = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |panic_info| {
+            let graph = get_graph();
+            let cur_thread = std::thread::current().id();
+            let identifier = graph
+                .executor_map
+                .get(&cur_thread)
+                .map(|ident| ident.value().clone());
+            if let Some(ident) = identifier {
+                get_graph().drop_subgraph(ident);
+            }
+            (prev_hook)(panic_info);
+        }));
+    });
 }
 
 static GRAPH: OnceLock<LogGraph> = OnceLock::new();

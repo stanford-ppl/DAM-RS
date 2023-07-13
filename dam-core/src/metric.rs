@@ -7,7 +7,7 @@ pub trait LogProducer {
     const LOG_NAME: &'static str;
 
     fn log<T: serde::Serialize + std::fmt::Debug>(value: T) {
-        let thread_id = ::std::thread::current().id();
+        let thread_id = std::thread::current().id();
         let current_graph = crate::log_graph::get_graph();
         let identifier = current_graph.get_identifier(thread_id);
         current_graph
