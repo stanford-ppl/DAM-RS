@@ -11,6 +11,7 @@ use crate::{
 
 use dam_core::{
     identifier::{Identifiable, Identifier},
+    log_graph::get_graph,
     time::Time,
     ContextView, ParentView, TimeManaged, TimeView, TimeViewable,
 };
@@ -78,7 +79,7 @@ impl<T: DAMType, IT: IndexLike, AT: DAMType> PMU<T, IT, AT> {
             identifier: Identifier::new(),
         };
         pmu.reader.writer_view = Some(pmu.writer.view());
-        let mut handle = dam_core::log_graph::register_handle(pmu.id());
+        let mut handle = get_graph().register_handle(pmu.id());
         handle.add_child(pmu.reader.id());
         handle.add_child(pmu.writer.id());
         pmu
@@ -270,11 +271,7 @@ impl<T: DAMType, IT: IndexLike, AT: DAMType> Context for WritePipeline<T, IT, AT
 #[cfg(test)]
 mod tests {
 
-    use dam_core::{
-        identifier::Identifiable,
-        log_graph::{get_graph, set_log_path},
-        ContextView, TimeViewable,
-    };
+    use dam_core::{ContextView, TimeViewable};
 
     use crate::{
         channel::{
@@ -299,7 +296,6 @@ mod tests {
     fn simple_pmu_test() {
         const TEST_SIZE: usize = 1024 * 64;
         let mut parent = BasicParentContext::default();
-        set_log_path(parent.id(), "/home/nzhang/pmu".into());
 
         let mut pmu = PMU::<u16, u16, bool>::new(
             TEST_SIZE,
@@ -374,7 +370,5 @@ mod tests {
         dbg!(finish_time);
         assert!(finish_time.is_infinite());
         assert_eq!(finish_time.time(), u64::try_from(TEST_SIZE).unwrap() + 1);
-
-        get_graph().dump();
     }
 }

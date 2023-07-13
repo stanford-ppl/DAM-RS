@@ -1,7 +1,5 @@
 use dam_core::{
-    identifier::Identifiable,
-    log_graph::{self, drop_subgraph, is_orphan},
-    ParentView, TimeView, TimeViewable,
+    identifier::Identifiable, log_graph::get_graph, ParentView, TimeView, TimeViewable,
 };
 
 pub mod broadcast_context;
@@ -17,7 +15,7 @@ pub trait Context: Send + Sync + TimeViewable + Identifiable {
     fn cleanup(&mut self);
 
     fn register(&self) {
-        log_graph::register(self.id(), self.name());
+        get_graph().register(self.id(), self.name());
     }
 }
 
@@ -67,7 +65,7 @@ pub trait ParentContext<'a>: Context {
     }
 
     fn add_child(&mut self, child: &'a mut ChildType) {
-        let mut handle = dam_core::log_graph::register_handle(self.id());
+        let mut handle = get_graph().register_handle(self.id());
         handle.add_child(child.id());
         self.manager_mut().add_child(child);
     }
@@ -93,8 +91,9 @@ impl<'a, T: ParentContext<'a> + Identifiable> Context for T {
 
     fn cleanup(&mut self) {
         // if we're an orphan, drop the graph.
-        if is_orphan(self.id()) {
-            drop_subgraph(self.id());
+        let graph = get_graph();
+        if graph.is_orphan(self.id()) {
+            graph.drop_subgraph(self.id());
         }
     }
 }

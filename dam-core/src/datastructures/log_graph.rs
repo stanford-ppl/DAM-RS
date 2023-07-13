@@ -1,23 +1,47 @@
 use std::{
     collections::{hash_map::DefaultHasher, HashSet, VecDeque},
-    fs::File,
+    fs::{create_dir_all, File},
     hash::{Hash, Hasher},
     io::{BufWriter, Write},
     path::PathBuf,
     sync::{Arc, Mutex, OnceLock},
     thread::ThreadId,
+    time::{Duration, Instant},
 };
 
 use dashmap::{DashMap, DashSet};
 use serde::{Deserialize, Serialize};
 
-use crate::identifier::{self, Identifiable};
+use crate::{
+    config::get_config,
+    log_config::{get_log_info, LogInfo},
+    metric::NODE,
+};
 
 use super::identifier::Identifier;
 
-#[derive(Clone, Default, Debug)]
+#[derive(Debug, Clone)]
+enum LogTarget {
+    File(Arc<Mutex<BufWriter<File>>>),
+    Stdout,
+    Nowhere,
+}
+#[derive(Clone, Debug)]
 pub struct EventLogger {
-    underlying: Option<Arc<Mutex<BufWriter<File>>>>,
+    underlying: LogTarget,
+}
+
+static INIT_TIME: OnceLock<Instant> = OnceLock::new();
+
+fn time_since_init() -> Duration {
+    Instant::now() - *INIT_TIME.get_or_init(Instant::now)
+}
+
+static LOG_INFO: OnceLock<LogInfo> = OnceLock::new();
+fn get_base_policy() -> LogInfo {
+    LOG_INFO
+        .get_or_init(|| get_config().log_config.clone().try_into().unwrap())
+        .clone()
 }
 
 impl EventLogger {
@@ -26,8 +50,10 @@ impl EventLogger {
         T: serde::Serialize,
     {
         match &self.underlying {
-            Some(wr) => {
+            LogTarget::File(wr) => {
                 let mut writer = wr.lock().unwrap();
+                let time_str = format!("[{}]\t", time_since_init().as_micros());
+                writer.write_all(time_str.as_bytes()).unwrap();
                 writer
                     .write_all(
                         serde_json::to_string(&event)
@@ -37,7 +63,8 @@ impl EventLogger {
                     .unwrap();
                 writer.write_all("\n".as_bytes()).unwrap();
             }
-            None => println!("{:?}", event),
+            LogTarget::Stdout => println!("{:?}", event),
+            LogTarget::Nowhere => {}
         }
     }
 }
@@ -49,6 +76,9 @@ pub enum RegistryEvent {
 
     // Registers the parent identifier of this node.
     WithParent(Identifier),
+
+    // Cleaned up, only registered on the topmost
+    Cleaned(u128),
 }
 
 #[derive(Default, Debug)]
@@ -56,11 +86,13 @@ pub struct LogGraph {
     // Maps children to their parents
     child_parent_tree: DashMap<Identifier, Identifier>,
 
+    parent_child_map: DashMap<Identifier, Vec<Identifier>>,
+
     // Maps threads to identifiers
     executor_map: DashMap<ThreadId, Identifier>,
 
     // Maps threads to file paths
-    logging_paths: DashMap<Identifier, PathBuf>,
+    logging_paths: DashMap<Identifier, LogInfo>,
     // All identifiers
     all_identifiers: DashSet<Identifier>,
 
@@ -69,20 +101,143 @@ pub struct LogGraph {
 }
 
 impl LogGraph {
-    pub fn dump(&self) {
-        for pair in self.child_parent_tree.iter() {
-            println!("Child({:?}) -> Parent({:?})", pair.key(), pair.value());
-        }
+    pub fn add_id(&self, id: Identifier) {
+        self.all_identifiers.insert(id);
+    }
 
-        for id in self.all_identifiers.iter() {
-            if !self.child_parent_tree.contains_key(id.key()) {
-                println!("Orphan ID: {:?}", id.key());
-            }
+    pub fn register_handle<'a>(&'a self, self_id: Identifier) -> LogGraphHandle<'a> {
+        LogGraphHandle {
+            self_id,
+            under: self,
         }
     }
 
-    pub fn add_id(&self, id: Identifier) {
-        self.all_identifiers.insert(id);
+    // Returns the directory that this compute tree is supposed to be using.
+    pub fn get_log_path(&self, self_id: Identifier) -> Option<PathBuf> {
+        let helper = || {
+            let mut cur_thread = self_id;
+            loop {
+                let log_path = self
+                    .logging_paths
+                    .get(&cur_thread)
+                    .map(|k| k.value().clone());
+                match log_path {
+                    // One of our parents had a registered path!
+                    // This shouldn't happen very often.
+                    Some(parent_log) => return parent_log.path,
+                    None => {
+                        let tree_handle = &self.child_parent_tree;
+                        match tree_handle.get(&cur_thread) {
+                            // Nothing matched, but we do have a parent, so climb the tree!
+                            Some(parent) => cur_thread = parent.value().clone(),
+
+                            // We're the parent, and we don't have anything to work with.
+                            None => return None,
+                        }
+                    }
+                }
+            }
+        };
+        let part = helper();
+        let log_info = get_log_info();
+        match (&log_info.path, &part) {
+            (None, None) => None,
+            (None, Some(_)) => part,
+            (Some(_), None) => log_info.path.clone(),
+            (Some(head), Some(tail)) => Some(head.join(tail)),
+        }
+    }
+
+    pub fn set_log_info(&self, id: Identifier, log_info: LogInfo) {
+        let paths = &self.logging_paths;
+
+        paths.insert(id, log_info);
+    }
+
+    pub fn get_log(&self, key: LogType) -> EventLogger {
+        let entry = self.loggers.entry(key.clone());
+        let logger = entry.or_insert_with(|| {
+            if let LogType::Event(_, _, tp) = key {
+                if !get_base_policy().include.contains(&tp.to_string()) {
+                    // Empty EventLogger
+                    return EventLogger {
+                        underlying: LogTarget::Nowhere,
+                    };
+                }
+            }
+            if let LogType::Base(_) = key {
+                if !get_base_policy().include.contains(NODE) {
+                    return EventLogger {
+                        underlying: LogTarget::Nowhere,
+                    };
+                }
+            }
+            let full_path = self.get_log_path(key.id()).map(|p| {
+                create_dir_all(&p).unwrap();
+                p.join(key.to_path())
+            });
+            let underlying = full_path
+                .map(|path| Arc::new(Mutex::new(BufWriter::new(File::create(path).unwrap()))));
+            match underlying {
+                Some(arc) => EventLogger {
+                    underlying: LogTarget::File(arc),
+                },
+                None => EventLogger {
+                    underlying: LogTarget::Stdout,
+                },
+            }
+        });
+        logger.value().clone()
+    }
+
+    pub fn get_identifier(&self, thread: ThreadId) -> Identifier {
+        *self.executor_map.get(&thread).unwrap().value()
+    }
+
+    pub fn register(&self, id: Identifier, name: String) {
+        self.executor_map.insert(std::thread::current().id(), id);
+
+        self.get_log(LogType::Base(id))
+            .log(RegistryEvent::Created(name));
+    }
+
+    pub fn is_orphan(&self, identifier: Identifier) -> bool {
+        self.child_parent_tree.contains_key(&identifier)
+    }
+
+    fn get_subgraph(&self, root: Identifier) -> HashSet<Identifier> {
+        let mut subgraph = HashSet::new();
+
+        let mut to_process = VecDeque::<Identifier>::new();
+        to_process.push_back(root);
+        while !to_process.is_empty() {
+            let next = to_process.pop_front().unwrap();
+            let already_exists = subgraph.contains(&next);
+            if !already_exists {
+                subgraph.insert(next);
+                let children = self.parent_child_map.get(&next);
+                if let Some(r) = children {
+                    to_process.extend(r.value().clone());
+                }
+            }
+        }
+
+        subgraph
+    }
+
+    pub fn drop_subgraph(&self, root: Identifier) {
+        self.get_log(LogType::Base(root))
+            .log(RegistryEvent::Cleaned(time_since_init().as_micros()));
+        let can_drop = self.get_subgraph(root);
+        println!("Dropping: {can_drop:?}");
+        self.all_identifiers
+            .retain(|identifier| !can_drop.contains(identifier));
+
+        self.child_parent_tree
+            .retain(|id, _| !can_drop.contains(id));
+        self.executor_map.retain(|_, v| !can_drop.contains(v));
+        self.logging_paths.retain(|k, _| !can_drop.contains(k));
+        self.loggers.retain(|k, _| !can_drop.contains(&k.id()));
     }
 }
 
@@ -94,61 +249,24 @@ pub struct LogGraphHandle<'a> {
 impl<'a> LogGraphHandle<'a> {
     pub fn add_child(&mut self, child: Identifier) {
         self.under.child_parent_tree.insert(child, self.self_id);
+        let pcm_entry = self.under.parent_child_map.entry(self.self_id);
+        pcm_entry.or_insert_with(Vec::new).push(child);
     }
 }
 
 pub fn get_graph() -> &'static LogGraph {
+    // Initialize time here as well
+    INIT_TIME.get_or_init(Instant::now);
     GRAPH.get_or_init(Default::default)
 }
 
 static GRAPH: OnceLock<LogGraph> = OnceLock::new();
-
-pub fn register_handle<'a>(self_id: Identifier) -> LogGraphHandle<'a> {
-    let g = get_graph();
-    LogGraphHandle { self_id, under: g }
-}
 
 fn thread_id_to_u64(id: ThreadId) -> u64 {
     // TODO: Replace this with just getting the u64 of the thread id once as_u64 is stabilized.
     let mut hasher = DefaultHasher::new();
     id.hash(&mut hasher);
     hasher.finish()
-}
-
-// Returns the directory that this compute tree is supposed to be using.
-pub fn get_log_path(self_id: Identifier) -> Option<PathBuf> {
-    let g = get_graph();
-    let mut cur_thread = self_id;
-    loop {
-        match g.logging_paths.get(&cur_thread) {
-            // One of our parents had a registered path!
-            // This shouldn't happen very often.
-            Some(path) => return Some(path.clone()),
-            None => {
-                let tree_handle = &g.child_parent_tree;
-                match tree_handle.get(&cur_thread) {
-                    // Nothing matched, but we do have a parent, so climb the tree!
-                    Some(parent) => cur_thread = parent.clone(),
-
-                    // We're the parent, and we don't have anything to work with.
-                    None => return None,
-                }
-            }
-        }
-    }
-}
-
-pub fn set_log_path(id: Identifier, path: PathBuf) {
-    let g = GRAPH.get_or_init(Default::default);
-    let paths = &g.logging_paths;
-
-    // It's fine to fail on the remove_dir_all, since the path might not exist.
-    let _ = std::fs::remove_dir_all(path.clone());
-
-    // This one isn't allowed to fail since we're going to be writing there.
-    std::fs::create_dir_all(path.clone()).unwrap();
-
-    paths.insert(id, path);
 }
 
 // Path format:
@@ -161,7 +279,7 @@ pub enum LogType {
     Base(Identifier),
 
     // Context name, identifier, Thread id, type
-    Event(Identifier, ThreadId, String),
+    Event(Identifier, ThreadId, &'static str),
 }
 
 impl LogType {
@@ -180,105 +298,4 @@ impl LogType {
             LogType::Event(id, _, _) => *id,
         }
     }
-}
-
-pub fn get_log(key: LogType) -> EventLogger {
-    let entry = get_graph().loggers.entry(key.clone());
-    let logger = entry.or_insert_with(|| {
-        let full_path = get_log_path(key.id()).map(|p| p.join(key.to_path()));
-        let underlying =
-            full_path.map(|path| Arc::new(Mutex::new(BufWriter::new(File::create(path).unwrap()))));
-        EventLogger { underlying }
-    });
-    logger.value().clone()
-}
-
-pub fn get_identifier(thread: ThreadId) -> Identifier {
-    *get_graph().executor_map.get(&thread).unwrap().value()
-}
-
-pub fn register(id: Identifier, name: String) {
-    let graph = get_graph();
-    graph.executor_map.insert(std::thread::current().id(), id);
-
-    get_log(LogType::Base(id)).log(RegistryEvent::Created(name));
-}
-
-pub fn is_orphan(identifier: Identifier) -> bool {
-    !get_graph().child_parent_tree.contains_key(&identifier)
-}
-
-fn get_subgraph(root: Identifier, graph: &LogGraph) -> HashSet<Identifier> {
-    let mut subgraph = HashSet::new();
-    subgraph.insert(root);
-
-    let mut to_process = VecDeque::<Identifier>::new();
-
-    for identifier in graph.all_identifiers.iter() {
-        to_process.push_back(*identifier.key());
-    }
-
-    loop {
-        match to_process.pop_front() {
-            Some(identifier) => {
-                // if the identifier's parent is in the subgraph, then we add identifier as well
-                match graph.child_parent_tree.get(&identifier) {
-                    Some(parent) if subgraph.contains(parent.value()) => {
-                        subgraph.insert(identifier);
-                    }
-
-                    // We don't know about the parent yet, we'll delay until later.
-                    Some(_) => to_process.push_back(identifier),
-                    None => {} // This one's an orphan, it's done,
-                }
-            }
-            None => break,
-        }
-    }
-
-    subgraph
-}
-
-pub fn drop_subgraph(root: Identifier) {
-    let g = get_graph();
-    let can_drop = get_subgraph(root, g);
-    g.all_identifiers
-        .retain(|identifier| !can_drop.contains(identifier));
-
-    g.child_parent_tree.retain(|id, _| !can_drop.contains(id));
-    g.executor_map.retain(|_, v| !can_drop.contains(v));
-    g.logging_paths.retain(|k, _| !can_drop.contains(k));
-    g.loggers.retain(|k, _| !can_drop.contains(&k.id()));
-}
-
-#[macro_export]
-macro_rules! DAMLog {
-    () => {
-        ({
-            let thread_id = ::std::thread::current().id();
-            let identifier = ::dam_core::log_graph::get_identifier(thread_id);
-            let typename = ::std::any::type_name::<Self>();
-            ::dam_core::log_graph::get_log(::dam_core::log_graph::LogType::Event(
-                identifier,
-                thread_id,
-                typename.into(),
-            ))
-        })
-    };
-}
-
-#[macro_export]
-macro_rules! DAMLog_core {
-    () => {
-        ({
-            let thread_id = ::std::thread::current().id();
-            let identifier = crate::log_graph::get_identifier(thread_id);
-            let typename = ::std::any::type_name::<Self>();
-            crate::log_graph::get_log(crate::log_graph::LogType::Event(
-                identifier,
-                thread_id,
-                typename.into(),
-            ))
-        })
-    };
 }

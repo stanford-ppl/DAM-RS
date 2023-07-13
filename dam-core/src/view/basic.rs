@@ -1,12 +1,13 @@
 use std::sync::{atomic::AtomicBool, Arc, Mutex};
 
+use linkme::distributed_slice;
 use serde::{Deserialize, Serialize};
 
 use crate::{
     identifier::Identifier,
-    log_graph::get_identifier,
+    log_graph::get_graph,
+    metric::{LogProducer, METRICS},
     time::{AtomicTime, Time},
-    DAMLog_core,
 };
 
 use super::ContextView;
@@ -38,16 +39,23 @@ impl TimeManager {
     }
 }
 
+impl LogProducer for TimeManager {
+    const LOG_NAME: &'static str = "time_manager";
+}
+
+#[distributed_slice(METRICS)]
+static TIMEMANAGER_NAME: &'static str = "time_manager";
+
 impl TimeManager {
     pub fn incr_cycles(&mut self, incr: u64) {
-        DAMLog_core!().log(TimeEvent::Incr(incr));
+        Self::log(TimeEvent::Incr(incr));
         self.underlying.time.incr_cycles(incr);
         self.scan_and_write_signals();
     }
 
     pub fn advance(&mut self, new: Time) {
         if self.underlying.time.try_advance(new) {
-            DAMLog_core!().log(TimeEvent::Advance(new));
+            Self::log(TimeEvent::Advance(new));
             self.scan_and_write_signals();
         }
     }
@@ -71,8 +79,12 @@ impl TimeManager {
 
         drop(signal_buffer);
         if !released.is_empty() {
-            DAMLog_core!().log(TimeEvent::ScanAndWrite(
-                released.into_iter().map(get_identifier).collect(),
+            let graph = get_graph();
+            Self::log(TimeEvent::ScanAndWrite(
+                released
+                    .into_iter()
+                    .map(|thr| graph.get_identifier(thr))
+                    .collect(),
             ));
         }
     }
@@ -83,7 +95,7 @@ impl TimeManager {
 
     pub fn cleanup(&mut self) {
         self.underlying.time.set_infinite();
-        DAMLog_core!().log(TimeEvent::Finish(self.underlying.time.load()));
+        Self::log(TimeEvent::Finish(self.underlying.time.load()));
         self.scan_and_write_signals();
     }
 }
