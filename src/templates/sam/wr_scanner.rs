@@ -1,9 +1,9 @@
+use dam_core::{identifier::Identifier, TimeManager};
+use dam_macros::{cleanup, identifiable, time_managed};
+
 use crate::{
     channel::{utils::dequeue, Receiver},
-    context::{
-        view::{TimeManager, TimeView},
-        Context,
-    },
+    context::Context,
     types::{Cleanable, DAMType},
 };
 
@@ -19,12 +19,12 @@ impl<ValType: DAMType, StopType: DAMType> Cleanable for WrScanData<ValType, Stop
     }
 }
 
+#[time_managed]
+#[identifiable]
 pub struct CompressedWrScan<ValType, StopType> {
     wr_scan_data: WrScanData<ValType, StopType>,
-    // meta_dim: ValType,
     pub seg_arr: Vec<ValType>,
     pub crd_arr: Vec<ValType>,
-    time: TimeManager,
 }
 
 impl<ValType: DAMType, StopType: DAMType> CompressedWrScan<ValType, StopType>
@@ -41,6 +41,7 @@ where
             seg_arr,
             crd_arr,
             time: TimeManager::default(),
+            identifier: Identifier::new(),
         };
         (cwr.wr_scan_data.input).attach_receiver(&cwr);
 
@@ -96,21 +97,18 @@ where
         }
     }
 
+    #[cleanup(time_managed)]
     fn cleanup(&mut self) {
         self.wr_scan_data.cleanup();
         self.time.cleanup();
     }
-
-    fn view(&self) -> TimeView {
-        self.time.view().into()
-    }
 }
 
+#[time_managed]
+#[identifiable]
 pub struct ValsWrScan<ValType, StopType> {
     vals_data: WrScanData<ValType, StopType>,
-    // meta_dim: ValType,
     pub out_val: Vec<ValType>,
-    time: TimeManager,
 }
 
 impl<ValType: DAMType, StopType: DAMType> ValsWrScan<ValType, StopType>
@@ -122,6 +120,7 @@ where
             vals_data,
             out_val,
             time: TimeManager::default(),
+            identifier: Identifier::new(),
         };
         (vals.vals_data.input).attach_receiver(&vals);
 
@@ -159,13 +158,10 @@ where
         }
     }
 
+    #[cleanup(time_managed)]
     fn cleanup(&mut self) {
         self.vals_data.cleanup();
         self.time.cleanup();
-    }
-
-    fn view(&self) -> TimeView {
-        self.time.view().into()
     }
 }
 

@@ -1,12 +1,12 @@
+use dam_core::{identifier::Identifier, TimeManager};
+use dam_macros::{cleanup, identifiable, time_managed};
+
 use crate::{
     channel::{
         utils::{dequeue, enqueue},
         ChannelElement, Receiver, Sender,
     },
-    context::{
-        view::{TimeManager, TimeView},
-        Context,
-    },
+    context::Context,
     types::{Cleanable, DAMType},
 };
 
@@ -26,10 +26,11 @@ impl<RefType: DAMType, ValType: DAMType, StopType: DAMType> Cleanable
     }
 }
 
+#[time_managed]
+#[identifiable]
 pub struct Array<RefType, ValType, StopType> {
     array_data: ArrayData<RefType, ValType, StopType>,
     val_arr: Vec<ValType>,
-    time: TimeManager,
 }
 
 impl<RefType: DAMType, ValType: DAMType, StopType: DAMType> Array<RefType, ValType, StopType>
@@ -41,6 +42,7 @@ where
             array_data,
             val_arr,
             time: TimeManager::default(),
+            identifier: Identifier::new(),
         };
         (arr.array_data.in_ref).attach_receiver(&arr);
         (arr.array_data.out_val).attach_sender(&arr);
@@ -104,13 +106,10 @@ where
         }
     }
 
+    #[cleanup(time_managed)]
     fn cleanup(&mut self) {
         self.array_data.cleanup();
         self.time.cleanup();
-    }
-
-    fn view(&self) -> TimeView {
-        self.time.view().into()
     }
 }
 

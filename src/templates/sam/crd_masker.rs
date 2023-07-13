@@ -1,18 +1,18 @@
-use core::panic;
-
-use crate::{
-    channel::{
-        utils::{dequeue, enqueue, peek_next},
-        ChannelElement, Receiver, Sender,
-    },
-    context::{
-        view::{TimeManager, TimeView},
-        Context,
-    },
-    types::{Cleanable, DAMType},
-};
-
-use super::sam::primitive::Token;
+use crate::channel::utils::dequeue;
+use crate::channel::utils::enqueue;
+use crate::channel::utils::peek_next;
+use crate::channel::ChannelElement;
+use crate::channel::Receiver;
+use crate::channel::Sender;
+use crate::context::Context;
+use crate::templates::sam::primitive::Token;
+use crate::types::Cleanable;
+use crate::types::DAMType;
+use dam_core::identifier::Identifier;
+use dam_core::TimeManager;
+use dam_macros::cleanup;
+use dam_macros::identifiable;
+use dam_macros::time_managed;
 
 pub struct CrdMaskData<ValType, StopType> {
     pub in_crd_inner: Receiver<Token<ValType, StopType>>,
@@ -34,10 +34,11 @@ impl<ValType: DAMType, StopType: DAMType> Cleanable for CrdMaskData<ValType, Sto
     }
 }
 
+#[time_managed]
+#[identifiable]
 pub struct CrdMask<ValType, StopType> {
     crd_mask_data: CrdMaskData<ValType, StopType>,
     predicate: fn(Token<ValType, StopType>, Token<ValType, StopType>) -> bool,
-    time: TimeManager,
 }
 
 impl<ValType: DAMType, StopType: DAMType> CrdMask<ValType, StopType>
@@ -52,6 +53,7 @@ where
             crd_mask_data,
             predicate,
             time: TimeManager::default(),
+            identifier: Identifier::new(),
         };
         (mask.crd_mask_data.in_crd_inner).attach_receiver(&mask);
         (mask.crd_mask_data.in_crd_outer).attach_receiver(&mask);
@@ -85,17 +87,63 @@ where
                     let curr_iref =
                         dequeue(&mut self.time, &mut self.crd_mask_data.in_ref_inner).unwrap();
                     let curr_ocrd = out_ocrd.unwrap().data.clone();
+                    match curr_ocrd.clone() {
+                        Token::Stop(stkn) => {
+                            let channel_elem = ChannelElement::new(
+                                self.time.tick() + 1,
+                                Token::<ValType, StopType>::Stop(stkn.clone()),
+                            );
+                            enqueue(
+                                &mut self.time,
+                                &mut self.crd_mask_data.out_crd_outer,
+                                channel_elem,
+                            )
+                            .unwrap();
+                            dequeue(&mut self.time, &mut self.crd_mask_data.in_crd_outer).unwrap();
+                        }
+                        _ => (),
+                    }
                     match curr_in.data {
                         Token::Val(val) => {
                             if (self.predicate)(curr_ocrd, Token::Val(val.clone())) == false {
-                                let channel_elem = ChannelElement::new(
+                                let icrd_channel_elem = ChannelElement::new(
                                     self.time.tick() + 1,
                                     Token::<ValType, StopType>::Val(val.clone()),
                                 );
-                                // enqueue(&mut self.time(), self.crd_mask_data.o, data)
+                                enqueue(
+                                    &mut self.time,
+                                    &mut self.crd_mask_data.out_crd_inner,
+                                    icrd_channel_elem,
+                                )
+                                .unwrap();
+                                let iref_channel_elem = ChannelElement::new(
+                                    self.time.tick() + 1,
+                                    curr_iref.data.clone(),
+                                );
+                                enqueue(
+                                    &mut self.time,
+                                    &mut self.crd_mask_data.out_crd_inner,
+                                    iref_channel_elem,
+                                )
+                                .unwrap();
+                                has_crd = true;
                             }
                         }
-                        Token::Stop(_) => todo!(),
+                        Token::Stop(_) => {
+                            if has_crd {
+                                let ocrd_channel_elem =
+                                    ChannelElement::new(self.time.tick() + 1, curr_ocrd.clone());
+                                enqueue(
+                                    &mut self.time,
+                                    &mut self.crd_mask_data.out_crd_outer,
+                                    ocrd_channel_elem,
+                                )
+                                .unwrap();
+                                has_crd = false;
+                                dequeue(&mut self.time, &mut self.crd_mask_data.in_crd_outer)
+                                    .unwrap();
+                            }
+                        }
                         Token::Empty => todo!(),
                         Token::Done => todo!(),
                     }
@@ -106,13 +154,10 @@ where
         }
     }
 
+    #[cleanup(time_managed)]
     fn cleanup(&mut self) {
         self.crd_mask_data.cleanup();
         self.time.cleanup();
-    }
-
-    fn view(&self) -> TimeView {
-        self.time.view().into()
     }
 }
 

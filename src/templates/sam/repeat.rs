@@ -1,12 +1,13 @@
+use dam_core::identifier::Identifier;
+use dam_core::TimeManager;
+use dam_macros::{cleanup, identifiable, time_managed};
+
 use crate::{
     channel::{
         utils::{dequeue, enqueue, peek_next},
         ChannelElement, Receiver, Sender,
     },
-    context::{
-        view::{TimeManager, TimeView},
-        Context,
-    },
+    context::Context,
     types::{Cleanable, DAMType},
 };
 
@@ -26,9 +27,10 @@ impl<ValType: DAMType, StopType: DAMType> Cleanable for RepeatData<ValType, Stop
     }
 }
 
+#[time_managed]
+#[identifiable]
 pub struct Repeat<ValType, StopType> {
     repeat_data: RepeatData<ValType, StopType>,
-    time: TimeManager,
 }
 
 impl<ValType: DAMType, StopType: DAMType> Repeat<ValType, StopType>
@@ -39,6 +41,7 @@ where
         let repeat = Repeat {
             repeat_data,
             time: TimeManager::default(),
+            identifier: Identifier::new(),
         };
         (repeat.repeat_data.in_ref).attach_receiver(&repeat);
         (repeat.repeat_data.in_repsig).attach_receiver(&repeat);
@@ -130,13 +133,10 @@ where
         }
     }
 
+    #[cleanup(time_managed)]
     fn cleanup(&mut self) {
         self.repeat_data.cleanup();
         self.time.cleanup();
-    }
-
-    fn view(&self) -> TimeView {
-        self.time.view().into()
     }
 }
 
@@ -152,9 +152,10 @@ impl<ValType: DAMType, StopType: DAMType> Cleanable for RepSigGenData<ValType, S
     }
 }
 
+#[time_managed]
+#[identifiable]
 pub struct RepeatSigGen<ValType, StopType> {
     rep_sig_gen_data: RepSigGenData<ValType, StopType>,
-    time: TimeManager,
 }
 
 impl<ValType: DAMType, StopType: DAMType> RepeatSigGen<ValType, StopType>
@@ -165,6 +166,7 @@ where
         let rep_sig_gen = RepeatSigGen {
             rep_sig_gen_data,
             time: TimeManager::default(),
+            identifier: Identifier::new(),
         };
         (rep_sig_gen.rep_sig_gen_data.input).attach_receiver(&rep_sig_gen);
         (rep_sig_gen.rep_sig_gen_data.out_repsig).attach_sender(&rep_sig_gen);
@@ -234,13 +236,10 @@ where
         }
     }
 
+    #[cleanup(time_managed)]
     fn cleanup(&mut self) {
         self.rep_sig_gen_data.cleanup();
         self.time.cleanup();
-    }
-
-    fn view(&self) -> TimeView {
-        self.time.view().into()
     }
 }
 

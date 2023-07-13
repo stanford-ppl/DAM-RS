@@ -1,14 +1,14 @@
 use core::panic;
 
+use dam_core::{identifier::Identifier, TimeManager};
+use dam_macros::{cleanup, identifiable, time_managed};
+
 use crate::{
     channel::{
         utils::{dequeue, enqueue, peek_next},
         ChannelElement, Receiver, Sender,
     },
-    context::{
-        view::{TimeManager, TimeView},
-        Context,
-    },
+    context::Context,
     types::{Cleanable, DAMType},
 };
 
@@ -30,9 +30,10 @@ impl<ValType: DAMType, StopType: DAMType> Cleanable for CrdManagerData<ValType, 
     }
 }
 
+#[time_managed]
+#[identifiable]
 pub struct CrdDrop<ValType, StopType> {
     crd_drop_data: CrdManagerData<ValType, StopType>,
-    time: TimeManager,
 }
 
 impl<ValType: DAMType, StopType: DAMType> CrdDrop<ValType, StopType>
@@ -43,6 +44,7 @@ where
         let drop = CrdDrop {
             crd_drop_data,
             time: TimeManager::default(),
+            identifier: Identifier::new(),
         };
         (drop.crd_drop_data.in_crd_inner).attach_receiver(&drop);
         (drop.crd_drop_data.in_crd_outer).attach_receiver(&drop);
@@ -185,19 +187,17 @@ where
         }
     }
 
+    #[cleanup(time_managed)]
     fn cleanup(&mut self) {
         self.crd_drop_data.cleanup();
         self.time.cleanup();
     }
-
-    fn view(&self) -> TimeView {
-        self.time.view().into()
-    }
 }
 
+#[time_managed]
+#[identifiable]
 pub struct CrdHold<ValType, StopType> {
     crd_hold_data: CrdManagerData<ValType, StopType>,
-    time: TimeManager,
 }
 
 impl<ValType: DAMType, StopType: DAMType> CrdHold<ValType, StopType>
@@ -208,6 +208,7 @@ where
         let hold = CrdHold {
             crd_hold_data,
             time: TimeManager::default(),
+            identifier: Identifier::new(),
         };
         (hold.crd_hold_data.in_crd_inner).attach_receiver(&hold);
         (hold.crd_hold_data.in_crd_outer).attach_receiver(&hold);
@@ -301,13 +302,10 @@ where
         }
     }
 
+    #[cleanup(time_managed)]
     fn cleanup(&mut self) {
         self.crd_hold_data.cleanup();
         self.time.cleanup();
-    }
-
-    fn view(&self) -> TimeView {
-        self.time.view().into()
     }
 }
 

@@ -132,7 +132,7 @@ mod tests {
         channel::unbounded,
         context::{
             checker_context::CheckerContext, generator_context::GeneratorContext,
-            parent::BasicParentContext, Context, ContextView, ParentContext,
+            parent::BasicParentContext, Context, ParentContext,
         },
         templates::{
             ops::ALUAddOp,
@@ -195,7 +195,7 @@ mod tests {
         parent.init();
         parent.run();
         parent.cleanup();
-        dbg!(alu.view().tick_lower_bound());
+        // dbg!(alu.view().tick_lower_bound());
     }
 
     #[test]
@@ -222,6 +222,6 @@ mod tests {
         parent.init();
         parent.run();
         parent.cleanup();
-        dbg!(unary_alu.view().tick_lower_bound());
+        // dbg!(unary_alu.view().tick_lower_bound());
     }
 }

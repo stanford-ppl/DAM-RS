@@ -1,13 +1,12 @@
-
+use crate::context::Context;
+use dam_core::identifier::Identifier;
+use dam_core::TimeManager;
+use dam_macros::{cleanup, identifiable, time_managed};
 
 use crate::{
     channel::{
         utils::{dequeue, enqueue},
         ChannelElement, Receiver, Sender,
-    },
-    context::{
-        view::{TimeManager, TimeView},
-        Context,
     },
     types::{Cleanable, DAMType},
 };
@@ -15,17 +14,8 @@ use crate::{
 use super::primitive::Token;
 
 pub struct ReduceData<ValType, StopType> {
-    // curr_ref: Token,
-    // curr_crd: Stream,
     pub in_val: Receiver<Token<ValType, StopType>>,
     pub out_val: Sender<Token<ValType, StopType>>,
-    // out_crd: Sender<Token<ValType, StopType>>,
-    // end_fiber: bool,
-    // emit_tkn: bool,
-    // meta_dim: i32,
-    // start_addr: i32,
-    // end_addr: i32,
-    // begin: bool,
 }
 
 impl<ValType: DAMType, StopType: DAMType> Cleanable for ReduceData<ValType, StopType> {
@@ -35,10 +25,10 @@ impl<ValType: DAMType, StopType: DAMType> Cleanable for ReduceData<ValType, Stop
     }
 }
 
+#[time_managed]
+#[identifiable]
 pub struct Reduce<ValType, StopType> {
     reduce_data: ReduceData<ValType, StopType>,
-    // meta_dim: ValType,
-    time: TimeManager,
 }
 
 impl<ValType: DAMType, StopType: DAMType> Reduce<ValType, StopType>
@@ -49,6 +39,7 @@ where
         let red = Reduce {
             reduce_data,
             time: TimeManager::default(),
+            identifier: Identifier::new(),
         };
         (red.reduce_data.in_val).attach_receiver(&red);
         (red.reduce_data.out_val).attach_sender(&red);
@@ -121,20 +112,17 @@ where
         }
     }
 
+    #[cleanup(time_managed)]
     fn cleanup(&mut self) {
         self.reduce_data.cleanup();
-        self.time.cleanup();
-    }
-
-    fn view(&self) -> TimeView {
-        self.time.view().into()
     }
 }
 
+#[time_managed]
+#[identifiable]
 pub struct MaxReduce<ValType, StopType> {
     max_reduce_data: ReduceData<ValType, StopType>,
     min_val: ValType,
-    time: TimeManager,
 }
 
 impl<ValType: DAMType, StopType: DAMType> MaxReduce<ValType, StopType>
@@ -146,6 +134,7 @@ where
             max_reduce_data,
             min_val,
             time: TimeManager::default(),
+            identifier: Identifier::new(),
         };
         (red.max_reduce_data.in_val).attach_receiver(&red);
         (red.max_reduce_data.out_val).attach_sender(&red);
@@ -222,13 +211,9 @@ where
         }
     }
 
+    #[cleanup(time_managed)]
     fn cleanup(&mut self) {
         self.max_reduce_data.cleanup();
-        self.time.cleanup();
-    }
-
-    fn view(&self) -> TimeView {
-        self.time.view().into()
     }
 }
 

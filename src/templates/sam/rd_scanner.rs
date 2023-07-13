@@ -1,12 +1,13 @@
+use dam_core::identifier::Identifier;
+use dam_core::TimeManager;
+use dam_macros::{cleanup, identifiable, time_managed};
+
 use crate::{
     channel::{
         utils::{dequeue, enqueue, peek_next},
         ChannelElement, Receiver, Sender,
     },
-    context::{
-        view::{TimeManager, TimeView},
-        Context,
-    },
+    context::Context,
     types::{Cleanable, DAMType},
 };
 
@@ -26,24 +27,20 @@ impl<ValType: DAMType, StopType: DAMType> Cleanable for RdScanData<ValType, Stop
     }
 }
 
-pub trait CrdRdScan<ValType, StopType> {
-    // data: RdScanData<ValType, StopType>,
-    fn get_data(&self) -> &mut RdScanData<ValType, StopType>;
-    // fn out_ref(&self) -> Token<ValType, StopType>;
-}
-
+#[time_managed]
+#[identifiable]
 pub struct UncompressedCrdRdScan<ValType, StopType> {
     rd_scan_data: RdScanData<ValType, StopType>,
     meta_dim: ValType,
-    time: TimeManager,
 }
 
+#[time_managed]
+#[identifiable]
 pub struct CompressedCrdRdScan<ValType, StopType> {
     rd_scan_data: RdScanData<ValType, StopType>,
     // meta_dim: ValType,
     seg_arr: Vec<ValType>,
     crd_arr: Vec<ValType>,
-    time: TimeManager,
 }
 
 impl<ValType: DAMType, StopType: DAMType> UncompressedCrdRdScan<ValType, StopType>
@@ -58,6 +55,7 @@ where
             rd_scan_data,
             meta_dim,
             time: TimeManager::default(),
+            identifier: Identifier::new(),
         };
         (ucr.rd_scan_data.in_ref).attach_receiver(&ucr);
         (ucr.rd_scan_data.out_ref).attach_sender(&ucr);
@@ -81,6 +79,7 @@ where
             seg_arr,
             crd_arr,
             time: TimeManager::default(),
+            identifier: Identifier::new(),
         };
         (ucr.rd_scan_data.in_ref).attach_receiver(&ucr);
         (ucr.rd_scan_data.out_ref).attach_sender(&ucr);
@@ -215,16 +214,10 @@ where
         }
     }
 
+    #[cleanup(time_managed)]
     fn cleanup(&mut self) {
-        // self.input_channels.iter_mut().for_each(|chan| {
-        // chan.lock().unwrap().close();
-        // });
         self.rd_scan_data.cleanup();
         self.time.cleanup();
-    }
-
-    fn view(&self) -> TimeView {
-        self.time.view().into()
     }
 }
 
@@ -362,16 +355,10 @@ where
         }
     }
 
+    #[cleanup(time_managed)]
     fn cleanup(&mut self) {
-        // self.input_channels.iter_mut().for_each(|chan| {
-        // chan.lock().unwrap().close();
-        // });
         self.rd_scan_data.cleanup();
         self.time.cleanup();
-    }
-
-    fn view(&self) -> TimeView {
-        self.time.view().into()
     }
 }
 

@@ -1,12 +1,13 @@
+use dam_core::identifier::Identifier;
+use dam_core::TimeManager;
+use dam_macros::{cleanup, identifiable, time_managed};
+
 use crate::{
     channel::{
         utils::{dequeue, enqueue, Peekable},
         ChannelElement, Receiver, Sender,
     },
-    context::{
-        view::{TimeManager, TimeView},
-        Context,
-    },
+    context::Context,
     types::{Cleanable, DAMType},
 };
 
@@ -30,9 +31,10 @@ impl<CrdType: DAMType, ValType: DAMType, StopType: DAMType> Cleanable
     }
 }
 
+#[time_managed]
+#[identifiable]
 pub struct ValDrop<CrdType, ValType, StopType> {
     val_drop_data: ValDropData<CrdType, ValType, StopType>,
-    time: TimeManager,
 }
 
 impl<CrdType: DAMType, ValType: DAMType, StopType: DAMType> ValDrop<CrdType, ValType, StopType>
@@ -43,6 +45,7 @@ where
         let val_drop = ValDrop {
             val_drop_data: array_data,
             time: TimeManager::default(),
+            identifier: Identifier::new(),
         };
         (val_drop.val_drop_data.in_val).attach_receiver(&val_drop);
         (val_drop.val_drop_data.in_crd).attach_receiver(&val_drop);
@@ -134,13 +137,10 @@ where
         }
     }
 
+    #[cleanup(time_managed)]
     fn cleanup(&mut self) {
         self.val_drop_data.cleanup();
         self.time.cleanup();
-    }
-
-    fn view(&self) -> TimeView {
-        self.time.view().into()
     }
 }
 

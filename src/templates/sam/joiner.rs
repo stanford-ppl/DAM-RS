@@ -1,12 +1,12 @@
+use dam_core::{identifier::Identifier, TimeManager};
+use dam_macros::{cleanup, identifiable, time_managed};
+
 use crate::{
     channel::{
         utils::{dequeue, enqueue, peek_next},
         ChannelElement, Receiver, Sender,
     },
-    context::{
-        view::{TimeManager, TimeView},
-        Context,
-    },
+    context::Context,
     types::{Cleanable, DAMType},
 };
 
@@ -34,10 +34,10 @@ impl<ValType: DAMType, StopType: DAMType> Cleanable for CrdJoinerData<ValType, S
     }
 }
 
+#[time_managed]
+#[identifiable]
 pub struct Intersect<ValType, StopType> {
     intersect_data: CrdJoinerData<ValType, StopType>,
-    // meta_dim: ValType,
-    time: TimeManager,
 }
 
 impl<ValType: DAMType, StopType: DAMType> Intersect<ValType, StopType>
@@ -48,6 +48,7 @@ where
         let int = Intersect {
             intersect_data,
             time: TimeManager::default(),
+            identifier: Identifier::new(),
         };
         (int.intersect_data.in_crd1).attach_receiver(&int);
         (int.intersect_data.in_ref1).attach_receiver(&int);
@@ -225,20 +226,17 @@ where
         }
     }
 
+    #[cleanup(time_managed)]
     fn cleanup(&mut self) {
         self.intersect_data.cleanup();
         self.time.cleanup();
     }
-
-    fn view(&self) -> TimeView {
-        self.time.view().into()
-    }
 }
 
+#[time_managed]
+#[identifiable]
 pub struct Union<ValType, StopType> {
     union_data: CrdJoinerData<ValType, StopType>,
-    // meta_dim: ValType,
-    time: TimeManager,
 }
 
 impl<ValType: DAMType, StopType: DAMType> Union<ValType, StopType>
@@ -249,6 +247,7 @@ where
         let int = Union {
             union_data,
             time: TimeManager::default(),
+            identifier: Identifier::new(),
         };
         (int.union_data.in_crd1).attach_receiver(&int);
         (int.union_data.in_ref1).attach_receiver(&int);
@@ -472,13 +471,10 @@ where
         }
     }
 
+    #[cleanup(time_managed)]
     fn cleanup(&mut self) {
         self.union_data.cleanup();
         self.time.cleanup();
-    }
-
-    fn view(&self) -> TimeView {
-        self.time.view().into()
     }
 }
 
