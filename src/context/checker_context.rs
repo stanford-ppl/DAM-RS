@@ -1,19 +1,20 @@
+use dam_core::identifier::Identifier;
+use dam_macros::{cleanup, identifiable, time_managed};
+
 use crate::{
     channel::{utils::dequeue, ChannelElement, Receiver},
     types::DAMType,
 };
 
-use super::{
-    view::{TimeManager, TimeView},
-    Context,
-};
+use super::Context;
 
+#[time_managed]
+#[identifiable]
 pub struct CheckerContext<T, IType, FType>
 where
     IType: Iterator<Item = T>,
     FType: FnOnce() -> IType + Send + Sync,
 {
-    time: TimeManager,
     iterator: Option<FType>,
     input: Receiver<T>,
 }
@@ -43,13 +44,8 @@ where
         }
     }
 
-    fn cleanup(&mut self) {
-        self.time.cleanup();
-    }
-
-    fn view(&self) -> TimeView {
-        self.time.view().into()
-    }
+    #[cleanup(time_managed)]
+    fn cleanup(&mut self) {}
 }
 
 impl<T: DAMType, IType, FType> CheckerContext<T, IType, FType>
@@ -60,9 +56,10 @@ where
 {
     pub fn new(iterator: FType, input: Receiver<T>) -> CheckerContext<T, IType, FType> {
         let gc = CheckerContext {
-            time: TimeManager::new(),
             iterator: Some(iterator),
             input,
+            time: Default::default(),
+            identifier: Identifier::new(),
         };
         gc.input.attach_receiver(&gc);
         gc

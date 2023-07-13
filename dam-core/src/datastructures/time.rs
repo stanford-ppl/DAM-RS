@@ -3,7 +3,9 @@ use std::{
     sync::atomic::{AtomicBool, AtomicU64},
 };
 
-#[derive(Debug, Clone, Copy, Default)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
 pub struct Time {
     time: u64,
     done: bool,

@@ -5,13 +5,12 @@ use crate::{
         utils::{dequeue, enqueue, EventTime, Peekable},
         ChannelElement, Receiver, Recv, Sender,
     },
-    context::{
-        view::{TimeManager, TimeView},
-        Context,
-    },
-    time::Time,
+    context::Context,
     types::{Cleanable, DAMType, IndexLike},
 };
+
+use dam_core::{identifier::Identifier, time::Time};
+use dam_macros::{cleanup, identifiable, time_managed};
 
 use super::datastore::{Behavior, Datastore};
 
@@ -99,14 +98,14 @@ impl<IT: DAMType, DT: DAMType, AT> Cleanable for AccessBundle<IT, DT, AT> {
 }
 
 // The basic DRAM handles scalar addressing
+#[identifiable]
+#[time_managed]
 pub struct DRAM<IType: DAMType, T: DAMType, AT: DAMType> {
     config: DRAMConfig,
     datastore: Datastore<T>,
     // A rotating buffer for when each request window opens up
     request_windows: VecDeque<Time>,
     bundles: Vec<AccessBundle<IType, T, AT>>,
-
-    time: TimeManager,
 }
 
 impl<IType: DAMType, T: DAMType, AT: DAMType> DRAM<IType, T, AT> {
@@ -115,8 +114,9 @@ impl<IType: DAMType, T: DAMType, AT: DAMType> DRAM<IType, T, AT> {
             config,
             datastore: Datastore::new(config.capacity, datastore_behavior),
             request_windows: VecDeque::<Time>::with_capacity(config.num_simultaneous_requests),
-            time: TimeManager::default(),
             bundles: vec![],
+            identifier: Identifier::new(),
+            time: Default::default(),
         }
     }
 
@@ -309,13 +309,9 @@ impl<IType: IndexLike, T: DAMType, AT: DAMType> Context for DRAM<IType, T, AT> {
         }
     }
 
+    #[cleanup(time_managed)]
     fn cleanup(&mut self) {
-        self.time.cleanup();
         self.bundles.iter_mut().for_each(|x| x.cleanup());
-    }
-
-    fn view(&self) -> TimeView {
-        self.time.view().into()
     }
 }
 
@@ -337,8 +333,9 @@ pub mod tests {
             datastore::Behavior,
             dram::{DRAMConfig, DRAMReadBundle, DRAMWriteBundle, DRAM},
         },
-        time::Time,
     };
+
+    use dam_core::time::Time;
 
     #[test]
     fn test_dram_rw() {

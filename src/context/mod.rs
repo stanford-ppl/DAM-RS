@@ -1,23 +1,21 @@
-use crate::time::Time;
-
-pub use self::view::ContextView;
-use self::view::TimeView;
+use dam_core::{
+    identifier::Identifiable, log_graph::get_graph, ParentView, TimeView, TimeViewable,
+};
 
 pub mod broadcast_context;
 pub mod checker_context;
 pub mod function_context;
 pub mod generator_context;
 pub mod parent;
-pub mod view;
 
 type ParentType<'a> = dyn ParentContext<'a>;
-pub trait Context: Send + Sync {
+pub trait Context: Send + Sync + TimeViewable + Identifiable {
     fn init(&mut self);
     fn run(&mut self);
     fn cleanup(&mut self);
-    fn view(&self) -> TimeView;
-    fn name(&self) -> &'static str {
-        std::any::type_name::<Self>()
+
+    fn register(&self) {
+        get_graph().register(self.id(), self.name());
     }
 }
 
@@ -27,33 +25,6 @@ type ChildType = dyn Context;
 pub struct ChildManager<'a> {
     next_id: usize,
     children: Vec<&'a mut ChildType>,
-}
-
-pub struct ParentView {
-    pub child_views: Vec<TimeView>,
-}
-
-impl ContextView for ParentView {
-    fn wait_until(&self, when: Time) -> Time {
-        let individual_signals: Vec<_> = self
-            .child_views
-            .iter()
-            .map(|child| child.wait_until(when))
-            .collect();
-        individual_signals.into_iter().min().unwrap_or(when)
-    }
-
-    fn tick_lower_bound(&self) -> Time {
-        let min_time = self
-            .child_views
-            .iter()
-            .map(|child| child.tick_lower_bound())
-            .min();
-        match min_time {
-            Some(time) => time,
-            None => Time::infinite(),
-        }
-    }
 }
 
 impl<'a> ChildManager<'a> {
@@ -94,30 +65,35 @@ pub trait ParentContext<'a>: Context {
     }
 
     fn add_child(&mut self, child: &'a mut ChildType) {
+        let mut handle = get_graph().register_handle(self.id());
+        handle.add_child(child.id());
         self.manager_mut().add_child(child);
     }
 }
 
-impl<'a, T: ParentContext<'a>> Context for T {
+impl<'a, T: ParentContext<'a> + Identifiable> Context for T {
     fn init(&mut self) {
         self.manager_mut().for_each_child_single_threaded(|child| {
             child.init();
         })
+
+        // Check if we're the orphan, if so, dump the graph to our log.
     }
 
     fn run(&mut self) {
-        // self.manager_mut().for_each_child_single_threaded(|child| {
-        //     println!("Starting run: {}", child.name());
-        // });
+        self.register();
         self.manager_mut().for_each_child_parallel(|child| {
+            child.register();
             child.run();
             child.cleanup();
         })
     }
 
-    fn cleanup(&mut self) {}
-
-    fn view(&self) -> TimeView {
-        self.manager().view()
+    fn cleanup(&mut self) {
+        // if we're an orphan, drop the graph.
+        let graph = get_graph();
+        if graph.is_orphan(self.id()) {
+            graph.drop_subgraph(self.id());
+        }
     }
 }

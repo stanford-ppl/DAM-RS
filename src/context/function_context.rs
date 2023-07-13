@@ -1,12 +1,11 @@
-use crate::context::view::TimeView;
+use dam_core::{identifier::Identifier, TimeManager};
+use dam_macros::{cleanup, identifiable, time_managed};
 
-use super::{view::TimeManager, Context};
+use super::Context;
 
-pub struct FunctionContext<RT>
-where
-    RT: FnOnce(&mut TimeManager) + Send + Sync,
-{
-    pub time: TimeManager,
+#[identifiable]
+#[time_managed]
+pub struct FunctionContext<RT> {
     run_fn: Option<RT>,
 }
 
@@ -24,13 +23,8 @@ where
         }
     }
 
-    fn cleanup(&mut self) {
-        self.time.cleanup();
-    }
-
-    fn view(&self) -> TimeView {
-        self.time.view().into()
-    }
+    #[cleanup(time_managed)]
+    fn cleanup(&mut self) {}
 }
 impl<RT> FunctionContext<RT>
 where
@@ -38,8 +32,9 @@ where
 {
     pub fn new() -> Self {
         Self {
-            time: TimeManager::new(),
-            run_fn: None,
+            run_fn: Default::default(),
+            identifier: Identifier::new(),
+            time: Default::default(),
         }
     }
 
