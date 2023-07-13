@@ -17,6 +17,7 @@ mod tests {
     use crate::templates::sam::repeat::{RepSigGenData, Repeat, RepeatData, RepeatSigGen};
     use crate::templates::sam::test::config::Data;
     use crate::templates::sam::utils::read_inputs;
+    use crate::templates::sam::val_dropper::{ValDrop, ValDropData};
     use crate::templates::sam::wr_scanner::{CompressedWrScan, ValsWrScan, WrScanData};
     use crate::token_vec;
 
@@ -118,14 +119,6 @@ mod tests {
         };
         let mut x2_wrscanner = CompressedWrScan::new(x2_wrscanner_data, x2_seg, x2_crd);
 
-        // fiberwrite_x3
-        let x3_seg: Vec<u32> = Vec::new();
-        let x3_crd: Vec<u32> = Vec::new();
-        let x3_wrscanner_data = WrScanData::<u32, u32> {
-            input: bl_out_crd_receiver,
-        };
-        let mut x3_wrscanner = CompressedWrScan::new(x3_wrscanner_data, x3_seg, x3_crd);
-
         let (bc_bl_out_ref_sender, bc_bl_out_ref_receiver) = unbounded::<Token<u32, u32>>();
         let (bc1_bl_out_ref_sender, bc1_bl_out_ref_receiver) = unbounded::<Token<u32, u32>>();
         let (bc2_bl_out_ref_sender, _bc2_bl_out_ref_receiver) = unbounded::<Token<u32, u32>>();
@@ -221,10 +214,30 @@ mod tests {
             ALUDivOp(),
         );
 
+        let (out_drop_val_sender, out_drop_val_receiver) = unbounded::<Token<f32, u32>>();
+        let (out_drop_crd_sender, out_drop_crd_receiver) = unbounded::<Token<u32, u32>>();
+
+        let val_drop_data = ValDropData::<u32, f32, u32> {
+            in_val: div_out_receiver,
+            in_crd: bl_out_crd_receiver,
+            out_val: out_drop_val_sender,
+            out_crd: out_drop_crd_sender,
+        };
+
+        let mut val_drop = ValDrop::new(val_drop_data);
+
+        // fiberwrite_x3
+        let x3_seg: Vec<u32> = Vec::new();
+        let x3_crd: Vec<u32> = Vec::new();
+        let x3_wrscanner_data = WrScanData::<u32, u32> {
+            input: out_drop_crd_receiver,
+        };
+        let mut x3_wrscanner = CompressedWrScan::new(x3_wrscanner_data, x3_seg, x3_crd);
+
         // fiberwrite_Xvals
         let out_vals: Vec<f32> = Vec::new();
         let xvals_data = WrScanData::<f32, u32> {
-            input: div_out_receiver,
+            input: out_drop_val_receiver,
         };
         let mut xvals = ValsWrScan::<f32, u32>::new(xvals_data, out_vals);
 
@@ -252,13 +265,14 @@ mod tests {
         parent.add_child(&mut exp);
         parent.add_child(&mut red);
         parent.add_child(&mut xvals);
+        parent.add_child(&mut val_drop);
 
         parent.init();
         parent.run();
         parent.cleanup();
 
-        println!("{:?}", x0_wrscanner.crd_arr);
-        println!("{:?}", xvals.out_val);
+        // println!("{:?}", x0_wrscanner.crd_arr);
+        // println!("{:?}", xvals.out_val);
 
         // let fil = formatted_dir.to_str().unwrap();
     }

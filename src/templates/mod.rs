@@ -1,3 +1,4 @@
+pub mod crd_masker;
 pub mod datastore;
 pub mod dram;
 pub mod ops;
