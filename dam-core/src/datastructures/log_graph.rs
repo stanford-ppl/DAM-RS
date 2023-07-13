@@ -202,7 +202,7 @@ impl LogGraph {
     }
 
     pub fn is_orphan(&self, identifier: Identifier) -> bool {
-        self.child_parent_tree.contains_key(&identifier)
+        !self.child_parent_tree.contains_key(&identifier)
     }
 
     fn get_subgraph(&self, root: Identifier) -> HashSet<Identifier> {
