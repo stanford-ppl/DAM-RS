@@ -178,7 +178,7 @@ impl LogGraph {
         let logger = entry.or_insert_with(|| {
             let policy = self.get_log_policy(key);
             if let LogType::Event(_, _, tp) = key {
-                if policy.include.contains(&tp.to_string()) {
+                if !policy.include.contains(&tp.to_string()) {
                     // Empty EventLogger
                     return EventLogger {
                         underlying: LogTarget::Nowhere,
