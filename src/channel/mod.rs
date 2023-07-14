@@ -1,6 +1,6 @@
 pub mod utils;
 
-use std::sync::atomic::{AtomicU8, AtomicUsize};
+use std::sync::atomic::{AtomicUsize};
 use std::sync::{Arc, RwLock};
 
 use crate::context::Context;
