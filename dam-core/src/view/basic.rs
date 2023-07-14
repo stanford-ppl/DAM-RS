@@ -16,7 +16,7 @@ use super::ContextView;
 enum TimeEvent {
     Incr(u64),
     Advance(Time),
-    ScanAndWrite(Vec<Identifier>),
+    ScanAndWrite(Time, Vec<Identifier>),
     Finish(Time),
 }
 
@@ -81,6 +81,7 @@ impl TimeManager {
         if !released.is_empty() {
             let graph = get_graph();
             Self::log(TimeEvent::ScanAndWrite(
+                tlb,
                 released
                     .into_iter()
                     .map(|thr| graph.get_identifier(thr))

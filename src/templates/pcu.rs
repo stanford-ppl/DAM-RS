@@ -236,22 +236,21 @@ mod tests {
     #[test]
     fn pcu_test() {
         // two-stage PCU on scalars, with the third stage a no-op.
-
+        type T = u32;
         const CHAN_SIZE: usize = 8;
-        let ingress_op = PCU::<u16>::READ_ALL_INPUTS;
-        let egress_op = PCU::<u16>::WRITE_ALL_RESULTS;
+        const TEST_ITERATIONS: T = 8192;
 
-        let mut pcu = PCU::<u16>::new(
+        let mut pcu = PCU::<T>::new(
             super::PCUConfig {
                 pipeline_depth: 3,
                 num_registers: 3,
             },
-            ingress_op,
-            egress_op,
+            PCU::READ_ALL_INPUTS,
+            PCU::WRITE_ALL_RESULTS,
         );
 
         pcu.push_stage(super::PipelineStage {
-            op: ALUMulOp::<u16>(),
+            op: ALUMulOp::<T>(),
             forward: vec![(2, 1)],
             prev_register_ids: vec![0, 1],
             next_register_ids: vec![],
@@ -259,31 +258,40 @@ mod tests {
         });
 
         pcu.push_stage(super::PipelineStage {
-            op: ALUAddOp::<u16>(),
+            op: ALUAddOp::<T>(),
             forward: vec![],
             prev_register_ids: vec![0, 1],
             next_register_ids: vec![],
             output_register_ids: vec![0],
         });
 
-        let (arg1_send, arg1_recv) = bounded::<u16>(CHAN_SIZE);
-        let (arg2_send, arg2_recv) = bounded::<u16>(CHAN_SIZE);
-        let (arg3_send, arg3_recv) = bounded::<u16>(CHAN_SIZE);
-        let (pcu_out_send, pcu_out_recv) = bounded::<u16>(CHAN_SIZE);
+        let (arg1_send, arg1_recv) = bounded::<T>(CHAN_SIZE);
+        let (arg2_send, arg2_recv) = bounded::<T>(CHAN_SIZE);
+        let (arg3_send, arg3_recv) = bounded::<T>(CHAN_SIZE);
+        let (pcu_out_send, pcu_out_recv) = bounded::<T>(CHAN_SIZE);
+        arg1_send.set_flavor(crate::channel::ChannelFlavor::Acyclic);
+        arg2_send.set_flavor(crate::channel::ChannelFlavor::Acyclic);
+        arg3_send.set_flavor(crate::channel::ChannelFlavor::Acyclic);
+        pcu_out_send.set_flavor(crate::channel::ChannelFlavor::Acyclic);
 
         pcu.add_input_channel(arg1_recv);
         pcu.add_input_channel(arg2_recv);
         pcu.add_input_channel(arg3_recv);
         pcu.add_output_channel(pcu_out_send);
 
-        let mut gen1 = GeneratorContext::new(|| (0u16..32), arg1_send);
-        let mut gen2 = GeneratorContext::new(|| (33u16..64), arg2_send);
-        let mut gen3 = GeneratorContext::new(|| (65u16..96), arg3_send);
+        // 0..test_iterations
+        // test_iterations .. 2*test_iterations
+        // 2*test_iterations .. 3*test_iterations
+        let mut gen1 = GeneratorContext::new(|| (0..TEST_ITERATIONS), arg1_send);
+        let mut gen2 =
+            GeneratorContext::new(|| (TEST_ITERATIONS..(2 * TEST_ITERATIONS)), arg2_send);
+        let mut gen3 =
+            GeneratorContext::new(|| ((2 * TEST_ITERATIONS)..(3 * TEST_ITERATIONS)), arg3_send);
         let mut checker = CheckerContext::new(
             || {
-                (0u16..32)
-                    .zip(33u16..64)
-                    .zip(65u16..96)
+                (0..TEST_ITERATIONS)
+                    .zip(TEST_ITERATIONS..(2 * TEST_ITERATIONS))
+                    .zip((2 * TEST_ITERATIONS)..(3 * TEST_ITERATIONS))
                     .map(|((a, b), c)| (a * b) + c)
             },
             pcu_out_recv,
