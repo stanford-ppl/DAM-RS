@@ -22,7 +22,8 @@ use super::identifier::Identifier;
 
 #[derive(Debug, Clone)]
 enum LogTarget {
-    File(Arc<Mutex<BufWriter<File>>>),
+    // File handle, eager flush.
+    File(Arc<Mutex<BufWriter<File>>>, bool),
     Stdout,
     Nowhere,
 }
@@ -50,7 +51,7 @@ impl EventLogger {
         T: serde::Serialize,
     {
         match &self.underlying {
-            LogTarget::File(wr) => {
+            LogTarget::File(wr, flush) => {
                 let mut writer = wr.lock().unwrap();
                 let time_str = format!("[{}]\t", time_since_init().as_micros());
                 writer.write_all(time_str.as_bytes()).unwrap();
@@ -62,6 +63,9 @@ impl EventLogger {
                     )
                     .unwrap();
                 writer.write_all("\n".as_bytes()).unwrap();
+                if *flush {
+                    writer.flush().unwrap();
+                }
             }
             LogTarget::Stdout => println!("{:?}", event),
             LogTarget::Nowhere => {}
@@ -154,11 +158,27 @@ impl LogGraph {
         paths.insert(id, log_info);
     }
 
+    pub fn get_log_policy(&self, key: LogType) -> LogInfo {
+        // traverse up the parent tree. Policies encountered here are considered overrides.
+        let mut id = key.id();
+        loop {
+            let info = self.logging_paths.get(&id).map(|x| x.value().clone());
+            if let Some(result) = info {
+                return result;
+            }
+            match self.child_parent_tree.get(&id) {
+                Some(parent) => id = parent.value().clone(),
+                None => return get_base_policy(),
+            }
+        }
+    }
+
     pub fn get_log(&self, key: LogType) -> EventLogger {
         let entry = self.loggers.entry(key.clone());
         let logger = entry.or_insert_with(|| {
+            let policy = self.get_log_policy(key);
             if let LogType::Event(_, _, tp) = key {
-                if !get_base_policy().include.contains(&tp.to_string()) {
+                if policy.include.contains(&tp.to_string()) {
                     // Empty EventLogger
                     return EventLogger {
                         underlying: LogTarget::Nowhere,
@@ -166,7 +186,7 @@ impl LogGraph {
                 }
             }
             if let LogType::Base(_) = key {
-                if !get_base_policy().include.contains(NODE) {
+                if !policy.include.contains(NODE) {
                     return EventLogger {
                         underlying: LogTarget::Nowhere,
                     };
@@ -180,7 +200,7 @@ impl LogGraph {
                 .map(|path| Arc::new(Mutex::new(BufWriter::new(File::create(path).unwrap()))));
             match underlying {
                 Some(arc) => EventLogger {
-                    underlying: LogTarget::File(arc),
+                    underlying: LogTarget::File(arc, policy.eager_flush),
                 },
                 None => EventLogger {
                     underlying: LogTarget::Stdout,
@@ -294,7 +314,7 @@ fn thread_id_to_u64(id: ThreadId) -> u64 {
 // Base log: name_identifier only
 // Event logs: name_identifier_thread_logsrc
 
-#[derive(Clone, PartialEq, Hash, Eq, Debug)]
+#[derive(Clone, PartialEq, Hash, Eq, Debug, Copy)]
 pub enum LogType {
     // Context name, identifier
     Base(Identifier),
