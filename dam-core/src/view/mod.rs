@@ -6,7 +6,6 @@ pub use basic::TimeManager;
 pub use parent::ParentView;
 
 use crate::datastructures::time::Time;
-
 #[enum_delegate::register]
 pub trait ContextView {
     fn wait_until(&self, when: Time) -> Time;
