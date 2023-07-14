@@ -1,12 +1,12 @@
 pub mod utils;
 
-use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::{AtomicUsize};
 use std::sync::{Arc, RwLock};
 
 use crate::context::Context;
 use crate::types::Cleanable;
 use crate::types::DAMType;
-use crossbeam::channel::{self, SendError};
+use crossbeam::channel::{self, RecvError, SendError};
 use dam_core::*;
 
 use dam_core::time::Time;
@@ -40,9 +40,17 @@ struct ViewData {
     pub receiver: ViewType,
 }
 
+#[derive(Copy, Clone, PartialEq, Debug)]
+pub enum ChannelFlavor {
+    Acyclic,
+    Cyclic,
+    Unknown,
+}
+
 struct ViewStruct {
-    pub sender_views: RwLock<ViewData>,
-    pub receiver_views: RwLock<ViewData>,
+    pub views: RwLock<ViewData>,
+
+    pub flavor: RwLock<ChannelFlavor>,
 
     pub channel_id: usize,
 }
@@ -55,20 +63,33 @@ impl ViewStruct {
 
     pub fn new() -> Self {
         Self {
-            sender_views: Default::default(),
-            receiver_views: Default::default(),
+            views: Default::default(),
             channel_id: ViewStruct::next_id(),
+            flavor: RwLock::new(ChannelFlavor::Unknown),
         }
     }
 
     pub fn attach_sender(&self, sender: &dyn Context) {
-        self.sender_views.write().unwrap().sender = Some(sender.view());
-        self.receiver_views.write().unwrap().sender = Some(sender.view());
+        self.views.write().unwrap().sender = Some(sender.view());
     }
 
     pub fn attach_receiver(&self, receiver: &dyn Context) {
-        self.sender_views.write().unwrap().receiver = Some(receiver.view());
-        self.receiver_views.write().unwrap().receiver = Some(receiver.view());
+        self.views.write().unwrap().receiver = Some(receiver.view());
+    }
+
+    pub fn set_flavor(&self, flavor: ChannelFlavor) {
+        let mut write_lock = self.flavor.write().unwrap();
+        match *write_lock {
+            ChannelFlavor::Unknown => *write_lock = flavor,
+            old_flavor if old_flavor == flavor => {}
+            _ => {
+                // Wasn't unkown, and the flavors didn't match
+                panic!(
+                    "Attempted to set conflicting flavors: Old ({:?}) != New ({:?})",
+                    *write_lock, flavor
+                );
+            }
+        }
     }
 }
 
@@ -99,7 +120,7 @@ impl<T: DAMType> Sender<T> {
 
     fn sender_tlb(&self) -> Time {
         self.view_struct
-            .sender_views
+            .views
             .read()
             .unwrap()
             .sender
@@ -178,7 +199,7 @@ impl<T: DAMType> Sender<T> {
 
         let new_time = self
             .view_struct
-            .sender_views
+            .views
             .read()
             .unwrap()
             .receiver
@@ -205,6 +226,10 @@ impl<T> Sender<T> {
     // This drops the underlying channel
     pub fn close(&mut self) {
         self.underlying = SenderState::Closed;
+    }
+
+    pub fn set_flavor(&self, flavor: ChannelFlavor) {
+        self.view_struct.set_flavor(flavor);
     }
 }
 
@@ -239,7 +264,7 @@ impl<T: DAMType> Receiver<T> {
 
     fn receiver_tlb(&self) -> Time {
         self.view_struct
-            .receiver_views
+            .views
             .read()
             .unwrap()
             .receiver
@@ -269,6 +294,32 @@ impl<T: DAMType> Receiver<T> {
     }
 
     pub fn peek(&mut self) -> Recv<T> {
+        let flavor: ChannelFlavor = *self.view_struct.flavor.read().unwrap();
+        match flavor {
+            ChannelFlavor::Acyclic => self.peek_sync(),
+            ChannelFlavor::Cyclic => self.peek_async(),
+            ChannelFlavor::Unknown => self.peek_async(),
+        }
+    }
+
+    // This one blocks, so it could cause deadlock!
+    fn peek_sync(&mut self) -> Recv<T> {
+        match self.head {
+            Recv::Something(_) => return self.head.clone(),
+            Recv::Closed => return Recv::Closed,
+            _ => {}
+        }
+
+        // Otherwise, we recv from the channel.
+        self.head = match self.under().recv() {
+            Ok(value) => Recv::Something(value),
+            Err(RecvError) => Recv::Closed,
+        };
+
+        self.head.clone()
+    }
+
+    fn peek_async(&mut self) -> Recv<T> {
         let recv_time = self.receiver_tlb();
         match self.head {
             Recv::Nothing(time) if time >= recv_time => {
@@ -287,7 +338,7 @@ impl<T: DAMType> Receiver<T> {
 
         let sig_time = self
             .view_struct
-            .receiver_views
+            .views
             .read()
             .unwrap()
             .sender
@@ -300,6 +351,15 @@ impl<T: DAMType> Receiver<T> {
     }
 
     pub fn recv(&mut self) -> Recv<T> {
+        let flavor: ChannelFlavor = *self.view_struct.flavor.read().unwrap();
+        match flavor {
+            ChannelFlavor::Acyclic => self.recv_sync(),
+            ChannelFlavor::Cyclic => self.recv_async(),
+            ChannelFlavor::Unknown => self.recv_async(),
+        }
+    }
+
+    fn recv_async(&mut self) -> Recv<T> {
         let res = self.peek();
         match &res {
             Recv::Something(stuff) => {
@@ -313,6 +373,20 @@ impl<T: DAMType> Receiver<T> {
         res
     }
 
+    fn recv_sync(&mut self) -> Recv<T> {
+        let res = self.peek_sync();
+        match &res {
+            Recv::Something(result) => {
+                let ct: Time = self.receiver_tlb();
+                let _ = self.resp.send(ct.max(result.time));
+                self.head = Recv::Unknown;
+                return res.clone();
+            }
+            Recv::Closed => return res.clone(),
+            _ => unreachable!(),
+        }
+    }
+
     pub fn attach_receiver(&self, receiver: &dyn Context) {
         self.view_struct.attach_receiver(receiver);
     }
@@ -322,6 +396,10 @@ impl<T> Receiver<T> {
     // This drops the underlying channel
     pub fn close(&mut self) {
         self.underlying = ReceiverState::Closed;
+    }
+
+    pub fn set_flavor(&self, flavor: ChannelFlavor) {
+        self.view_struct.set_flavor(flavor);
     }
 }
 
