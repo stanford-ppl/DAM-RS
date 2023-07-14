@@ -3,7 +3,7 @@ mod tests {
 
     use std::{fs, path::Path};
 
-    use crate::channel::unbounded;
+    use crate::channel::{bounded, unbounded};
     use crate::context::generator_context::GeneratorContext;
     use crate::context::parent::BasicParentContext;
     use crate::context::{Context, ParentContext};
@@ -20,7 +20,7 @@ mod tests {
 
     #[test]
     fn test_mat_elemadd() {
-        let test_name = "mat_elemadd2";
+        let test_name = "mat_elemadd";
         let filename = home::home_dir().unwrap().join("sam_config.toml");
         let contents = fs::read_to_string(filename).unwrap();
         let data: Data = toml::from_str(&contents).unwrap();
@@ -48,10 +48,12 @@ mod tests {
         let c1_crd = read_inputs::<u32>(&c1_crd_filename);
         let c_vals = read_inputs::<f32>(&c_vals_filename);
 
+        let chan_size = 1024;
+
         // fiberlookup_bi
-        let (bi_out_ref_sender, bi_out_ref_receiver) = unbounded::<Token<u32, u32>>();
-        let (bi_out_crd_sender, bi_out_crd_receiver) = unbounded::<Token<u32, u32>>();
-        let (bi_in_ref_sender, bi_in_ref_receiver) = unbounded::<Token<u32, u32>>();
+        let (bi_out_ref_sender, bi_out_ref_receiver) = bounded::<Token<u32, u32>>(chan_size);
+        let (bi_out_crd_sender, bi_out_crd_receiver) = bounded::<Token<u32, u32>>(chan_size);
+        let (bi_in_ref_sender, bi_in_ref_receiver) = bounded::<Token<u32, u32>>(chan_size);
         let bi_data = RdScanData::<u32, u32> {
             in_ref: bi_in_ref_receiver,
             out_ref: bi_out_ref_sender,
@@ -65,9 +67,9 @@ mod tests {
         let mut bi_rdscanner = CompressedCrdRdScan::new(bi_data, b0_seg, b0_crd);
 
         // fiberlookup_ci
-        let (ci_out_crd_sender, ci_out_crd_receiver) = unbounded::<Token<u32, u32>>();
-        let (ci_out_ref_sender, ci_out_ref_receiver) = unbounded::<Token<u32, u32>>();
-        let (ci_in_ref_sender, ci_in_ref_receiver) = unbounded::<Token<u32, u32>>();
+        let (ci_out_crd_sender, ci_out_crd_receiver) = bounded::<Token<u32, u32>>(chan_size);
+        let (ci_out_ref_sender, ci_out_ref_receiver) = bounded::<Token<u32, u32>>(chan_size);
+        let (ci_in_ref_sender, ci_in_ref_receiver) = bounded::<Token<u32, u32>>(chan_size);
         let ci_data = RdScanData::<u32, u32> {
             in_ref: ci_in_ref_receiver,
             out_ref: ci_out_ref_sender,
@@ -80,9 +82,12 @@ mod tests {
         let mut ci_rdscanner = CompressedCrdRdScan::new(ci_data, c0_seg, c0_crd);
 
         // union_i
-        let (unioni_out_crd_sender, unioni_out_crd_receiver) = unbounded::<Token<u32, u32>>();
-        let (unioni_out_ref1_sender, unioni_out_ref1_receiver) = unbounded::<Token<u32, u32>>();
-        let (unioni_out_ref2_sender, unioni_out_ref2_receiver) = unbounded::<Token<u32, u32>>();
+        let (unioni_out_crd_sender, unioni_out_crd_receiver) =
+            bounded::<Token<u32, u32>>(chan_size);
+        let (unioni_out_ref1_sender, unioni_out_ref1_receiver) =
+            bounded::<Token<u32, u32>>(chan_size);
+        let (unioni_out_ref2_sender, unioni_out_ref2_receiver) =
+            bounded::<Token<u32, u32>>(chan_size);
         let unioni_data = CrdJoinerData::<u32, u32> {
             in_crd1: bi_out_crd_receiver,
             in_ref1: bi_out_ref_receiver,

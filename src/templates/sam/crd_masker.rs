@@ -77,7 +77,6 @@ where
     fn init(&mut self) {}
 
     fn run(&mut self) {
-        // let mut get_next_ocrd = false;
         let mut has_crd = false;
         // let icrd_vec: Vec<Token<ValType, StopType>> = Vec::new();
         loop {
@@ -122,14 +121,32 @@ where
                                 );
                                 enqueue(
                                     &mut self.time,
-                                    &mut self.crd_mask_data.out_crd_inner,
+                                    &mut self.crd_mask_data.out_ref_inner,
                                     iref_channel_elem,
                                 )
                                 .unwrap();
                                 has_crd = true;
                             }
                         }
-                        Token::Stop(_) => {
+                        Token::Stop(stkn) => {
+                            let icrd_channel_elem = ChannelElement::new(
+                                self.time.tick() + 1,
+                                Token::<ValType, StopType>::Stop(stkn.clone()),
+                            );
+                            enqueue(
+                                &mut self.time,
+                                &mut self.crd_mask_data.out_crd_inner,
+                                icrd_channel_elem,
+                            )
+                            .unwrap();
+                            let iref_channel_elem =
+                                ChannelElement::new(self.time.tick() + 1, curr_iref.data.clone());
+                            enqueue(
+                                &mut self.time,
+                                &mut self.crd_mask_data.out_ref_inner,
+                                iref_channel_elem,
+                            )
+                            .unwrap();
                             if has_crd {
                                 let ocrd_channel_elem =
                                     ChannelElement::new(self.time.tick() + 1, curr_ocrd.clone());
@@ -144,11 +161,38 @@ where
                                     .unwrap();
                             }
                         }
-                        Token::Empty => todo!(),
-                        Token::Done => todo!(),
+                        Token::Done => {
+                            let channel_elem =
+                                ChannelElement::new(self.time.tick() + 1, Token::Done);
+                            enqueue(
+                                &mut self.time,
+                                &mut self.crd_mask_data.out_crd_inner,
+                                channel_elem.clone(),
+                            )
+                            .unwrap();
+                            enqueue(
+                                &mut self.time,
+                                &mut self.crd_mask_data.out_ref_inner,
+                                channel_elem.clone(),
+                            )
+                            .unwrap();
+                            enqueue(
+                                &mut self.time,
+                                &mut self.crd_mask_data.out_crd_outer,
+                                channel_elem.clone(),
+                            )
+                            .unwrap();
+                            return;
+                        }
+                        _ => {
+                            dbg!(curr_in.data.clone());
+                            panic!("Invalid case found");
+                        }
                     }
                 }
-                Err(_) => todo!(),
+                Err(_) => {
+                    panic!("Error encountered!");
+                }
             }
             self.time.incr_cycles(1);
         }
@@ -163,12 +207,77 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::{channel::unbounded, templates::sam::primitive::Token};
+    use crate::{
+        channel::unbounded,
+        context::{
+            checker_context::CheckerContext, generator_context::GeneratorContext,
+            parent::BasicParentContext, Context, ParentContext,
+        },
+        templates::sam::primitive::Token,
+        token_vec,
+    };
 
     use super::{CrdMask, CrdMaskData};
 
     #[test]
-    fn test_fn() {
+    fn test_tril_mask() {
+        let in_crd_outer = || token_vec!(u32; u32; 0, 1, 2, "S0", "D").into_iter();
+        let in_crd_inner =
+            || token_vec!(u32; u32; 0, 1, 3, "S0", 0, 1, 2, "S0", 0, 1, 2, "S1", "D").into_iter();
+        let in_ref_inner =
+            || token_vec!(u32; u32; 0, 1, 2, "S0", 3, 4, 5, "S0", 6, 7, 8, "S1", "D").into_iter();
+
+        let out_crd_outer = || token_vec!(u32; u32; 0, 1, 2, "S0", "D").into_iter();
+        let out_crd_inner =
+            || token_vec!(u32; u32; 0, 1, 3, "S0", 1, 2, "S0", 2, "S1", "D").into_iter();
+        let out_ref_inner =
+            || token_vec!(u32; u32; 0, 1, 2, "S0", 4, 5, "S0", 8, "S1", "D").into_iter();
+        mask_test(
+            in_crd_outer,
+            in_crd_inner,
+            in_ref_inner,
+            out_crd_outer,
+            out_crd_inner,
+            out_ref_inner,
+        );
+    }
+
+    #[test]
+    fn test_tril_mask1() {
+        let in_crd_outer = || token_vec!(u32; u32; 4, 1, 2, "S0", "D").into_iter();
+        let in_crd_inner =
+            || token_vec!(u32; u32; 0, 1, 3, "S0", 0, 1, 2, "S0", 0, 1, 2, "S1", "D").into_iter();
+        let in_ref_inner =
+            || token_vec!(u32; u32; 0, 1, 2, "S0", 3, 4, 5, "S0", 6, 7, 8, "S1", "D").into_iter();
+
+        let out_crd_outer = || token_vec!(u32; u32; 1, 2, "S0", "D").into_iter();
+        let out_crd_inner = || token_vec!(u32; u32; "S0", 1, 2, "S0", 2, "S1", "D").into_iter();
+        let out_ref_inner = || token_vec!(u32; u32;  "S0", 4, 5, "S0", 8, "S1", "D").into_iter();
+        mask_test(
+            in_crd_outer,
+            in_crd_inner,
+            in_ref_inner,
+            out_crd_outer,
+            out_crd_inner,
+            out_ref_inner,
+        );
+    }
+
+    fn mask_test<IRT1, IRT2, IRT3, ORT1, ORT2, ORT3>(
+        in_crd_outer: fn() -> IRT2,
+        in_crd_inner: fn() -> IRT1,
+        in_ref_inner: fn() -> IRT3,
+        out_crd_outer: fn() -> ORT2,
+        out_crd_inner: fn() -> ORT1,
+        out_ref_inner: fn() -> ORT3,
+    ) where
+        IRT1: Iterator<Item = Token<u32, u32>> + 'static,
+        IRT2: Iterator<Item = Token<u32, u32>> + 'static,
+        IRT3: Iterator<Item = Token<u32, u32>> + 'static,
+        ORT1: Iterator<Item = Token<u32, u32>> + 'static,
+        ORT2: Iterator<Item = Token<u32, u32>> + 'static,
+        ORT3: Iterator<Item = Token<u32, u32>> + 'static,
+    {
         let (mask_in_crd_sender, mask_in_crd_receiver) = unbounded::<Token<u32, u32>>();
         let (mask_in_ocrd_sender, mask_in_ocrd_receiver) = unbounded::<Token<u32, u32>>();
         let (mask_in_ref_sender, mask_in_ref_receiver) = unbounded::<Token<u32, u32>>();
@@ -176,6 +285,14 @@ mod tests {
         let (mask_out_crd_sender, mask_out_crd_receiver) = unbounded::<Token<u32, u32>>();
         let (mask_out_ocrd_sender, mask_out_ocrd_receiver) = unbounded::<Token<u32, u32>>();
         let (mask_out_ref_sender, mask_out_ref_receiver) = unbounded::<Token<u32, u32>>();
+
+        let mut gen1 = GeneratorContext::new(in_crd_outer, mask_in_ocrd_sender);
+        let mut gen2 = GeneratorContext::new(in_crd_inner, mask_in_crd_sender);
+        let mut gen3 = GeneratorContext::new(in_ref_inner, mask_in_ref_sender);
+        let mut ocrd_checker = CheckerContext::new(out_crd_outer, mask_out_ocrd_receiver);
+        let mut icrd_checker = CheckerContext::new(out_crd_inner, mask_out_crd_receiver);
+        let mut iref_checker = CheckerContext::new(out_ref_inner, mask_out_ref_receiver);
+
         let mask_data = CrdMaskData::<u32, u32> {
             in_crd_inner: mask_in_crd_receiver,
             in_ref_inner: mask_in_ref_receiver,
@@ -184,6 +301,17 @@ mod tests {
             out_crd_outer: mask_out_ocrd_sender,
             out_ref_inner: mask_out_ref_sender,
         };
-        let mut mask = CrdMask::new(mask_data, |x, y| x < y);
+        let mut mask = CrdMask::new(mask_data, |x, y| x > y);
+        let mut parent = BasicParentContext::default();
+        parent.add_child(&mut gen1);
+        parent.add_child(&mut gen2);
+        parent.add_child(&mut gen3);
+        parent.add_child(&mut ocrd_checker);
+        parent.add_child(&mut icrd_checker);
+        parent.add_child(&mut iref_checker);
+        parent.add_child(&mut mask);
+        parent.init();
+        parent.run();
+        parent.cleanup();
     }
 }

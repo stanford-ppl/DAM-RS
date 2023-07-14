@@ -287,10 +287,10 @@ where
                 dequeue(&mut self.time, &mut self.union_data.in_crd2).unwrap();
                 dequeue(&mut self.time, &mut self.union_data.in_ref2).unwrap();
             }
-            let crd1_deq = peek_next(&mut self.time, &mut self.union_data.in_crd1);
-            let crd2_deq = peek_next(&mut self.time, &mut self.union_data.in_crd2);
             let ref1_deq = peek_next(&mut self.time, &mut self.union_data.in_ref1);
             let ref2_deq = peek_next(&mut self.time, &mut self.union_data.in_ref2);
+            let crd1_deq = peek_next(&mut self.time, &mut self.union_data.in_crd1);
+            let crd2_deq = peek_next(&mut self.time, &mut self.union_data.in_crd2);
 
             match (crd1_deq, crd2_deq) {
                 (Ok(crd1), Ok(crd2)) => {
@@ -481,7 +481,7 @@ where
 #[cfg(test)]
 mod tests {
     use crate::{
-        channel::unbounded,
+        channel::{bounded, unbounded},
         context::{
             checker_context::CheckerContext, generator_context::GeneratorContext,
             parent::BasicParentContext, Context, ParentContext,
@@ -554,13 +554,15 @@ mod tests {
         ORT2: Iterator<Item = Token<u32, u32>> + 'static,
         ORT3: Iterator<Item = Token<u32, u32>> + 'static,
     {
-        let (in_crd1_sender, in_crd1_receiver) = unbounded::<Token<u32, u32>>();
-        let (in_crd2_sender, in_crd2_receiver) = unbounded::<Token<u32, u32>>();
-        let (in_ref1_sender, in_ref1_receiver) = unbounded::<Token<u32, u32>>();
-        let (in_ref2_sender, in_ref2_receiver) = unbounded::<Token<u32, u32>>();
-        let (out_crd_sender, out_crd_receiver) = unbounded::<Token<u32, u32>>();
-        let (out_ref1_sender, out_ref1_receiver) = unbounded::<Token<u32, u32>>();
-        let (out_ref2_sender, out_ref2_receiver) = unbounded::<Token<u32, u32>>();
+        let chan_size = 4;
+
+        let (in_crd1_sender, in_crd1_receiver) = bounded::<Token<u32, u32>>(chan_size);
+        let (in_crd2_sender, in_crd2_receiver) = bounded::<Token<u32, u32>>(chan_size);
+        let (in_ref1_sender, in_ref1_receiver) = bounded::<Token<u32, u32>>(chan_size);
+        let (in_ref2_sender, in_ref2_receiver) = bounded::<Token<u32, u32>>(chan_size);
+        let (out_crd_sender, out_crd_receiver) = bounded::<Token<u32, u32>>(chan_size);
+        let (out_ref1_sender, out_ref1_receiver) = bounded::<Token<u32, u32>>(chan_size);
+        let (out_ref2_sender, out_ref2_receiver) = bounded::<Token<u32, u32>>(chan_size);
 
         let data = CrdJoinerData::<u32, u32> {
             in_crd1: in_crd1_receiver,
