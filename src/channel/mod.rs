@@ -1,6 +1,6 @@
 pub mod utils;
 
-use std::sync::atomic::{AtomicUsize};
+use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, RwLock};
 
 use crate::context::Context;
@@ -9,6 +9,7 @@ use crate::types::DAMType;
 use crossbeam::channel::{self, RecvError, SendError};
 use dam_core::*;
 
+use dam_core::identifier::Identifier;
 use dam_core::time::Time;
 
 #[derive(Clone, Debug)]
@@ -53,6 +54,9 @@ struct ViewStruct {
     pub flavor: RwLock<ChannelFlavor>,
 
     pub channel_id: usize,
+
+    pub sender_id: RwLock<Option<Identifier>>,
+    pub receiver_id: RwLock<Option<Identifier>>,
 }
 
 static ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
@@ -66,15 +70,19 @@ impl ViewStruct {
             views: Default::default(),
             channel_id: ViewStruct::next_id(),
             flavor: RwLock::new(ChannelFlavor::Unknown),
+            sender_id: Default::default(),
+            receiver_id: Default::default(),
         }
     }
 
     pub fn attach_sender(&self, sender: &dyn Context) {
         self.views.write().unwrap().sender = Some(sender.view());
+        *self.sender_id.write().unwrap() = Some(sender.id());
     }
 
     pub fn attach_receiver(&self, receiver: &dyn Context) {
         self.views.write().unwrap().receiver = Some(receiver.view());
+        *self.receiver_id.write().unwrap() = Some(receiver.id());
     }
 
     pub fn set_flavor(&self, flavor: ChannelFlavor) {
@@ -226,10 +234,6 @@ impl<T> Sender<T> {
     // This drops the underlying channel
     pub fn close(&mut self) {
         self.underlying = SenderState::Closed;
-    }
-
-    pub fn set_flavor(&self, flavor: ChannelFlavor) {
-        self.view_struct.set_flavor(flavor);
     }
 }
 
@@ -397,10 +401,6 @@ impl<T> Receiver<T> {
     pub fn close(&mut self) {
         self.underlying = ReceiverState::Closed;
     }
-
-    pub fn set_flavor(&self, flavor: ChannelFlavor) {
-        self.view_struct.set_flavor(flavor);
-    }
 }
 
 impl<T> Cleanable for Receiver<T> {
@@ -413,9 +413,17 @@ pub fn bounded<T>(capacity: usize) -> (Sender<T>, Receiver<T>)
 where
     T: DAMType,
 {
+    bounded_with_flavor(capacity, ChannelFlavor::Unknown)
+}
+
+pub fn bounded_with_flavor<T>(capacity: usize, flavor: ChannelFlavor) -> (Sender<T>, Receiver<T>)
+where
+    T: DAMType,
+{
     let (tx, rx) = channel::bounded::<ChannelElement<T>>(capacity);
     let (resp_t, resp_r) = channel::bounded::<Time>(capacity);
     let view_struct = Arc::new(ViewStruct::new());
+    view_struct.set_flavor(flavor);
     let snd = Sender {
         underlying: SenderState::Open(tx),
         resp: resp_r,
@@ -433,13 +441,18 @@ where
     (snd, rcv)
 }
 
-pub fn unbounded<T>() -> (Sender<T>, Receiver<T>)
+pub fn unbounded<T: DAMType>() -> (Sender<T>, Receiver<T>) {
+    unbounded_with_flavor(ChannelFlavor::Unknown)
+}
+
+pub fn unbounded_with_flavor<T>(flavor: ChannelFlavor) -> (Sender<T>, Receiver<T>)
 where
     T: DAMType,
 {
     let (tx, rx) = channel::unbounded::<ChannelElement<T>>();
     let (resp_t, resp_r) = channel::unbounded::<Time>();
     let view_struct = Arc::new(ViewStruct::new());
+    view_struct.set_flavor(flavor);
     let snd = Sender {
         underlying: SenderState::Open(tx),
         resp: resp_r,
