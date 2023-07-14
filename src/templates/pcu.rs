@@ -223,7 +223,7 @@ impl<ElementType: DAMType> Context for PCU<ElementType> {
 mod tests {
 
     use crate::{
-        channel::{bounded_with_flavor},
+        channel::bounded_with_flavor,
         context::{
             checker_context::CheckerContext, generator_context::GeneratorContext,
             parent::BasicParentContext, Context, ParentContext,
