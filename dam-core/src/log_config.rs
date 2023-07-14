@@ -9,6 +9,7 @@ use crate::{config::get_config, metric::METRICS};
 pub struct LogInfo {
     pub path: Option<PathBuf>,
     pub include: HashSet<String>,
+    pub eager_flush: bool,
 }
 
 static LOG_INFO: OnceLock<LogInfo> = OnceLock::new();
@@ -23,6 +24,7 @@ pub fn get_log_info() -> LogInfo {
 pub struct LogConfig {
     path: Option<String>,
     log_options: Option<Table>,
+    eager_flush: Option<bool>,
 }
 
 impl LogConfig {
@@ -66,6 +68,9 @@ impl LogConfig {
             (Some(_), None) => {}
             (Some(base), Some(new)) => base.extend(new.clone().into_iter()),
         }
+        if other.eager_flush.is_some() {
+            self.eager_flush = other.eager_flush;
+        }
     }
 }
 
@@ -83,6 +88,7 @@ impl From<LogConfig> for LogInfo {
         Self {
             path: value.path.map(PathBuf::from),
             include,
+            eager_flush: value.eager_flush.unwrap_or(false),
         }
     }
 }

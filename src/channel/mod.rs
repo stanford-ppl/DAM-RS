@@ -164,7 +164,7 @@ impl<T: DAMType> Sender<T> {
     fn update_len(&mut self) {
         let send_time = self.sender_tlb();
         if let SendOptions::AvailableAt(time) = self.next_available {
-            if time < send_time {
+            if time <= send_time {
                 // Next available time has already passed, so we pop an element off.
                 // Additionally, to avoid work, we don't update next_available immediately.
                 self.next_available = SendOptions::Unknown;
