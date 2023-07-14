@@ -223,7 +223,7 @@ impl<ElementType: DAMType> Context for PCU<ElementType> {
 mod tests {
 
     use crate::{
-        channel::bounded,
+        channel::{bounded_with_flavor},
         context::{
             checker_context::CheckerContext, generator_context::GeneratorContext,
             parent::BasicParentContext, Context, ParentContext,
@@ -239,6 +239,9 @@ mod tests {
         type T = u32;
         const CHAN_SIZE: usize = 8;
         const TEST_ITERATIONS: T = 8192;
+
+        let mk_chan =
+            || bounded_with_flavor::<T>(CHAN_SIZE, crate::channel::ChannelFlavor::Acyclic);
 
         let mut pcu = PCU::<T>::new(
             super::PCUConfig {
@@ -265,14 +268,10 @@ mod tests {
             output_register_ids: vec![0],
         });
 
-        let (arg1_send, arg1_recv) = bounded::<T>(CHAN_SIZE);
-        let (arg2_send, arg2_recv) = bounded::<T>(CHAN_SIZE);
-        let (arg3_send, arg3_recv) = bounded::<T>(CHAN_SIZE);
-        let (pcu_out_send, pcu_out_recv) = bounded::<T>(CHAN_SIZE);
-        arg1_send.set_flavor(crate::channel::ChannelFlavor::Acyclic);
-        arg2_send.set_flavor(crate::channel::ChannelFlavor::Acyclic);
-        arg3_send.set_flavor(crate::channel::ChannelFlavor::Acyclic);
-        pcu_out_send.set_flavor(crate::channel::ChannelFlavor::Acyclic);
+        let (arg1_send, arg1_recv) = mk_chan();
+        let (arg2_send, arg2_recv) = mk_chan();
+        let (arg3_send, arg3_recv) = mk_chan();
+        let (pcu_out_send, pcu_out_recv) = mk_chan();
 
         pcu.add_input_channel(arg1_recv);
         pcu.add_input_channel(arg2_recv);
