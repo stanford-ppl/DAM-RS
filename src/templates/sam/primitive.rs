@@ -6,7 +6,7 @@ use crate::{
     RegisterALUOp,
 };
 
-#[derive(Clone, Copy, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Hash)]
 pub enum Token<ValType, StopType> {
     Val(ValType),
     Stop(StopType),
