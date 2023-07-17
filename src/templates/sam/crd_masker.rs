@@ -129,25 +129,27 @@ where
                             }
                         }
                         Token::Stop(stkn) => {
-                            let icrd_channel_elem = ChannelElement::new(
-                                self.time.tick() + 1,
-                                Token::<ValType, StopType>::Stop(stkn.clone()),
-                            );
-                            enqueue(
-                                &mut self.time,
-                                &mut self.crd_mask_data.out_crd_inner,
-                                icrd_channel_elem,
-                            )
-                            .unwrap();
-                            let iref_channel_elem =
-                                ChannelElement::new(self.time.tick() + 1, curr_iref.data.clone());
-                            enqueue(
-                                &mut self.time,
-                                &mut self.crd_mask_data.out_ref_inner,
-                                iref_channel_elem,
-                            )
-                            .unwrap();
                             if has_crd {
+                                let icrd_channel_elem = ChannelElement::new(
+                                    self.time.tick() + 1,
+                                    Token::<ValType, StopType>::Stop(stkn.clone()),
+                                );
+                                enqueue(
+                                    &mut self.time,
+                                    &mut self.crd_mask_data.out_crd_inner,
+                                    icrd_channel_elem,
+                                )
+                                .unwrap();
+                                let iref_channel_elem = ChannelElement::new(
+                                    self.time.tick() + 1,
+                                    curr_iref.data.clone(),
+                                );
+                                enqueue(
+                                    &mut self.time,
+                                    &mut self.crd_mask_data.out_ref_inner,
+                                    iref_channel_elem,
+                                )
+                                .unwrap();
                                 let ocrd_channel_elem =
                                     ChannelElement::new(self.time.tick() + 1, curr_ocrd.clone());
                                 enqueue(
@@ -157,9 +159,8 @@ where
                                 )
                                 .unwrap();
                                 has_crd = false;
-                                dequeue(&mut self.time, &mut self.crd_mask_data.in_crd_outer)
-                                    .unwrap();
                             }
+                            dequeue(&mut self.time, &mut self.crd_mask_data.in_crd_outer).unwrap();
                         }
                         Token::Done => {
                             let channel_elem =
@@ -251,8 +252,8 @@ mod tests {
             || token_vec!(u32; u32; 0, 1, 2, "S0", 3, 4, 5, "S0", 6, 7, 8, "S1", "D").into_iter();
 
         let out_crd_outer = || token_vec!(u32; u32; 1, 2, "S0", "D").into_iter();
-        let out_crd_inner = || token_vec!(u32; u32; "S0", 1, 2, "S0", 2, "S1", "D").into_iter();
-        let out_ref_inner = || token_vec!(u32; u32;  "S0", 4, 5, "S0", 8, "S1", "D").into_iter();
+        let out_crd_inner = || token_vec!(u32; u32; 1, 2, "S0", 2, "S1", "D").into_iter();
+        let out_ref_inner = || token_vec!(u32; u32;  4, 5, "S0", 8, "S1", "D").into_iter();
         mask_test(
             in_crd_outer,
             in_crd_inner,
