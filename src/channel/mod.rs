@@ -9,7 +9,10 @@ use crate::types::DAMType;
 use crossbeam::channel::{self, RecvError, SendError};
 use dam_core::*;
 
+use dam_core::metric::LogProducer;
 use dam_core::time::Time;
+use dam_macros::log_producer;
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug)]
 pub struct ChannelElement<T> {
@@ -47,25 +50,38 @@ pub enum ChannelFlavor {
     Cyclic,
 }
 
+static ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
+#[derive(Serialize, Deserialize, Debug, Copy, Clone)]
+pub struct ChannelID {
+    id: usize,
+}
+
+impl ChannelID {
+    fn next_id() -> usize {
+        ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    }
+
+    fn new() -> Self {
+        Self {
+            id: Self::next_id(),
+        }
+    }
+}
+
 struct ViewStruct {
     pub views: RwLock<ViewData>,
 
-    pub channel_id: usize,
+    pub channel_id: ChannelID,
     flavor: RwLock<ChannelFlavor>,
 
     current_send_receive_delta: AtomicUsize,
 }
 
-static ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
 impl ViewStruct {
-    fn next_id() -> usize {
-        ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
-    }
-
     pub fn new() -> Self {
         Self {
             views: Default::default(),
-            channel_id: ViewStruct::next_id(),
+            channel_id: ChannelID::new(),
             flavor: RwLock::new(ChannelFlavor::Unknown),
             current_send_receive_delta: AtomicUsize::new(0),
         }
@@ -87,6 +103,14 @@ pub enum SendOptions {
     CheckBackAt(Time),
     Never,
 }
+
+#[derive(Serialize, Deserialize, Debug)]
+enum SendEvent {
+    Send(ChannelID),
+    Len(ChannelID, usize),
+}
+
+#[log_producer]
 pub struct Sender<T> {
     underlying: SenderState<ChannelElement<T>>,
     resp: channel::Receiver<Time>,
@@ -131,6 +155,8 @@ impl<T: DAMType> Sender<T> {
         self.under_send(elem).unwrap();
         self.send_receive_delta += 1;
 
+        Self::log(SendEvent::Send(self.view_struct.channel_id));
+
         Ok(())
     }
 
@@ -143,6 +169,10 @@ impl<T: DAMType> Sender<T> {
             return false;
         }
         self.update_len();
+        Self::log(SendEvent::Len(
+            self.view_struct.channel_id,
+            self.send_receive_delta,
+        ));
 
         self.send_receive_delta == self.capacity
     }
@@ -211,6 +241,7 @@ impl<T: DAMType> Sender<T> {
 
     fn update_len(&mut self) {
         let send_time = self.sender_tlb();
+
         if let SendOptions::AvailableAt(time) = self.next_available {
             if time <= send_time {
                 // Next available time has already passed, so we pop an element off.
@@ -266,6 +297,13 @@ enum ReceiverState<T> {
     Closed,
 }
 
+#[derive(Serialize, Deserialize, Debug, Copy, Clone)]
+enum ReceiverEvent {
+    Peek(ChannelID),
+    Recv(ChannelID),
+}
+
+#[log_producer]
 pub struct Receiver<T> {
     underlying: ReceiverState<ChannelElement<T>>,
     resp: channel::Sender<Time>,
@@ -337,6 +375,7 @@ impl<T: DAMType> Receiver<T> {
     }
 
     pub fn peek(&mut self) -> Recv<T> {
+        Self::log(ReceiverEvent::Peek(self.view_struct.channel_id));
         let recv_time = self.receiver_tlb();
         match self.head {
             Recv::Nothing(time) if time >= recv_time => {
@@ -369,6 +408,7 @@ impl<T: DAMType> Receiver<T> {
 
     pub fn recv(&mut self) -> Recv<T> {
         let res = self.peek();
+        Self::log(ReceiverEvent::Recv(self.view_struct.channel_id));
         match &res {
             Recv::Something(stuff) => {
                 let ct: Time = self.receiver_tlb();

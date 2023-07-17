@@ -40,11 +40,11 @@ impl TimeManager {
 }
 
 impl LogProducer for TimeManager {
-    const LOG_NAME: &'static str = "time_manager";
+    const LOG_NAME: &'static str = "TimeManager";
 }
 
 #[distributed_slice(METRICS)]
-static TIMEMANAGER_NAME: &'static str = "time_manager";
+static TIMEMANAGER_NAME: &'static str = "TimeManager";
 
 impl TimeManager {
     pub fn incr_cycles(&mut self, incr: u64) {
