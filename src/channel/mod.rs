@@ -6,10 +6,13 @@ use std::sync::{Arc, RwLock};
 use crate::context::Context;
 use crate::types::Cleanable;
 use crate::types::DAMType;
-use crossbeam::channel::{self, SendError};
+use crossbeam::channel::{self, RecvError, SendError};
 use dam_core::*;
 
+use dam_core::metric::LogProducer;
 use dam_core::time::Time;
+use dam_macros::log_producer;
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug)]
 pub struct ChannelElement<T> {
@@ -32,6 +35,7 @@ type ViewType = Option<TimeView>;
 enum SenderState<T> {
     Open(channel::Sender<T>),
     Closed,
+    Void,
 }
 
 #[derive(Default)]
@@ -40,35 +44,56 @@ struct ViewData {
     pub receiver: ViewType,
 }
 
-struct ViewStruct {
-    pub sender_views: RwLock<ViewData>,
-    pub receiver_views: RwLock<ViewData>,
-
-    pub channel_id: usize,
+#[derive(Clone, Copy, Debug)]
+pub enum ChannelFlavor {
+    Unknown,
+    Acyclic,
+    Cyclic,
 }
 
 static ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
-impl ViewStruct {
+#[derive(Serialize, Deserialize, Debug, Copy, Clone)]
+pub struct ChannelID {
+    id: usize,
+}
+
+impl ChannelID {
     fn next_id() -> usize {
         ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
     }
 
+    fn new() -> Self {
+        Self {
+            id: Self::next_id(),
+        }
+    }
+}
+
+struct ViewStruct {
+    pub views: RwLock<ViewData>,
+
+    pub channel_id: ChannelID,
+    flavor: RwLock<ChannelFlavor>,
+
+    current_send_receive_delta: AtomicUsize,
+}
+
+impl ViewStruct {
     pub fn new() -> Self {
         Self {
-            sender_views: Default::default(),
-            receiver_views: Default::default(),
-            channel_id: ViewStruct::next_id(),
+            views: Default::default(),
+            channel_id: ChannelID::new(),
+            flavor: RwLock::new(ChannelFlavor::Unknown),
+            current_send_receive_delta: AtomicUsize::new(0),
         }
     }
 
     pub fn attach_sender(&self, sender: &dyn Context) {
-        self.sender_views.write().unwrap().sender = Some(sender.view());
-        self.receiver_views.write().unwrap().sender = Some(sender.view());
+        self.views.write().unwrap().sender = Some(sender.view());
     }
 
     pub fn attach_receiver(&self, receiver: &dyn Context) {
-        self.sender_views.write().unwrap().receiver = Some(receiver.view());
-        self.receiver_views.write().unwrap().receiver = Some(receiver.view());
+        self.views.write().unwrap().receiver = Some(receiver.view());
     }
 }
 
@@ -79,6 +104,14 @@ pub enum SendOptions {
     CheckBackAt(Time),
     Never,
 }
+
+#[derive(Serialize, Deserialize, Debug)]
+enum SendEvent {
+    Send(ChannelID),
+    Len(ChannelID, usize),
+}
+
+#[log_producer]
 pub struct Sender<T> {
     underlying: SenderState<ChannelElement<T>>,
     resp: channel::Receiver<Time>,
@@ -94,12 +127,13 @@ impl<T: DAMType> Sender<T> {
         match &self.underlying {
             SenderState::Open(sender) => sender.send(elem),
             SenderState::Closed => Err(SendError(elem)),
+            SenderState::Void => Ok(()),
         }
     }
 
     fn sender_tlb(&self) -> Time {
         self.view_struct
-            .sender_views
+            .views
             .read()
             .unwrap()
             .sender
@@ -115,8 +149,16 @@ impl<T: DAMType> Sender<T> {
 
         assert!(self.send_receive_delta < self.capacity);
         assert!(elem.time >= self.sender_tlb());
+        let prev_srd = self
+            .view_struct
+            .current_send_receive_delta
+            .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+        assert!(prev_srd < self.capacity);
         self.under_send(elem).unwrap();
         self.send_receive_delta += 1;
+
+        Self::log(SendEvent::Send(self.view_struct.channel_id));
+
         Ok(())
     }
 
@@ -125,10 +167,17 @@ impl<T: DAMType> Sender<T> {
     }
 
     fn is_full(&mut self) -> bool {
+        if let SenderState::Void = self.underlying {
+            return false;
+        }
         if self.send_receive_delta < self.capacity {
             return false;
         }
         self.update_len();
+        Self::log(SendEvent::Len(
+            self.view_struct.channel_id,
+            self.send_receive_delta,
+        ));
 
         self.send_receive_delta == self.capacity
     }
@@ -138,6 +187,40 @@ impl<T: DAMType> Sender<T> {
         // We don't know when it'll be available.
         self.next_available = SendOptions::Unknown;
 
+        let real_srd = self
+            .view_struct
+            .current_send_receive_delta
+            .load(std::sync::atomic::Ordering::Acquire);
+        if real_srd > self.send_receive_delta {
+            println!(
+                "Channel: {:?} Real SRD: {real_srd:?}, current SRD: {:?}",
+                self.view_struct.channel_id, self.send_receive_delta
+            );
+        }
+        assert!(real_srd <= self.send_receive_delta);
+        let srd_diff = self.send_receive_delta - real_srd;
+
+        // Always pop at least one off.
+        if srd_diff > 0 {
+            match self.resp.recv() {
+                Ok(time) if time <= send_time => {
+                    assert!(self.send_receive_delta > 0);
+                    self.send_receive_delta -= 1;
+                }
+                Ok(time) => {
+                    // Got a time in the future
+                    assert!(self.next_available == SendOptions::Unknown);
+                    self.next_available = SendOptions::AvailableAt(time);
+                    return;
+                }
+                Err(channel::RecvError) => {
+                    self.next_available = SendOptions::Never;
+                    return;
+                }
+            }
+        }
+
+        // Try to finish off whatever's left.
         loop {
             match self.resp.try_recv() {
                 Ok(time) if time <= send_time => {
@@ -163,6 +246,7 @@ impl<T: DAMType> Sender<T> {
 
     fn update_len(&mut self) {
         let send_time = self.sender_tlb();
+
         if let SendOptions::AvailableAt(time) = self.next_available {
             if time <= send_time {
                 // Next available time has already passed, so we pop an element off.
@@ -176,9 +260,14 @@ impl<T: DAMType> Sender<T> {
             }
         }
 
+        self.update_srd();
+        if self.send_receive_delta < self.capacity {
+            return;
+        }
+
         let new_time = self
             .view_struct
-            .sender_views
+            .views
             .read()
             .unwrap()
             .receiver
@@ -213,6 +302,13 @@ enum ReceiverState<T> {
     Closed,
 }
 
+#[derive(Serialize, Deserialize, Debug, Copy, Clone)]
+enum ReceiverEvent {
+    Peek(ChannelID),
+    Recv(ChannelID),
+}
+
+#[log_producer]
 pub struct Receiver<T> {
     underlying: ReceiverState<ChannelElement<T>>,
     resp: channel::Sender<Time>,
@@ -239,7 +335,7 @@ impl<T: DAMType> Receiver<T> {
 
     fn receiver_tlb(&self) -> Time {
         self.view_struct
-            .receiver_views
+            .views
             .read()
             .unwrap()
             .receiver
@@ -268,7 +364,23 @@ impl<T: DAMType> Receiver<T> {
         return retflag;
     }
 
+    pub fn peek_next_sync(&mut self) -> Recv<T> {
+        match self.head {
+            Recv::Something(_) => return self.head.clone(),
+            Recv::Nothing(_) | Recv::Unknown => {}
+            Recv::Closed => return Recv::Closed,
+        }
+
+        self.head = match self.under().recv() {
+            Ok(stuff) => Recv::Something(stuff),
+            Err(RecvError) => Recv::Closed,
+        };
+
+        self.head.clone()
+    }
+
     pub fn peek(&mut self) -> Recv<T> {
+        Self::log(ReceiverEvent::Peek(self.view_struct.channel_id));
         let recv_time = self.receiver_tlb();
         match self.head {
             Recv::Nothing(time) if time >= recv_time => {
@@ -287,7 +399,7 @@ impl<T: DAMType> Receiver<T> {
 
         let sig_time = self
             .view_struct
-            .receiver_views
+            .views
             .read()
             .unwrap()
             .sender
@@ -301,10 +413,16 @@ impl<T: DAMType> Receiver<T> {
 
     pub fn recv(&mut self) -> Recv<T> {
         let res = self.peek();
+        Self::log(ReceiverEvent::Recv(self.view_struct.channel_id));
         match &res {
             Recv::Something(stuff) => {
                 let ct: Time = self.receiver_tlb();
+                let prev_srd = self
+                    .view_struct
+                    .current_send_receive_delta
+                    .fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
                 let _ = self.resp.send(ct.max(stuff.time));
+                assert_ne!(prev_srd, 0);
                 self.head = Recv::Unknown;
             }
             Recv::Nothing(_) | Recv::Closed => {}
@@ -335,9 +453,18 @@ pub fn bounded<T>(capacity: usize) -> (Sender<T>, Receiver<T>)
 where
     T: DAMType,
 {
+    bounded_with_flavor(capacity, ChannelFlavor::Unknown)
+}
+
+pub fn bounded_with_flavor<T>(capacity: usize, flavor: ChannelFlavor) -> (Sender<T>, Receiver<T>)
+where
+    T: DAMType,
+{
     let (tx, rx) = channel::bounded::<ChannelElement<T>>(capacity);
     let (resp_t, resp_r) = channel::bounded::<Time>(capacity);
     let view_struct = Arc::new(ViewStruct::new());
+    *view_struct.flavor.write().unwrap() = flavor;
+
     let snd = Sender {
         underlying: SenderState::Open(tx),
         resp: resp_r,
@@ -377,6 +504,17 @@ where
         head: Recv::Unknown,
     };
     (snd, rcv)
+}
+
+pub fn void<T: DAMType>() -> Sender<T> {
+    Sender {
+        underlying: SenderState::Void,
+        resp: crossbeam::channel::never(),
+        send_receive_delta: 0,
+        capacity: usize::MAX,
+        view_struct: Arc::new(ViewStruct::new()),
+        next_available: SendOptions::Unknown,
+    }
 }
 
 #[derive(Debug)]

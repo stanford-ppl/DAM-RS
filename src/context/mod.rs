@@ -1,5 +1,5 @@
 use dam_core::{
-    identifier::Identifiable, log_graph::get_graph, ParentView, TimeView, TimeViewable,
+    identifier::Identifiable, log_graph::get_graph, ContextView, ParentView, TimeView, TimeViewable,
 };
 
 pub mod broadcast_context;
@@ -93,7 +93,7 @@ impl<'a, T: ParentContext<'a> + Identifiable> Context for T {
         // if we're an orphan, drop the graph.
         let graph = get_graph();
         if graph.is_orphan(self.id()) {
-            graph.drop_subgraph(self.id());
+            graph.drop_subgraph(self.id(), self.view().tick_lower_bound());
         }
     }
 }
