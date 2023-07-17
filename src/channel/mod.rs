@@ -35,6 +35,7 @@ type ViewType = Option<TimeView>;
 enum SenderState<T> {
     Open(channel::Sender<T>),
     Closed,
+    Void,
 }
 
 #[derive(Default)]
@@ -126,6 +127,7 @@ impl<T: DAMType> Sender<T> {
         match &self.underlying {
             SenderState::Open(sender) => sender.send(elem),
             SenderState::Closed => Err(SendError(elem)),
+            SenderState::Void => Ok(()),
         }
     }
 
@@ -165,6 +167,9 @@ impl<T: DAMType> Sender<T> {
     }
 
     fn is_full(&mut self) -> bool {
+        if let SenderState::Void = self.underlying {
+            return false;
+        }
         if self.send_receive_delta < self.capacity {
             return false;
         }
@@ -499,6 +504,17 @@ where
         head: Recv::Unknown,
     };
     (snd, rcv)
+}
+
+pub fn void<T: DAMType>() -> Sender<T> {
+    Sender {
+        underlying: SenderState::Void,
+        resp: crossbeam::channel::never(),
+        send_receive_delta: 0,
+        capacity: usize::MAX,
+        view_struct: Arc::new(ViewStruct::new()),
+        next_available: SendOptions::Unknown,
+    }
 }
 
 #[derive(Debug)]
