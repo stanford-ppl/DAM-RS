@@ -448,24 +448,7 @@ pub fn bounded<T>(capacity: usize) -> (Sender<T>, Receiver<T>)
 where
     T: DAMType,
 {
-    let (tx, rx) = channel::bounded::<ChannelElement<T>>(capacity);
-    let (resp_t, resp_r) = channel::bounded::<Time>(capacity);
-    let view_struct = Arc::new(ViewStruct::new());
-    let snd = Sender {
-        underlying: SenderState::Open(tx),
-        resp: resp_r,
-        send_receive_delta: 0,
-        capacity,
-        view_struct: view_struct.clone(),
-        next_available: SendOptions::Unknown,
-    };
-    let rcv = Receiver {
-        underlying: ReceiverState::Open(rx),
-        resp: resp_t,
-        view_struct,
-        head: Recv::Unknown,
-    };
-    (snd, rcv)
+    bounded_with_flavor(capacity, ChannelFlavor::Unknown)
 }
 
 pub fn bounded_with_flavor<T>(capacity: usize, flavor: ChannelFlavor) -> (Sender<T>, Receiver<T>)
