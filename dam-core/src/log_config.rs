@@ -84,7 +84,6 @@ impl From<LogConfig> for LogInfo {
             all_options.filter(|(_, v)| if let Value::Boolean(x) = v { *x } else { false });
 
         let include = HashSet::from_iter(filtered.map(|(k, _)| k));
-
         Self {
             path: value.path.map(PathBuf::from),
             include,
