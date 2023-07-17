@@ -3,7 +3,7 @@ mod tests {
 
     use std::{fs, path::Path};
 
-    use crate::channel::{bounded, unbounded};
+    use crate::channel::bounded;
     use crate::context::generator_context::GeneratorContext;
     use crate::context::parent::BasicParentContext;
     use crate::context::{Context, ParentContext};
@@ -20,7 +20,7 @@ mod tests {
 
     #[test]
     fn test_mat_elemadd() {
-        let test_name = "mat_elemadd2";
+        let test_name = "mat_elemadd";
         let filename = home::home_dir().unwrap().join("sam_config.toml");
         let contents = fs::read_to_string(filename).unwrap();
         let data: Data = toml::from_str(&contents).unwrap();
@@ -48,7 +48,10 @@ mod tests {
         let c1_crd = read_inputs::<u32>(&c1_crd_filename);
         let c_vals = read_inputs::<f32>(&c_vals_filename);
 
-        let mk_bounded = || bounded::<Token<u32, u32>>(16);
+        let chan_size = 8;
+
+        // let mk_bounded = || bounded_with_flavor::<Token<u32, u32>>(chan_size, Acyclic);
+        let mk_bounded = || bounded::<Token<u32, u32>>(chan_size);
 
         // fiberlookup_bi
         let (bi_out_ref_sender, bi_out_ref_receiver) = mk_bounded();
@@ -148,7 +151,7 @@ mod tests {
         let mut x1_wrscanner = CompressedWrScan::new(x1_wrscanner_data, x1_seg, x1_crd);
 
         // arrayvals_b
-        let (b_out_val_sender, b_out_val_receiver) = unbounded::<Token<f32, u32>>();
+        let (b_out_val_sender, b_out_val_receiver) = bounded::<Token<f32, u32>>(chan_size);
         let arrayvals_b_data = ArrayData::<u32, f32, u32> {
             in_ref: unionj_out_ref1_receiver,
             out_val: b_out_val_sender,
@@ -156,7 +159,7 @@ mod tests {
         let mut arrayvals_b = Array::<u32, f32, u32>::new(arrayvals_b_data, b_vals);
 
         // arrayvals_c
-        let (c_out_val_sender, c_out_val_receiver) = unbounded::<Token<f32, u32>>();
+        let (c_out_val_sender, c_out_val_receiver) = bounded::<Token<f32, u32>>(chan_size);
         let arrayvals_c_data = ArrayData::<u32, f32, u32> {
             in_ref: unionj_out_ref2_receiver,
             out_val: c_out_val_sender,
@@ -164,7 +167,7 @@ mod tests {
         let mut arrayvals_c = Array::<u32, f32, u32>::new(arrayvals_c_data, c_vals);
 
         // Add ALU
-        let (add_out_sender, add_out_receiver) = unbounded::<Token<f32, u32>>();
+        let (add_out_sender, add_out_receiver) = bounded::<Token<f32, u32>>(chan_size);
         let mut add = make_alu(
             b_out_val_receiver,
             c_out_val_receiver,

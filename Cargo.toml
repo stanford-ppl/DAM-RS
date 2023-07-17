@@ -8,7 +8,6 @@ edition = "2021"
 [dependencies]
 crossbeam = "0.8.2"
 num = "0.4.0"
-serde = "1.0.166"
 toml = "0.7.6"
 serde_derive = "1.0.166"
 home = "0.5.5"

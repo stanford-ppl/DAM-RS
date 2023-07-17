@@ -34,33 +34,27 @@ fn process_file<T: std::str::FromStr>(file_path: &PathBuf, shared_map: Arc<Mutex
     map.push(vector);
 }
 
-pub fn par_read_inputs<T>(base_path: &PathBuf, files: &Vec<String>) -> Vec<Vec<T>>
+pub fn par_read_inputs<T>(base_path: &PathBuf, files: &Vec<String>, val_file: String) -> Vec<Vec<T>>
 // ) -> HashMap<PathBuf, Vec<Vec<T>>>
 where
-    T: std::str::FromStr + std::marker::Send + 'static,
+    T: std::str::FromStr + std::marker::Send,
 {
     // let shared_map: Arc<Mutex<HashMap<PathBuf, Vec<T>>>> = Arc::new(Mutex::new(HashMap::new()));
-    let shared_map: Arc<Mutex<Vec<Vec<T>>>> = Arc::new(Mutex::new(Vec::new()));
+    let shared_vec: Arc<Mutex<Vec<Vec<T>>>> = Arc::new(Mutex::new(Vec::new()));
     // let shared_map: Arc<HashMap<PathBuf, Vec<T>>> = Arc::new(HashMap::new());
-    let mut threads = Vec::new();
 
-    for file_name in files {
-        let file_path = Path::new(base_path).join(file_name);
-        let shared_map = Arc::clone(&shared_map);
-        // let shared_data = Arc::clone(&shared_map);
+    thread::scope(|td| {
+        for file_name in files {
+            td.spawn(|| {
+                process_file::<T>(
+                    &(Path::new(base_path).join(file_name.clone())),
+                    shared_vec.clone(),
+                );
+            });
+        }
+    });
 
-        let thread = thread::spawn(move || {
-            process_file::<T>(&file_path, shared_map);
-        });
-
-        threads.push(thread);
-    }
-
-    for thread in threads {
-        thread.join().unwrap();
-    }
-
-    Arc::try_unwrap(shared_map)
+    Arc::try_unwrap(shared_vec)
         .ok()
         .unwrap()
         .into_inner()

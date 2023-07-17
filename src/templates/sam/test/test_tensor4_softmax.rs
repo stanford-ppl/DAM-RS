@@ -49,6 +49,11 @@ mod tests {
         let b3_crd = read_inputs::<u32>(&b3_crd_filename);
         let b_vals = read_inputs::<f32>(&b_vals_filename);
 
+        let a_vals_filename = base_path.join("tensor_A_mode_vals");
+        let a_vals = read_inputs::<f32>(&a_vals_filename);
+
+        dbg!(a_vals.clone());
+
         // fiberlookup_bi
         let (bi_out_ref_sender, bi_out_ref_receiver) = unbounded::<Token<u32, u32>>();
         let (bi_out_crd_sender, bi_out_crd_receiver) = unbounded::<Token<u32, u32>>();
@@ -272,7 +277,9 @@ mod tests {
         parent.cleanup();
 
         // println!("{:?}", x0_wrscanner.crd_arr);
+        assert_eq!(xvals.out_val, a_vals, "assert failed");
         // println!("{:?}", xvals.out_val);
+        // println!("{:?}", a_vals);
 
         // let fil = formatted_dir.to_str().unwrap();
     }
