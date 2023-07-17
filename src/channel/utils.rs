@@ -61,6 +61,30 @@ pub fn peek_next<T: DAMType>(
     manager: &mut TimeManager,
     recv: &mut Receiver<T>,
 ) -> Result<ChannelElement<T>, DequeueError> {
+    let cpy = *recv.view_struct.flavor.read().unwrap();
+    match cpy {
+        super::ChannelFlavor::Unknown | super::ChannelFlavor::Cyclic => {
+            peek_next_async(manager, recv)
+        }
+        super::ChannelFlavor::Acyclic => {
+            let recv = recv.peek_next_sync();
+
+            match recv {
+                Recv::Something(data) => {
+                    manager.advance(data.time);
+                    Ok(data)
+                }
+                Recv::Closed => Err(DequeueError {}),
+                _ => todo!(),
+            }
+        }
+    }
+}
+
+fn peek_next_async<T: DAMType>(
+    manager: &mut TimeManager,
+    recv: &mut Receiver<T>,
+) -> Result<ChannelElement<T>, DequeueError> {
     loop {
         let v: Recv<T> = recv.peek();
         match v {

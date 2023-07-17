@@ -16,6 +16,7 @@ use crate::{
     config::get_config,
     log_config::{get_log_info, LogInfo},
     metric::NODE,
+    time::Time,
 };
 
 use super::identifier::Identifier;
@@ -82,7 +83,7 @@ pub enum RegistryEvent {
     WithParent(Identifier),
 
     // Cleaned up, only registered on the topmost
-    Cleaned(u128),
+    Cleaned(u128, Time),
 }
 
 #[derive(Default, Debug)]
@@ -245,9 +246,9 @@ impl LogGraph {
         subgraph
     }
 
-    pub fn drop_subgraph(&self, root: Identifier) {
+    pub fn drop_subgraph(&self, root: Identifier, time: Time) {
         self.get_log(LogType::Base(root))
-            .log(RegistryEvent::Cleaned(time_since_init().as_micros()));
+            .log(RegistryEvent::Cleaned(time_since_init().as_micros(), time));
         let can_drop = self.get_subgraph(root);
         self.all_identifiers
             .retain(|identifier| !can_drop.contains(identifier));
@@ -294,7 +295,7 @@ fn start_static_hook() {
                 .get(&cur_thread)
                 .map(|ident| ident.value().clone());
             if let Some(ident) = identifier {
-                get_graph().drop_subgraph(ident);
+                get_graph().drop_subgraph(ident, Time::new(0));
             }
             (prev_hook)(panic_info);
         }));
