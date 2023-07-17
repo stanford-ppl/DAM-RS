@@ -1,5 +1,5 @@
 use core::hash::Hash;
-use std::collections::{BTreeMap};
+use std::collections::BTreeMap;
 
 use crate::{channel::utils::peek_next, context::Context};
 use dam_core::identifier::Identifier;
@@ -261,7 +261,6 @@ where
                                 // dbg!(key.clone());
                                 // dbg!(value.clone());
                             }
-                            // dbg!(Token::<ValType, StopType>::Stop(stkn.clone()));
                             let val_stkn_chan_elem = ChannelElement::new(
                                 self.time.tick() + 1,
                                 Token::Stop(stkn.clone()),
@@ -420,6 +419,8 @@ where
 
 #[cfg(test)]
 mod tests {
+    use dam_core::TimeViewable;
+
     use crate::{
         channel::unbounded,
         context::{
