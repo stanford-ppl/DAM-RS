@@ -4,7 +4,7 @@ use std::{
     hash::{Hash, Hasher},
     io::{BufWriter, Write},
     path::PathBuf,
-    sync::{Arc, Mutex, Once, OnceLock},
+    sync::{Arc, Mutex, Once, OnceLock, Weak},
     thread::ThreadId,
     time::{Duration, Instant},
 };
@@ -28,9 +28,42 @@ enum LogTarget {
     Stdout,
     Nowhere,
 }
+
+#[derive(Debug, Clone)]
+enum WeakLogTarget {
+    // File handle, eager flush.
+    File(Weak<Mutex<BufWriter<File>>>, bool),
+    Stdout,
+    Nowhere,
+}
+
 #[derive(Clone, Debug)]
 pub struct EventLogger {
     underlying: LogTarget,
+}
+
+#[derive(Clone, Debug)]
+pub struct WeakEventLogger {
+    underlying: WeakLogTarget,
+}
+
+impl WeakEventLogger {
+    pub fn promote(&self) -> Option<EventLogger> {
+        match &self.underlying {
+            WeakLogTarget::File(handle, eager_flush) => match handle.upgrade() {
+                Some(arc_handle) => Some(EventLogger {
+                    underlying: LogTarget::File(arc_handle, *eager_flush),
+                }),
+                None => None,
+            },
+            WeakLogTarget::Stdout => Some(EventLogger {
+                underlying: LogTarget::Stdout,
+            }),
+            WeakLogTarget::Nowhere => Some(EventLogger {
+                underlying: LogTarget::Nowhere,
+            }),
+        }
+    }
 }
 
 static INIT_TIME: OnceLock<Instant> = OnceLock::new();
@@ -47,7 +80,7 @@ fn get_base_policy() -> LogInfo {
 }
 
 impl EventLogger {
-    pub fn log<T: std::fmt::Debug>(&mut self, event: T)
+    pub fn log<T: std::fmt::Debug>(&self, event: T)
     where
         T: serde::Serialize,
     {
@@ -70,6 +103,18 @@ impl EventLogger {
             }
             LogTarget::Stdout => println!("{:?}", event),
             LogTarget::Nowhere => {}
+        }
+    }
+
+    pub fn weak(&self) -> WeakEventLogger {
+        WeakEventLogger {
+            underlying: match &self.underlying {
+                LogTarget::File(target, eager) => {
+                    WeakLogTarget::File(Arc::downgrade(target), *eager)
+                }
+                LogTarget::Stdout => WeakLogTarget::Stdout,
+                LogTarget::Nowhere => WeakLogTarget::Nowhere,
+            },
         }
     }
 }
