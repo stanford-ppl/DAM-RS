@@ -78,18 +78,18 @@ where
     fn init(&mut self) {}
 
     fn run(&mut self) -> () {
-        let mut get_crd1: bool = false;
-        let mut get_crd2: bool = false;
+        // let mut get_crd1: bool = false;
+        // let mut get_crd2: bool = false;
 
         loop {
-            if get_crd1 == true {
-                dequeue(&mut self.time, &mut self.intersect_data.in_crd1).unwrap();
-                dequeue(&mut self.time, &mut self.intersect_data.in_ref1).unwrap();
-            }
-            if get_crd2 == true {
-                dequeue(&mut self.time, &mut self.intersect_data.in_crd2).unwrap();
-                dequeue(&mut self.time, &mut self.intersect_data.in_ref2).unwrap();
-            }
+            // if get_crd1 == true {
+            //     dequeue(&mut self.time, &mut self.intersect_data.in_crd1).unwrap();
+            //     dequeue(&mut self.time, &mut self.intersect_data.in_ref1).unwrap();
+            // }
+            // if get_crd2 == true {
+            //     dequeue(&mut self.time, &mut self.intersect_data.in_crd2).unwrap();
+            //     dequeue(&mut self.time, &mut self.intersect_data.in_ref2).unwrap();
+            // }
             let crd1_deq = peek_next(&mut self.time, &mut self.intersect_data.in_crd1);
             let crd2_deq = peek_next(&mut self.time, &mut self.intersect_data.in_crd2);
             let ref1_deq = peek_next(&mut self.time, &mut self.intersect_data.in_ref1);
@@ -121,24 +121,34 @@ where
                                     ChannelElement::new(curr_time + 1, ref2),
                                 )
                                 .unwrap();
-                                get_crd1 = true;
-                                get_crd2 = true;
+                                // get_crd1 = true;
+                                // get_crd2 = true;
+                                dequeue(&mut self.time, &mut self.intersect_data.in_crd1).unwrap();
+                                dequeue(&mut self.time, &mut self.intersect_data.in_ref1).unwrap();
+                                dequeue(&mut self.time, &mut self.intersect_data.in_crd2).unwrap();
+                                dequeue(&mut self.time, &mut self.intersect_data.in_ref2).unwrap();
                             }
                             (crd1, crd2) if crd1 < crd2 => {
-                                get_crd1 = true;
-                                get_crd2 = false;
+                                // get_crd1 = true;
+                                // get_crd2 = false;
+                                dequeue(&mut self.time, &mut self.intersect_data.in_crd1).unwrap();
+                                dequeue(&mut self.time, &mut self.intersect_data.in_ref1).unwrap();
                             }
                             (crd1, crd2) if crd1 > crd2 => {
-                                get_crd1 = false;
-                                get_crd2 = true;
+                                // get_crd1 = false;
+                                // get_crd2 = true;
+                                dequeue(&mut self.time, &mut self.intersect_data.in_crd2).unwrap();
+                                dequeue(&mut self.time, &mut self.intersect_data.in_ref2).unwrap();
                             }
                             (_, _) => {
                                 panic!("Unexpected case found in val comparison");
                             }
                         },
                         (Token::Val(_), Token::Stop(_)) => {
-                            get_crd1 = true;
-                            get_crd2 = false;
+                            // get_crd1 = true;
+                            // get_crd2 = false;
+                            dequeue(&mut self.time, &mut self.intersect_data.in_crd1).unwrap();
+                            dequeue(&mut self.time, &mut self.intersect_data.in_ref1).unwrap();
                         }
                         (Token::Val(_), Token::Done) | (Token::Done, Token::Val(_)) => {
                             let curr_time = self.time.tick();
@@ -162,8 +172,10 @@ where
                             .unwrap();
                         }
                         (Token::Stop(_), Token::Val(_)) => {
-                            get_crd1 = false;
-                            get_crd2 = true;
+                            // get_crd1 = false;
+                            // get_crd2 = true;
+                            dequeue(&mut self.time, &mut self.intersect_data.in_crd2).unwrap();
+                            dequeue(&mut self.time, &mut self.intersect_data.in_ref2).unwrap();
                         }
                         (Token::Stop(stkn1), Token::Stop(_)) => {
                             let curr_time = self.time.tick();
@@ -185,8 +197,12 @@ where
                                 ChannelElement::new(curr_time + 1, ref2),
                             )
                             .unwrap();
-                            get_crd1 = true;
-                            get_crd2 = true;
+                            // get_crd1 = true;
+                            // get_crd2 = true;
+                            dequeue(&mut self.time, &mut self.intersect_data.in_crd1).unwrap();
+                            dequeue(&mut self.time, &mut self.intersect_data.in_ref1).unwrap();
+                            dequeue(&mut self.time, &mut self.intersect_data.in_crd2).unwrap();
+                            dequeue(&mut self.time, &mut self.intersect_data.in_ref2).unwrap();
                         }
                         (tkn @ Token::Empty, Token::Val(_))
                         | (Token::Val(_), tkn @ Token::Empty)
@@ -320,6 +336,8 @@ where
                                 .unwrap();
                                 get_crd1 = true;
                                 get_crd2 = true;
+                                // dequeue(&mut self.time, &mut self.union_data.in_crd1).unwrap();
+                                // dequeue(&mut self.time, &mut self.union_data.in_ref1).unwrap();
                             }
                             (crd1, crd2) if crd1 < crd2 => {
                                 enqueue(
@@ -490,10 +508,7 @@ mod tests {
         token_vec,
     };
 
-    use super::CrdJoinerData;
-    use super::Intersect;
-    use super::Union;
-
+    use super::{CrdJoinerData, Intersect, Union};
     #[test]
     fn intersect_2d_test() {
         let in_crd1 = || token_vec!(u32; u32; 0, "S0", 0, 1, 2, "S1", "D").into_iter();
