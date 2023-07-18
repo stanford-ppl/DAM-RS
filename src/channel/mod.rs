@@ -365,6 +365,7 @@ impl<T: DAMType> Receiver<T> {
     }
 
     pub fn peek_next_sync(&mut self) -> Recv<T> {
+        Self::log(ReceiverEvent::Peek(self.view_struct.channel_id));
         match self.head {
             Recv::Something(_) => return self.head.clone(),
             Recv::Nothing(_) | Recv::Unknown => {}
@@ -411,24 +412,55 @@ impl<T: DAMType> Receiver<T> {
         return self.head.clone();
     }
 
+    fn register_recv(&mut self, time: Time) {
+        let ct: Time = self.receiver_tlb();
+        let prev_srd = self
+            .view_struct
+            .current_send_receive_delta
+            .fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
+        let _ = self.resp.send(ct.max(time));
+        assert_ne!(prev_srd, 0);
+    }
+
     pub fn recv(&mut self) -> Recv<T> {
         let res = self.peek();
         Self::log(ReceiverEvent::Recv(self.view_struct.channel_id));
         match &res {
             Recv::Something(stuff) => {
-                let ct: Time = self.receiver_tlb();
-                let prev_srd = self
-                    .view_struct
-                    .current_send_receive_delta
-                    .fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
-                let _ = self.resp.send(ct.max(stuff.time));
-                assert_ne!(prev_srd, 0);
+                self.register_recv(stuff.time);
                 self.head = Recv::Unknown;
             }
             Recv::Nothing(_) | Recv::Closed => {}
             Recv::Unknown => unreachable!(),
         }
         res
+    }
+
+    pub fn dequeue_sync(&mut self) -> Recv<T> {
+        Self::log(ReceiverEvent::Recv(self.view_struct.channel_id));
+        if let Recv::Something(x) = &self.head {
+            let time = x.time;
+            let mut result = Recv::Unknown;
+            std::mem::swap(&mut self.head, &mut result);
+            self.register_recv(time);
+            return result;
+        }
+
+        if let Recv::Closed = self.head {
+            return Recv::Closed;
+        }
+
+        // At this point, we can just block!
+        match self.under().recv() {
+            Ok(ce) => {
+                self.register_recv(ce.time);
+                Recv::Something(ce)
+            }
+            Err(_) => {
+                self.head = Recv::Closed;
+                Recv::Closed
+            }
+        }
     }
 
     pub fn attach_receiver(&self, receiver: &dyn Context) {
