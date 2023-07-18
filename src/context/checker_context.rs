@@ -10,7 +10,7 @@ use super::Context;
 
 #[time_managed]
 #[identifiable]
-pub struct CheckerContext<T, IType, FType>
+pub struct CheckerContext<T: Clone, IType, FType>
 where
     IType: Iterator<Item = T>,
     FType: FnOnce() -> IType + Send + Sync,

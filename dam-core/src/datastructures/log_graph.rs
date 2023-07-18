@@ -13,7 +13,6 @@ use dashmap::{DashMap, DashSet};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    config::get_config,
     log_config::{get_log_info, LogInfo},
     metric::NODE,
     time::Time,
@@ -70,13 +69,6 @@ static INIT_TIME: OnceLock<Instant> = OnceLock::new();
 
 fn time_since_init() -> Duration {
     Instant::now() - *INIT_TIME.get_or_init(Instant::now)
-}
-
-static LOG_INFO: OnceLock<LogInfo> = OnceLock::new();
-fn get_base_policy() -> LogInfo {
-    LOG_INFO
-        .get_or_init(|| get_config().log_config.clone().try_into().unwrap())
-        .clone()
 }
 
 impl EventLogger {
@@ -227,12 +219,16 @@ impl LogGraph {
             }
             match self.child_parent_tree.get(&id) {
                 Some(parent) => id = parent.value().clone(),
-                None => return get_base_policy(),
+                None => return get_log_info(),
             }
         }
     }
 
     pub fn get_log(&self, key: LogType) -> EventLogger {
+        let full_path = self.get_log_path(key.id()).map(|p| {
+            create_dir_all(&p).unwrap();
+            p.join(key.to_path())
+        });
         let entry = self.loggers.entry(key.clone());
         let logger = entry.or_insert_with(|| {
             let policy = self.get_log_policy(key);
@@ -251,10 +247,6 @@ impl LogGraph {
                     };
                 }
             }
-            let full_path = self.get_log_path(key.id()).map(|p| {
-                create_dir_all(&p).unwrap();
-                p.join(key.to_path())
-            });
             let underlying = full_path
                 .map(|path| Arc::new(Mutex::new(BufWriter::new(File::create(path).unwrap()))));
             match underlying {
@@ -305,6 +297,7 @@ impl LogGraph {
     }
 
     pub fn drop_subgraph(&self, root: Identifier, time: Time) {
+        println!("Dropping Subgraph: {:?}", root);
         self.get_log(LogType::Base(root))
             .log(RegistryEvent::Cleaned(time_since_init().as_micros(), time));
         let can_drop = self.get_subgraph(root);
