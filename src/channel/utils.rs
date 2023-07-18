@@ -3,6 +3,7 @@ use dam_core::time::Time;
 use dam_core::TimeManager;
 
 use super::ChannelElement;
+use super::ChannelFlavor;
 use super::DequeueError;
 use super::EnqueueError;
 use super::Receiver;
@@ -43,6 +44,21 @@ pub fn dequeue<T: DAMType>(
     manager: &mut TimeManager,
     recv: &mut Receiver<T>,
 ) -> Result<ChannelElement<T>, DequeueError> {
+    if let ChannelFlavor::Acyclic = recv.view_struct.flavor {
+        match recv.dequeue_sync() {
+            Recv::Something(ce) => {
+                manager.advance(ce.time);
+                return Ok(ce);
+            }
+            Recv::Closed => return Err(DequeueError {}),
+            Recv::Nothing(_) | Recv::Unknown => {
+                unreachable!();
+            }
+        }
+    }
+
+    // Async dequeue
+
     loop {
         let v = recv.recv();
         match v {
@@ -74,7 +90,7 @@ pub fn peek_next<T: DAMType>(
                     Ok(data)
                 }
                 Recv::Closed => Err(DequeueError {}),
-                _ => todo!(),
+                _ => unreachable!(),
             }
         }
     }
