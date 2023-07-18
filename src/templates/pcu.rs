@@ -4,7 +4,7 @@ use crate::{
         ChannelElement, Receiver, Sender,
     },
     context::Context,
-    types::DAMType,
+    types::{Cleanable, DAMType},
 };
 
 use super::ops::{ALUOp, PipelineRegister};
@@ -88,7 +88,7 @@ type EgressOpType<ElementType> = fn(
 
 #[time_managed]
 #[identifiable]
-pub struct PCU<ElementType> {
+pub struct PCU<ElementType: Clone> {
     configuration: PCUConfig,
     registers: Vec<Vec<PipelineRegister<ElementType>>>,
 
@@ -214,7 +214,7 @@ impl<ElementType: DAMType> Context for PCU<ElementType> {
     #[cleanup(time_managed)]
     fn cleanup(&mut self) {
         self.input_channels.iter_mut().for_each(|chan| {
-            chan.close();
+            chan.cleanup();
         });
     }
 }

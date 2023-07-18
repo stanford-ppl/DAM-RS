@@ -94,12 +94,12 @@ impl<T: DAMType, IT: IndexLike, AT: DAMType> PMU<T, IT, AT> {
     }
 }
 
-pub struct PMUReadBundle<T, IT> {
+pub struct PMUReadBundle<T: Clone, IT: Clone> {
     pub addr: Receiver<IT>,
     pub resp: Sender<T>,
 }
 
-pub struct PMUWriteBundle<T, IT, AT> {
+pub struct PMUWriteBundle<T: Clone, IT: Clone, AT: Clone> {
     pub addr: Receiver<IT>,
     pub data: Receiver<T>,
     pub ack: Sender<AT>,

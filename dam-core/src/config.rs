@@ -28,8 +28,10 @@ impl Config {
 }
 
 pub fn get_config() -> Config {
+    println!("Getting Base Config {:?}", std::thread::current().id());
     DEFAULT_CONFIG
         .get_or_init(|| {
+            println!("Initializing Base Config {:?}", std::thread::current().id());
             let mut paths_to_check = vec![
                 // Check $HOME
                 home::home_dir(),
@@ -44,6 +46,7 @@ pub fn get_config() -> Config {
 
             let mut config = Config::default();
             for path in paths_to_check.iter().flat_map(|x| x) {
+                println!("Checking: {:?}", path);
                 let data = fs::read_to_string(path.join(FILE_NAME));
                 if let Ok(str) = data {
                     let read = toml::from_str::<Config>(&str);
@@ -53,7 +56,7 @@ pub fn get_config() -> Config {
                     }
                 }
             }
-
+            println!("Finished initializing base config");
             config
         })
         .clone()

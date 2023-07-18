@@ -10,7 +10,7 @@ use super::Context;
 
 #[identifiable]
 #[time_managed]
-pub struct GeneratorContext<T, IType, FType>
+pub struct GeneratorContext<T: Clone, IType, FType>
 where
     IType: Iterator<Item = T>,
     FType: FnOnce() -> IType + Send + Sync,
