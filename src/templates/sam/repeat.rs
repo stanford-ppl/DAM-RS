@@ -250,7 +250,7 @@ mod tests {
         channel::unbounded,
         context::{
             checker_context::CheckerContext, generator_context::GeneratorContext,
-            parent::BasicParentContext, Context, ParentContext,
+            parent::BasicParentContext, Context,
         },
         repsig_vec,
         templates::sam::primitive::Token,

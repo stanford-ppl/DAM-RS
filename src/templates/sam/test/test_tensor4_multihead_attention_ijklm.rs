@@ -7,7 +7,7 @@ mod tests {
     use crate::context::broadcast_context::BroadcastContext;
     use crate::context::generator_context::GeneratorContext;
     use crate::context::parent::BasicParentContext;
-    use crate::context::{Context, ParentContext};
+    use crate::context::Context;
     use crate::templates::ops::{ALUDivOp, ALUMulOp, ALUSubOp};
     use crate::templates::sam::accumulator::{MaxReduce, Reduce, ReduceData, Spacc1, Spacc1Data};
     use crate::templates::sam::alu::{make_alu, make_unary_alu};

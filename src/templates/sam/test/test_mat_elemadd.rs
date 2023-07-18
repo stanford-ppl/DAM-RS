@@ -6,7 +6,7 @@ mod tests {
     use crate::channel::{bounded, bounded_with_flavor, unbounded};
     use crate::context::generator_context::GeneratorContext;
     use crate::context::parent::BasicParentContext;
-    use crate::context::{Context, ParentContext};
+    use crate::context::Context;
     use crate::templates::ops::ALUAddOp;
     use crate::templates::sam::alu::make_alu;
     use crate::templates::sam::array::{Array, ArrayData};
