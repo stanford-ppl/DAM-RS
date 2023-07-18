@@ -3,10 +3,10 @@ mod tests {
 
     use std::{fs, path::Path};
 
-    use crate::channel::bounded;
+    use crate::channel::{bounded, bounded_with_flavor, unbounded};
     use crate::context::generator_context::GeneratorContext;
     use crate::context::parent::BasicParentContext;
-    use crate::context::{Context, ParentContext};
+    use crate::context::Context;
     use crate::templates::ops::ALUAddOp;
     use crate::templates::sam::alu::make_alu;
     use crate::templates::sam::array::{Array, ArrayData};
@@ -48,10 +48,14 @@ mod tests {
         let c1_crd = read_inputs::<u32>(&c1_crd_filename);
         let c_vals = read_inputs::<f32>(&c_vals_filename);
 
-        let chan_size = 8;
+        let chan_size = 16;
 
-        // let mk_bounded = || bounded_with_flavor::<Token<u32, u32>>(chan_size, Acyclic);
-        let mk_bounded = || bounded::<Token<u32, u32>>(chan_size);
+        let mk_bounded = || {
+            bounded_with_flavor::<Token<u32, u32>>(
+                chan_size,
+                crate::channel::ChannelFlavor::Acyclic,
+            )
+        };
 
         // fiberlookup_bi
         let (bi_out_ref_sender, bi_out_ref_receiver) = mk_bounded();

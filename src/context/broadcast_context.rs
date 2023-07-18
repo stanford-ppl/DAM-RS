@@ -73,7 +73,7 @@ mod tests {
         channel::bounded,
         context::{
             checker_context::CheckerContext, generator_context::GeneratorContext,
-            parent::BasicParentContext, Context, ParentContext,
+            parent::BasicParentContext, Context,
         },
     };
 

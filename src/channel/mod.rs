@@ -73,17 +73,17 @@ struct ViewStruct {
     pub views: RwLock<ViewData>,
 
     pub channel_id: ChannelID,
-    flavor: RwLock<ChannelFlavor>,
+    flavor: ChannelFlavor,
 
     current_send_receive_delta: AtomicUsize,
 }
 
 impl ViewStruct {
-    pub fn new() -> Self {
+    pub fn new(flavor: ChannelFlavor) -> Self {
         Self {
             views: Default::default(),
             channel_id: ChannelID::new(),
-            flavor: RwLock::new(ChannelFlavor::Unknown),
+            flavor,
             current_send_receive_delta: AtomicUsize::new(0),
         }
     }
@@ -462,8 +462,7 @@ where
 {
     let (tx, rx) = channel::bounded::<ChannelElement<T>>(capacity);
     let (resp_t, resp_r) = channel::bounded::<Time>(capacity);
-    let view_struct = Arc::new(ViewStruct::new());
-    *view_struct.flavor.write().unwrap() = flavor;
+    let view_struct = Arc::new(ViewStruct::new(flavor));
 
     let snd = Sender {
         underlying: SenderState::Open(tx),
@@ -488,7 +487,7 @@ where
 {
     let (tx, rx) = channel::unbounded::<ChannelElement<T>>();
     let (resp_t, resp_r) = channel::unbounded::<Time>();
-    let view_struct = Arc::new(ViewStruct::new());
+    let view_struct = Arc::new(ViewStruct::new(ChannelFlavor::Unknown));
     let snd = Sender {
         underlying: SenderState::Open(tx),
         resp: resp_r,
@@ -512,7 +511,7 @@ pub fn void<T: DAMType>() -> Sender<T> {
         resp: crossbeam::channel::never(),
         send_receive_delta: 0,
         capacity: usize::MAX,
-        view_struct: Arc::new(ViewStruct::new()),
+        view_struct: Arc::new(ViewStruct::new(ChannelFlavor::Unknown)),
         next_available: SendOptions::Unknown,
     }
 }

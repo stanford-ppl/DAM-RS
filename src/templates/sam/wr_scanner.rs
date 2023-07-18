@@ -169,9 +169,7 @@ where
 mod tests {
     use crate::{
         channel::unbounded,
-        context::{
-            generator_context::GeneratorContext, parent::BasicParentContext, Context, ParentContext,
-        },
+        context::{generator_context::GeneratorContext, parent::BasicParentContext, Context},
         templates::sam::primitive::Token,
     };
 
