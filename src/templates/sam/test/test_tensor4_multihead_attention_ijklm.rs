@@ -24,8 +24,8 @@ mod tests {
 
     #[test]
     fn test_multihead_attention() {
-        let test_name = "tensor4_fused_mul_T1";
-        // let test_name = "tensor4_mha";
+        // let test_name = "tensor4_fused_mul_T1";
+        let test_name = "tensor4_mha";
         let filename = home::home_dir().unwrap().join("sam_config.toml");
         let contents = fs::read_to_string(filename).unwrap();
         let data: Data = toml::from_str(&contents).unwrap();
@@ -91,9 +91,9 @@ mod tests {
         let v3_crd = read_inputs::<u32>(&v3_crd_filename);
         let v_vals = read_inputs::<f32>(&v_vals_filename);
 
-        let chan_size = 16;
+        let chan_size = 16000;
 
-        let mk_bounded = || bounded::<Token<u32, u32>>(chan_size);
+        let mk_bounded = || unbounded::<Token<u32, u32>>();
         let mk_boundedf = || bounded::<Token<f32, u32>>(chan_size);
 
         // fiberlookup_bi
