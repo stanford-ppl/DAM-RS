@@ -86,7 +86,7 @@ pub enum RegistryEvent {
     Cleaned(u128, Time),
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug)]
 pub struct LogGraph {
     // Maps children to their parents
     child_parent_tree: DashMap<Identifier, Identifier>,
@@ -106,6 +106,19 @@ pub struct LogGraph {
 }
 
 impl LogGraph {
+    pub fn new() -> Self {
+        const DEFAULT_CAPACITY: usize = 32;
+
+        Self {
+            child_parent_tree: DashMap::with_capacity(DEFAULT_CAPACITY),
+            parent_child_map: DashMap::with_capacity(DEFAULT_CAPACITY),
+            executor_map: DashMap::with_capacity(DEFAULT_CAPACITY),
+            logging_paths: DashMap::with_capacity(DEFAULT_CAPACITY),
+            all_identifiers: DashSet::with_capacity(DEFAULT_CAPACITY),
+            loggers: DashMap::with_capacity(DEFAULT_CAPACITY),
+        }
+    }
+
     pub fn add_id(&self, id: Identifier) {
         self.all_identifiers.insert(id);
     }
@@ -258,6 +271,12 @@ impl LogGraph {
         self.executor_map.retain(|_, v| !can_drop.contains(v));
         self.logging_paths.retain(|k, _| !can_drop.contains(k));
         self.loggers.retain(|k, _| !can_drop.contains(&k.id()));
+    }
+}
+
+impl Default for LogGraph {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
