@@ -35,7 +35,7 @@ macro_rules! RegisterArithmeticOp {
                         Token::Val(in1.$name(in2))
                     }
                     (Token::Stop(in1), Token::Stop(in2)) => {
-                        assert_eq!(in1, in2);
+                        assert_eq!(in1, in2, "Stop tokens must be the same");
                         Token::Stop(in1)
                     }
                     (Token::Done, Token::Done) | (Token::Empty, Token::Empty) => self,

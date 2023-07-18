@@ -8,23 +8,24 @@ mod tests {
     use crate::context::generator_context::GeneratorContext;
     use crate::context::parent::BasicParentContext;
     use crate::context::{Context, ParentContext};
-    use crate::templates::ops::ALUMulOp;
-    use crate::templates::sam::accumulator::{Reduce, ReduceData};
-    use crate::templates::sam::alu::make_alu;
+    use crate::templates::ops::{ALUDivOp, ALUMulOp, ALUSubOp};
+    use crate::templates::sam::accumulator::{MaxReduce, Reduce, ReduceData, Spacc1, Spacc1Data};
+    use crate::templates::sam::alu::{make_alu, make_unary_alu};
     use crate::templates::sam::array::{Array, ArrayData};
     use crate::templates::sam::joiner::{CrdJoinerData, Intersect};
-    use crate::templates::sam::primitive::{Repsiggen, Token};
+    use crate::templates::sam::primitive::{ALUExpOp, Repsiggen, Token};
     use crate::templates::sam::rd_scanner::{CompressedCrdRdScan, RdScanData};
     use crate::templates::sam::repeat::{RepSigGenData, Repeat, RepeatData, RepeatSigGen};
     use crate::templates::sam::test::config::Data;
     use crate::templates::sam::utils::read_inputs;
+    use crate::templates::sam::val_dropper::{ValDrop, ValDropData};
     use crate::templates::sam::wr_scanner::{CompressedWrScan, ValsWrScan, WrScanData};
     use crate::token_vec;
 
     #[test]
     fn test_multihead_attention() {
-        let test_name = "tensor4_fused_mul_T2";
-        // let test_name = "tensor4_mha";
+        // let test_name = "tensor4_fused_mul_T2";
+        let test_name = "tensor4_mha";
         let filename = home::home_dir().unwrap().join("sam_config.toml");
         let contents = fs::read_to_string(filename).unwrap();
         let data: Data = toml::from_str(&contents).unwrap();
@@ -181,8 +182,8 @@ mod tests {
 
         let (intersecti2_out_crd_sender, _intersecti2_out_crd_receiver) =
             bounded::<Token<u32, u32>>(chan_size);
-        let (intersecti2_out_ref1_sender, intersecti2_out_ref1_receiver) =
-            unbounded::<Token<u32, u32>>();
+        // let (intersecti2_out_ref1_sender, intersecti2_out_ref1_receiver) =
+        //     unbounded::<Token<u32, u32>>();
         let (intersecti2_out_ref2_sender, intersecti2_out_ref2_receiver) =
             bounded::<Token<u32, u32>>(chan_size);
         let intersecti2_data = CrdJoinerData::<u32, u32> {
@@ -191,13 +192,13 @@ mod tests {
             in_crd2: bc_intersecti_out_crd_receiver,
             in_ref2: intersecti_out_ref1_receiver,
             out_crd: intersecti2_out_crd_sender,
-            out_ref1: intersecti2_out_ref1_sender,
+            out_ref1: void(),
             out_ref2: intersecti2_out_ref2_sender,
         };
         let mut intersect_i2 = Intersect::new(intersecti2_data);
 
-        let (intersecti3_out_crd_sender, intersecti3_out_crd_receiver) =
-            unbounded::<Token<u32, u32>>();
+        // let (intersecti3_out_crd_sender, intersecti3_out_crd_receiver) =
+        //     unbounded::<Token<u32, u32>>();
         let (intersecti3_out_ref1_sender, intersecti3_out_ref1_receiver) =
             bounded::<Token<u32, u32>>(chan_size);
         let (intersecti3_out_ref2_sender, intersecti3_out_ref2_receiver) =
@@ -208,7 +209,7 @@ mod tests {
             in_ref1: bc1_ki_out_ref_receiver,
             in_crd2: bc1_intersecti_out_crd_receiver,
             in_ref2: intersecti_out_ref2_receiver,
-            out_crd: intersecti3_out_crd_sender,
+            out_crd: void(),
             out_ref1: intersecti3_out_ref1_sender,
             out_ref2: intersecti3_out_ref2_sender,
         };
@@ -243,8 +244,8 @@ mod tests {
 
         let (intersectj_out_crd_sender, intersectj_out_crd_receiver) =
             bounded::<Token<u32, u32>>(chan_size);
-        let (intersectj_out_ref1_sender, intersectj_out_ref1_receiver) =
-            unbounded::<Token<u32, u32>>();
+        // let (intersectj_out_ref1_sender, intersectj_out_ref1_receiver) =
+        //     unbounded::<Token<u32, u32>>();
         let (intersectj_out_ref2_sender, intersectj_out_ref2_receiver) =
             bounded::<Token<u32, u32>>(chan_size);
         let intersectj_data = CrdJoinerData::<u32, u32> {
@@ -253,7 +254,7 @@ mod tests {
             in_crd2: qj_out_crd_receiver,
             in_ref2: qj_out_ref_receiver,
             out_crd: intersectj_out_crd_sender,
-            out_ref1: intersectj_out_ref1_sender,
+            out_ref1: void(),
             out_ref2: intersectj_out_ref2_sender,
         };
         let mut intersect_j = Intersect::new(intersectj_data);
@@ -388,6 +389,16 @@ mod tests {
         };
         let mut kl_rdscanner = CompressedCrdRdScan::new(kl_data, k1_seg, k1_crd);
 
+        let (bc_kl_out_crd_sender, bc_kl_out_crd_receiver) = bounded::<Token<u32, u32>>(chan_size);
+        // let (bc1_kl_out_crd_sender, bc1_kl_out_crd_receiver) =
+        //     bounded::<Token<u32, u32>>(chan_size);
+        let (bc2_kl_out_crd_sender, bc2_kl_out_crd_receiver) =
+            bounded::<Token<u32, u32>>(chan_size);
+        let mut broadcast15 = BroadcastContext::new(kl_out_crd_receiver);
+        broadcast15.add_target(bc_kl_out_crd_sender);
+        // broadcast15.add_target(bc1_kl_out_crd_sender);
+        broadcast15.add_target(bc2_kl_out_crd_sender);
+
         let (vl_out_ref_sender, vl_out_ref_receiver) = bounded::<Token<u32, u32>>(chan_size);
         let (vl_out_crd_sender, vl_out_crd_receiver) = bounded::<Token<u32, u32>>(chan_size);
         let vl_data = RdScanData::<u32, u32> {
@@ -406,7 +417,7 @@ mod tests {
         let intersectl_data = CrdJoinerData::<u32, u32> {
             in_crd1: vl_out_crd_receiver,
             in_ref1: vl_out_ref_receiver,
-            in_crd2: kl_out_crd_receiver,
+            in_crd2: bc_kl_out_crd_receiver,
             in_ref2: kl_out_ref_receiver,
             out_crd: intersectl_out_crd_sender,
             out_ref1: intersectl_out_ref1_sender,
@@ -441,10 +452,12 @@ mod tests {
         let mut repsig_l = RepeatSigGen::new(repsig_l_data);
 
         let (bc_out_repsig_l_sender, bc_out_repsig_l_receiver) = bounded::<Repsiggen>(chan_size);
-        // let (bc1_out_repsig_l_sender, bc1_out_repsig_l_receiver) = bounded::<Repsiggen>(chan_size);
+        let (bc1_out_repsig_l_sender, bc1_out_repsig_l_receiver) = bounded::<Repsiggen>(chan_size);
+        let (bc2_out_repsig_l_sender, bc2_out_repsig_l_receiver) = bounded::<Repsiggen>(chan_size);
         let mut broadcast10 = BroadcastContext::new(out_repsig_l_receiver);
         broadcast10.add_target(bc_out_repsig_l_sender);
-        // broadcast10.add_target(bc1_out_repsig_l_sender);
+        broadcast10.add_target(bc1_out_repsig_l_sender);
+        broadcast10.add_target(bc2_out_repsig_l_sender);
 
         // repeat
         let (out_repeat_ql_sender, out_repeat_ql_receiver) = bounded::<Token<u32, u32>>(chan_size);
@@ -505,8 +518,8 @@ mod tests {
 
         let (intersectm2_out_crd_sender, _intersectm2_out_crd_receiver) =
             unbounded::<Token<u32, u32>>();
-        let (intersectm2_out_ref1_sender, intersectm2_out_ref1_receiver) =
-            unbounded::<Token<u32, u32>>();
+        // let (intersectm2_out_ref1_sender, intersectm2_out_ref1_receiver) =
+        //     unbounded::<Token<u32, u32>>();
         let (intersectm2_out_ref2_sender, intersectm2_out_ref2_receiver) =
             bounded::<Token<u32, u32>>(chan_size);
         let intersectm2_data = CrdJoinerData::<u32, u32> {
@@ -515,13 +528,14 @@ mod tests {
             in_crd2: bc_intersectm_out_crd_receiver,
             in_ref2: intersectm_out_ref1_receiver,
             out_crd: intersectm2_out_crd_sender,
-            out_ref1: intersectm2_out_ref1_sender,
+            out_ref1: void(),
             out_ref2: intersectm2_out_ref2_sender,
         };
         let mut intersect_m2 = Intersect::new(intersectm2_data);
 
         // TODO: Used later on in the code, change back to bounded
-        // let intersectm3_out_crd_sender = void::<Token<u32, u32>>();
+        let (intersectm3_out_crd_sender, intersectm3_out_crd_receiver) =
+            bounded::<Token<u32, u32>>(chan_size);
         // let (intersectm3_out_ref1_sender, intersectm3_out_ref1_receiver) =
         let (intersectm3_out_ref1_sender, intersectm3_out_ref1_receiver) =
             bounded::<Token<u32, u32>>(chan_size);
@@ -533,11 +547,19 @@ mod tests {
             in_ref1: bc1_km_out_ref_receiver,
             in_crd2: bc1_intersectm_out_crd_receiver,
             in_ref2: intersectm_out_ref2_receiver,
-            out_crd: void(),
+            out_crd: intersectm3_out_crd_sender,
             out_ref1: intersectm3_out_ref1_sender,
             out_ref2: intersectm3_out_ref2_sender,
         };
         let mut intersect_m3 = Intersect::new(intersectm3_data);
+
+        let (bc_intersectm3_out_crd_sender, bc_intersectm3_out_crd_receiver) =
+            bounded::<Token<u32, u32>>(chan_size);
+        let (bc1_intersectm3_out_crd_sender, bc1_intersectm3_out_crd_receiver) =
+            bounded::<Token<u32, u32>>(chan_size);
+        let mut broadcast16 = BroadcastContext::new(intersectm3_out_crd_receiver);
+        broadcast16.add_target(bc_intersectm3_out_crd_sender);
+        broadcast16.add_target(bc1_intersectm3_out_crd_sender);
 
         // arrayvals_q
         let (q_out_val_sender, q_out_val_receiver) = bounded::<Token<f32, u32>>(chan_size);
@@ -573,13 +595,6 @@ mod tests {
             ALUMulOp(),
         );
 
-        // fiberwrite_Xvals
-        let out_vals: Vec<f32> = Vec::new();
-        let xvals_data = WrScanData::<f32, u32> {
-            input: v_out_val_receiver,
-        };
-        let mut xvals = ValsWrScan::<f32, u32>::new(xvals_data, out_vals);
-
         // fiberwrite_X0
         // let x0_seg: Vec<u32> = Vec::new();
         // let x0_crd: Vec<u32> = Vec::new();
@@ -596,6 +611,141 @@ mod tests {
         };
         let mut red = Reduce::new(red_data);
 
+        let (bc_out_red_sender, bc_out_red_receiver) = unbounded::<Token<f32, u32>>();
+        let (bc1_out_red_sender, bc1_out_red_receiver) = unbounded::<Token<f32, u32>>();
+        let mut broadcast6 = BroadcastContext::new(red_out_receiver);
+        broadcast6.add_target(bc_out_red_sender);
+        broadcast6.add_target(bc1_out_red_sender);
+
+        // Max Reduce
+        let (max_out_val_sender, max_out_val_receiver) = unbounded::<Token<f32, u32>>();
+        let max_data = ReduceData::<f32, u32> {
+            in_val: bc_out_red_receiver,
+            out_val: max_out_val_sender,
+        };
+        let mut max_red = MaxReduce::new(max_data, f32::MIN);
+
+        let (rep_out_val_sender, rep_out_val_receiver) = unbounded::<Token<f32, u32>>();
+        let rep_data = RepeatData::<f32, u32> {
+            in_ref: max_out_val_receiver,
+            in_repsig: bc1_out_repsig_l_receiver,
+            out_ref: rep_out_val_sender,
+        };
+        let mut rep = Repeat::new(rep_data);
+
+        // Sub ALU, using Add name to correspond to SAM implementation
+        let (add_out_sender, add_out_receiver) = unbounded::<Token<f32, u32>>();
+        let mut add = make_alu(
+            bc1_out_red_receiver,
+            rep_out_val_receiver,
+            add_out_sender,
+            ALUSubOp(),
+        );
+
+        // Exp
+        let (exp_out_sender, exp_out_receiver) = unbounded::<Token<f32, u32>>();
+        let mut exp = make_unary_alu(add_out_receiver, exp_out_sender, ALUExpOp());
+
+        let (bc_exp_out_sender, bc_exp_out_receiver) = unbounded::<Token<f32, u32>>();
+        let (bc1_exp_out_sender, bc1_exp_out_receiver) = unbounded::<Token<f32, u32>>();
+        let mut broadcast14 = BroadcastContext::new(exp_out_receiver);
+        broadcast14.add_target(bc_exp_out_sender);
+        broadcast14.add_target(bc1_exp_out_sender);
+
+        // Reduce
+        let (red1_out_sender, red1_out_receiver) = unbounded::<Token<f32, u32>>();
+        let red1_data = ReduceData::<f32, u32> {
+            in_val: bc_exp_out_receiver,
+            out_val: red1_out_sender,
+        };
+        let mut red1 = Reduce::new(red1_data);
+
+        let (rep1_out_val_sender, rep1_out_val_receiver) = unbounded::<Token<f32, u32>>();
+        let rep1_data = RepeatData::<f32, u32> {
+            in_ref: red1_out_receiver,
+            in_repsig: bc2_out_repsig_l_receiver,
+            out_ref: rep1_out_val_sender,
+        };
+        let mut rep1 = Repeat::new(rep1_data);
+
+        // Div ALU
+        let (div_out_sender, div_out_receiver) = unbounded::<Token<f32, u32>>();
+        let mut div = make_alu(
+            bc1_exp_out_receiver,
+            rep1_out_val_receiver,
+            div_out_sender,
+            ALUDivOp(),
+        );
+
+        // let (out_drop_val_sender, out_drop_val_receiver) = unbounded::<Token<f32, u32>>();
+        // let (out_drop_crd_sender, out_drop_crd_receiver) = unbounded::<Token<u32, u32>>();
+
+        // let val_drop_data = ValDropData::<u32, f32, u32> {
+        //     in_val: div_out_receiver,
+        //     in_crd: bc1_kl_out_crd_receiver,
+        //     out_val: out_drop_val_sender,
+        //     out_crd: out_drop_crd_sender,
+        // };
+
+        // let mut val_drop = ValDrop::new(val_drop_data);
+
+        let (out_repsig_m_sender, out_repsig_m_receiver) = unbounded::<Repsiggen>();
+        let repsig_m_data = RepSigGenData::<u32, u32> {
+            input: bc_intersectm3_out_crd_receiver,
+            out_repsig: out_repsig_m_sender,
+        };
+        let mut repsigm = RepeatSigGen::new(repsig_m_data);
+
+        // let (bc_out_repsig_sender, bc_out_repsig_receiver) = unbounded::<Repsiggen>();
+        // let (bc1_out_repsig_sender, bc1_out_repsig_receiver) = unbounded::<Repsiggen>();
+        // let mut broadcast2 = BroadcastContext::new(out_repsig_receiver);
+        // broadcast2.add_target(bc_out_repsig_sender);
+        // broadcast2.add_target(bc1_out_repsig_sender);
+
+        let (rep_m_out_val_sender, rep_m_out_val_receiver) = unbounded::<Token<f32, u32>>();
+        let rep2_data = RepeatData::<f32, u32> {
+            // in_ref: out_drop_val_receiver,
+            in_ref: div_out_receiver,
+            in_repsig: out_repsig_m_receiver,
+            out_ref: rep_m_out_val_sender,
+        };
+        let mut rep_m = Repeat::new(rep2_data);
+
+        // mul ALU
+        let (mul2_out_sender, mul2_out_receiver) = bounded::<Token<f32, u32>>(chan_size);
+        let mut mul2 = make_alu(
+            rep_m_out_val_receiver,
+            v_out_val_receiver,
+            mul2_out_sender,
+            ALUMulOp(),
+        );
+
+        let (out_spacc_val_sender, out_spacc_val_receiver) = unbounded::<Token<f32, u32>>();
+        let (out_spacc_icrd_sender, out_spacc_icrd_receiver) = unbounded::<Token<u32, u32>>();
+        let spacc_data = Spacc1Data::<u32, f32, u32> {
+            in_crd_outer: bc2_kl_out_crd_receiver,
+            in_crd_inner: bc1_intersectm3_out_crd_receiver,
+            in_val: mul2_out_receiver,
+            out_val: out_spacc_val_sender,
+            out_crd_inner: out_spacc_icrd_sender,
+        };
+        let mut spacc = Spacc1::new(spacc_data);
+
+        // fiberwrite_X0
+        let x3_seg: Vec<u32> = Vec::new();
+        let x3_crd: Vec<u32> = Vec::new();
+        let x3_wrscanner_data = WrScanData::<u32, u32> {
+            input: out_spacc_icrd_receiver,
+        };
+        let mut x3_wrscanner = CompressedWrScan::new(x3_wrscanner_data, x3_seg, x3_crd);
+
+        // fiberwrite_Xvals
+        let out_vals: Vec<f32> = Vec::new();
+        let xvals_data = WrScanData::<f32, u32> {
+            input: out_spacc_val_receiver,
+        };
+        let mut xvals = ValsWrScan::<f32, u32>::new(xvals_data, out_vals);
+
         let mut parent = BasicParentContext::default();
         parent.add_child(&mut q_gen);
         parent.add_child(&mut k_gen);
@@ -609,7 +759,7 @@ mod tests {
         parent.add_child(&mut broadcast3);
         parent.add_child(&mut broadcast4);
         parent.add_child(&mut broadcast5);
-        // parent.add_child(&mut broadcast6);
+        parent.add_child(&mut broadcast6);
         parent.add_child(&mut broadcast7);
         parent.add_child(&mut broadcast8);
         parent.add_child(&mut broadcast9);
@@ -617,6 +767,9 @@ mod tests {
         parent.add_child(&mut broadcast11);
         parent.add_child(&mut broadcast12);
         parent.add_child(&mut broadcast13);
+        parent.add_child(&mut broadcast14);
+        parent.add_child(&mut broadcast15);
+        parent.add_child(&mut broadcast16);
         parent.add_child(&mut intersect_i);
         parent.add_child(&mut intersect_i2);
         parent.add_child(&mut intersect_i3);
@@ -645,7 +798,21 @@ mod tests {
         parent.add_child(&mut arrayvals_k);
         parent.add_child(&mut arrayvals_v);
         parent.add_child(&mut mul);
+        parent.add_child(&mut mul2);
         parent.add_child(&mut xvals);
+        parent.add_child(&mut red);
+        parent.add_child(&mut red1);
+        parent.add_child(&mut max_red);
+        parent.add_child(&mut rep);
+        parent.add_child(&mut add);
+        parent.add_child(&mut exp);
+        parent.add_child(&mut rep1);
+        parent.add_child(&mut div);
+        // parent.add_child(&mut val_drop);
+        parent.add_child(&mut repsigm);
+        parent.add_child(&mut rep_m);
+        parent.add_child(&mut spacc);
+        parent.add_child(&mut x3_wrscanner);
 
         parent.init();
         parent.run();
