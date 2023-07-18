@@ -226,7 +226,7 @@ mod tests {
         channel::bounded,
         context::{
             checker_context::CheckerContext, generator_context::GeneratorContext,
-            parent::BasicParentContext, Context, ParentContext,
+            parent::BasicParentContext, Context,
         },
         templates::ops::*,
     };
@@ -289,7 +289,7 @@ mod tests {
             pcu_out_recv,
         );
 
-        let mut parent = BasicParentContext::new();
+        let mut parent = BasicParentContext::default();
         parent.add_child(&mut gen1);
         parent.add_child(&mut gen2);
         parent.add_child(&mut gen3);

@@ -4,9 +4,7 @@ mod tests {
 
     use dam_rs::{
         channel::ChannelElement,
-        context::{
-            function_context::FunctionContext, parent::BasicParentContext, ParentContext, *,
-        },
+        context::{function_context::FunctionContext, parent::BasicParentContext, *},
     };
 
     use dam_rs::channel::Recv;
