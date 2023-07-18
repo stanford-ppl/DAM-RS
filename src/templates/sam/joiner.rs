@@ -82,14 +82,6 @@ where
         // let mut get_crd2: bool = false;
 
         loop {
-            // if get_crd1 == true {
-            //     dequeue(&mut self.time, &mut self.intersect_data.in_crd1).unwrap();
-            //     dequeue(&mut self.time, &mut self.intersect_data.in_ref1).unwrap();
-            // }
-            // if get_crd2 == true {
-            //     dequeue(&mut self.time, &mut self.intersect_data.in_crd2).unwrap();
-            //     dequeue(&mut self.time, &mut self.intersect_data.in_ref2).unwrap();
-            // }
             let crd1_deq = peek_next(&mut self.time, &mut self.intersect_data.in_crd1);
             let crd2_deq = peek_next(&mut self.time, &mut self.intersect_data.in_crd2);
             let ref1_deq = peek_next(&mut self.time, &mut self.intersect_data.in_ref1);
