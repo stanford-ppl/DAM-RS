@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     identifier::Identifier,
-    log_graph::get_graph,
+    log_graph::get_registry,
     metric::{LogProducer, METRICS},
     time::{AtomicTime, Time},
 };
@@ -79,12 +79,16 @@ impl TimeManager {
 
         drop(signal_buffer);
         if !released.is_empty() {
-            let graph = get_graph();
+            let graph = get_registry();
             Self::log(TimeEvent::ScanAndWrite(
                 tlb,
                 released
                     .into_iter()
-                    .map(|thr| graph.get_identifier(thr))
+                    .map(|thr| {
+                        graph
+                            .get_identifier(thr)
+                            .expect("Not all threads had registered identifiers!")
+                    })
                     .collect(),
             ));
         }

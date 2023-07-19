@@ -16,7 +16,7 @@ use crate::{
 
 use super::primitive::Token;
 
-pub struct ReduceData<ValType, StopType> {
+pub struct ReduceData<ValType: Clone, StopType: Clone> {
     pub in_val: Receiver<Token<ValType, StopType>>,
     pub out_val: Sender<Token<ValType, StopType>>,
 }
@@ -30,7 +30,7 @@ impl<ValType: DAMType, StopType: DAMType> Cleanable for ReduceData<ValType, Stop
 
 #[time_managed]
 #[identifiable]
-pub struct Reduce<ValType, StopType> {
+pub struct Reduce<ValType: Clone, StopType: Clone> {
     reduce_data: ReduceData<ValType, StopType>,
 }
 
@@ -121,7 +121,7 @@ where
     }
 }
 
-pub struct Spacc1Data<CrdType, ValType, StopType> {
+pub struct Spacc1Data<CrdType: Clone, ValType: Clone, StopType: Clone> {
     pub in_val: Receiver<Token<ValType, StopType>>,
     pub in_crd_outer: Receiver<Token<CrdType, StopType>>,
     pub in_crd_inner: Receiver<Token<CrdType, StopType>>,
@@ -143,7 +143,7 @@ impl<CrdType: DAMType, ValType: DAMType, StopType: DAMType> Cleanable
 
 #[time_managed]
 #[identifiable]
-pub struct Spacc1<CrdType, ValType, StopType> {
+pub struct Spacc1<CrdType: Clone, ValType: Clone, StopType: Clone> {
     spacc1_data: Spacc1Data<CrdType, ValType, StopType>,
 }
 
@@ -320,7 +320,7 @@ where
 
 #[time_managed]
 #[identifiable]
-pub struct MaxReduce<ValType, StopType> {
+pub struct MaxReduce<ValType: Clone, StopType: Clone> {
     max_reduce_data: ReduceData<ValType, StopType>,
     min_val: ValType,
 }

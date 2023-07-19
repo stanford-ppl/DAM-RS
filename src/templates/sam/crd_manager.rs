@@ -14,7 +14,7 @@ use crate::{
 
 use super::primitive::Token;
 
-pub struct CrdManagerData<ValType, StopType> {
+pub struct CrdManagerData<ValType: Clone, StopType: Clone> {
     pub in_crd_inner: Receiver<Token<ValType, StopType>>,
     pub in_crd_outer: Receiver<Token<ValType, StopType>>,
     pub out_crd_inner: Sender<Token<ValType, StopType>>,
@@ -32,7 +32,7 @@ impl<ValType: DAMType, StopType: DAMType> Cleanable for CrdManagerData<ValType, 
 
 #[time_managed]
 #[identifiable]
-pub struct CrdDrop<ValType, StopType> {
+pub struct CrdDrop<ValType: Clone, StopType: Clone> {
     crd_drop_data: CrdManagerData<ValType, StopType>,
 }
 
@@ -196,7 +196,7 @@ where
 
 #[time_managed]
 #[identifiable]
-pub struct CrdHold<ValType, StopType> {
+pub struct CrdHold<ValType: Clone, StopType: Clone> {
     crd_hold_data: CrdManagerData<ValType, StopType>,
 }
 

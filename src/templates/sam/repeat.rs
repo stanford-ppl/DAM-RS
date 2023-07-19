@@ -13,7 +13,7 @@ use crate::{
 
 use super::primitive::{Repsiggen, Token};
 
-pub struct RepeatData<ValType, StopType> {
+pub struct RepeatData<ValType: Clone, StopType: Clone> {
     pub in_ref: Receiver<Token<ValType, StopType>>,
     pub in_repsig: Receiver<Repsiggen>,
     pub out_ref: Sender<Token<ValType, StopType>>,
@@ -29,7 +29,7 @@ impl<ValType: DAMType, StopType: DAMType> Cleanable for RepeatData<ValType, Stop
 
 #[time_managed]
 #[identifiable]
-pub struct Repeat<ValType, StopType> {
+pub struct Repeat<ValType: Clone, StopType: Clone> {
     repeat_data: RepeatData<ValType, StopType>,
 }
 
@@ -140,7 +140,7 @@ where
     }
 }
 
-pub struct RepSigGenData<ValType, StopType> {
+pub struct RepSigGenData<ValType: Clone, StopType: Clone> {
     pub input: Receiver<Token<ValType, StopType>>,
     pub out_repsig: Sender<Repsiggen>,
 }
@@ -154,7 +154,7 @@ impl<ValType: DAMType, StopType: DAMType> Cleanable for RepSigGenData<ValType, S
 
 #[time_managed]
 #[identifiable]
-pub struct RepeatSigGen<ValType, StopType> {
+pub struct RepeatSigGen<ValType: Clone, StopType: Clone> {
     rep_sig_gen_data: RepSigGenData<ValType, StopType>,
 }
 

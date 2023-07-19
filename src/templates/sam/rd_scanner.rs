@@ -13,7 +13,7 @@ use crate::{
 
 use super::primitive::Token;
 
-pub struct RdScanData<ValType, StopType> {
+pub struct RdScanData<ValType: Clone, StopType: Clone> {
     pub in_ref: Receiver<Token<ValType, StopType>>,
     pub out_ref: Sender<Token<ValType, StopType>>,
     pub out_crd: Sender<Token<ValType, StopType>>,
@@ -29,14 +29,14 @@ impl<ValType: DAMType, StopType: DAMType> Cleanable for RdScanData<ValType, Stop
 
 #[time_managed]
 #[identifiable]
-pub struct UncompressedCrdRdScan<ValType, StopType> {
+pub struct UncompressedCrdRdScan<ValType: Clone, StopType: Clone> {
     rd_scan_data: RdScanData<ValType, StopType>,
     meta_dim: ValType,
 }
 
 #[time_managed]
 #[identifiable]
-pub struct CompressedCrdRdScan<ValType, StopType> {
+pub struct CompressedCrdRdScan<ValType: Clone, StopType: Clone> {
     rd_scan_data: RdScanData<ValType, StopType>,
     // meta_dim: ValType,
     seg_arr: Vec<ValType>,

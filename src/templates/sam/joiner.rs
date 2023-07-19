@@ -12,7 +12,7 @@ use crate::{
 
 use super::primitive::Token;
 
-pub struct CrdJoinerData<ValType, StopType> {
+pub struct CrdJoinerData<ValType: Clone, StopType: Clone> {
     pub in_crd1: Receiver<Token<ValType, StopType>>,
     pub in_ref1: Receiver<Token<ValType, StopType>>,
     pub in_crd2: Receiver<Token<ValType, StopType>>,
@@ -36,7 +36,7 @@ impl<ValType: DAMType, StopType: DAMType> Cleanable for CrdJoinerData<ValType, S
 
 #[time_managed]
 #[identifiable]
-pub struct Intersect<ValType, StopType> {
+pub struct Intersect<ValType: Clone, StopType: Clone> {
     intersect_data: CrdJoinerData<ValType, StopType>,
 }
 
@@ -243,7 +243,7 @@ where
 
 #[time_managed]
 #[identifiable]
-pub struct Union<ValType, StopType> {
+pub struct Union<ValType: Clone, StopType: Clone> {
     union_data: CrdJoinerData<ValType, StopType>,
 }
 

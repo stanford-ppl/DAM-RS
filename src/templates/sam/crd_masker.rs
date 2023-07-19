@@ -14,7 +14,7 @@ use dam_macros::cleanup;
 use dam_macros::identifiable;
 use dam_macros::time_managed;
 
-pub struct CrdMaskData<ValType, StopType> {
+pub struct CrdMaskData<ValType: Clone, StopType: Clone> {
     pub in_crd_inner: Receiver<Token<ValType, StopType>>,
     pub in_crd_outer: Receiver<Token<ValType, StopType>>,
     pub out_crd_inner: Sender<Token<ValType, StopType>>,
@@ -36,7 +36,7 @@ impl<ValType: DAMType, StopType: DAMType> Cleanable for CrdMaskData<ValType, Sto
 
 #[time_managed]
 #[identifiable]
-pub struct CrdMask<ValType, StopType> {
+pub struct CrdMask<ValType: Clone, StopType: Clone> {
     crd_mask_data: CrdMaskData<ValType, StopType>,
     predicate: fn(Token<ValType, StopType>, Token<ValType, StopType>) -> bool,
 }

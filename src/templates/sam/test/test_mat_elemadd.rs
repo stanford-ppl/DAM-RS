@@ -20,7 +20,7 @@ mod tests {
 
     #[test]
     fn test_mat_elemadd() {
-        let test_name = "mat_elemadd";
+        let test_name = "mat_elemadd2";
         let filename = home::home_dir().unwrap().join("sam_config.toml");
         let contents = fs::read_to_string(filename).unwrap();
         let data: Data = toml::from_str(&contents).unwrap();

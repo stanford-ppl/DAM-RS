@@ -12,7 +12,7 @@ use crate::{
 
 use super::primitive::Token;
 
-pub struct ArrayData<RefType, ValType, StopType> {
+pub struct ArrayData<RefType: Clone, ValType: Clone, StopType: Clone> {
     pub in_ref: Receiver<Token<RefType, StopType>>,
     pub out_val: Sender<Token<ValType, StopType>>,
 }
@@ -28,7 +28,7 @@ impl<RefType: DAMType, ValType: DAMType, StopType: DAMType> Cleanable
 
 #[time_managed]
 #[identifiable]
-pub struct Array<RefType, ValType, StopType> {
+pub struct Array<RefType: Clone, ValType: Clone, StopType: Clone> {
     array_data: ArrayData<RefType, ValType, StopType>,
     val_arr: Vec<ValType>,
 }

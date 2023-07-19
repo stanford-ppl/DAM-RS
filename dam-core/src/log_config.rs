@@ -14,14 +14,9 @@ pub struct LogInfo {
 
 static LOG_INFO: OnceLock<LogInfo> = OnceLock::new();
 pub fn get_log_info() -> LogInfo {
-    println!("Getting Log info: {:?}", std::thread::current().id());
     let result = LOG_INFO
-        .get_or_init(|| {
-            println!("Initializing config!: {:?}", std::thread::current().id());
-            get_config().log_config.clone().into()
-        })
+        .get_or_init(|| get_config().log_config.clone().into())
         .clone();
-    println!("Received Log Info: {:?}", std::thread::current().id());
     result
 }
 

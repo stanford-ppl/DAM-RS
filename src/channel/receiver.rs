@@ -6,7 +6,7 @@ use dam_core::{time::Time, TimeManager};
 use dam_macros::log_producer;
 use enum_dispatch::enum_dispatch;
 
-use crate::{context::Context, types::DAMType};
+use crate::{context::Context};
 
 use super::{events::ReceiverEvent, view_struct::ViewStruct, ChannelElement, Recv};
 

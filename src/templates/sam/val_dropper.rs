@@ -13,7 +13,7 @@ use crate::{
 
 use super::primitive::Token;
 
-pub struct ValDropData<CrdType, ValType, StopType> {
+pub struct ValDropData<CrdType: Clone, ValType: Clone, StopType: Clone> {
     pub in_val: Receiver<Token<ValType, StopType>>,
     pub in_crd: Receiver<Token<CrdType, StopType>>,
     pub out_val: Sender<Token<ValType, StopType>>,
@@ -33,7 +33,7 @@ impl<CrdType: DAMType, ValType: DAMType, StopType: DAMType> Cleanable
 
 #[time_managed]
 #[identifiable]
-pub struct ValDrop<CrdType, ValType, StopType> {
+pub struct ValDrop<CrdType: Clone, ValType: Clone, StopType: Clone> {
     val_drop_data: ValDropData<CrdType, ValType, StopType>,
 }
 

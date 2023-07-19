@@ -9,7 +9,7 @@ use crate::{
 
 use super::primitive::Token;
 
-pub struct WrScanData<ValType, StopType> {
+pub struct WrScanData<ValType: Clone, StopType: Clone> {
     pub input: Receiver<Token<ValType, StopType>>,
 }
 
@@ -21,7 +21,7 @@ impl<ValType: DAMType, StopType: DAMType> Cleanable for WrScanData<ValType, Stop
 
 #[time_managed]
 #[identifiable]
-pub struct CompressedWrScan<ValType, StopType> {
+pub struct CompressedWrScan<ValType: Clone, StopType: Clone> {
     wr_scan_data: WrScanData<ValType, StopType>,
     pub seg_arr: Vec<ValType>,
     pub crd_arr: Vec<ValType>,
@@ -106,7 +106,7 @@ where
 
 #[time_managed]
 #[identifiable]
-pub struct ValsWrScan<ValType, StopType> {
+pub struct ValsWrScan<ValType: Clone, StopType: Clone> {
     vals_data: WrScanData<ValType, StopType>,
     pub out_val: Vec<ValType>,
 }
