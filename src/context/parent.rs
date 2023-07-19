@@ -1,3 +1,5 @@
+use dam_core::identifier::Identifiable;
+use dam_core::log_graph::with_log_scope;
 use dam_core::{
     log_graph::{get_log, RegistryEvent},
     metric::NODE,
@@ -28,20 +30,29 @@ impl<'a> Context for BasicParentContext<'a> {
     }
 
     fn run(&mut self) {
-        self.register();
-        std::thread::scope(|s| {
-            self.children.iter_mut().for_each(|child| {
-                let id = child.id();
-                let name = child.name();
-                get_log(NODE).log(RegistryEvent::WithChild(child.id(), child.name()));
-                std::thread::Builder::new()
-                    .name(format!("{}({})", child.id(), child.name()))
-                    .spawn_scoped(s, || {
-                        child.register();
-                        child.run();
-                        child.cleanup();
-                    })
-                    .expect(format!("Failed to spawn child {name:?} {id:?}").as_str());
+        with_log_scope(self.id(), self.name(), || {
+            let parent_id = self.id();
+            let parent_name = self.name();
+            std::thread::scope(|s| {
+                self.children.iter_mut().for_each(|child| {
+                    let id = child.id();
+                    let name = child.name();
+                    get_log(NODE).log(RegistryEvent::WithChild(
+                        parent_id,
+                        parent_name.clone(),
+                        child.id(),
+                        child.name(),
+                    ));
+                    std::thread::Builder::new()
+                        .name(format!("{}({})", child.id(), child.name()))
+                        .spawn_scoped(s, || {
+                            with_log_scope(child.id(), child.name(), || {
+                                child.run();
+                                child.cleanup();
+                            });
+                        })
+                        .expect(format!("Failed to spawn child {name:?} {id:?}").as_str());
+                });
             });
         });
     }
@@ -52,7 +63,9 @@ impl<'a> Context for BasicParentContext<'a> {
             .iter()
             .map(|child| child.view().tick_lower_bound())
             .max();
-        get_log(NODE).log(RegistryEvent::Cleaned(finish_time.unwrap_or(Time::new(0))))
+        with_log_scope(self.id(), self.name(), || {
+            get_log(NODE).log(RegistryEvent::Cleaned(finish_time.unwrap_or(Time::new(0))));
+        });
     }
 }
 

@@ -4,7 +4,6 @@ pub use channel_id::*;
 
 mod events;
 
-
 mod flavors;
 pub use flavors::*;
 
@@ -20,9 +19,12 @@ use crate::types::DAMType;
 use crossbeam::channel;
 use dam_core::*;
 
+use dam_core::metric::LogProducer;
 use dam_core::time::Time;
 use dam_macros::log_producer;
 
+use self::events::ReceiverEvent;
+use self::events::SendEvent;
 use self::receiver::AcyclicReceiver;
 use self::receiver::CyclicReceiver;
 use self::receiver::{ReceiverFlavor, ReceiverImpl};
@@ -58,14 +60,17 @@ pub enum Recv<T> {
 #[log_producer]
 pub struct Sender<T: Clone> {
     underlying: SenderImpl<T>,
+    id: ChannelID,
 }
 
 impl<T: DAMType> Sender<T> {
     pub fn attach_sender(&self, sender: &dyn Context) {
+        Self::log(SendEvent::AttachSender(self.id, sender.id()));
         self.underlying.attach_sender(sender);
     }
 
     pub fn try_send(&mut self, data: ChannelElement<T>) -> Result<(), SendOptions> {
+        Self::log(SendEvent::TrySend(self.id));
         self.underlying.try_send(data)
     }
 
@@ -74,7 +79,10 @@ impl<T: DAMType> Sender<T> {
         manager: &mut TimeManager,
         data: ChannelElement<T>,
     ) -> Result<(), EnqueueError> {
-        self.underlying.enqueue(manager, data)
+        Self::log(SendEvent::EnqueueStart(self.id));
+        let res = self.underlying.enqueue(manager, data);
+        Self::log(SendEvent::EnqueueFinish(self.id));
+        res
     }
 }
 
@@ -82,24 +90,34 @@ impl<T: Clone> Cleanable for Sender<T> {
     fn cleanup(&mut self) {}
 }
 
+#[log_producer]
 pub struct Receiver<T: Clone> {
     underlying: ReceiverImpl<T>,
+    id: ChannelID,
 }
 
 impl<T: DAMType> Receiver<T> {
     pub fn attach_receiver(&self, receiver: &dyn Context) {
+        Self::log(ReceiverEvent::AttachReceiver(self.id, receiver.id()));
         self.underlying.attach_receiver(receiver)
     }
 
     pub fn peek(&mut self) -> Recv<T> {
+        Self::log(ReceiverEvent::Peek(self.id));
         self.underlying.peek()
     }
     pub fn peek_next(&mut self, manager: &mut TimeManager) -> Recv<T> {
-        self.underlying.peek_next(manager)
+        Self::log(ReceiverEvent::PeekNextStart(self.id));
+        let result = self.underlying.peek_next(manager);
+        Self::log(ReceiverEvent::PeekNextFinish(self.id));
+        result
     }
 
     pub fn dequeue(&mut self, manager: &mut TimeManager) -> Recv<T> {
-        self.underlying.dequeue(manager)
+        Self::log(ReceiverEvent::DequeueStart(self.id));
+        let result = self.underlying.dequeue(manager);
+        Self::log(ReceiverEvent::DequeueFinish(self.id));
+        result
     }
 }
 
@@ -121,6 +139,7 @@ where
     let (tx, rx) = channel::bounded::<ChannelElement<T>>(capacity);
     let (resp_t, resp_r) = channel::bounded::<Time>(capacity);
     let view_struct = Arc::new(ViewStruct::new(flavor));
+    let id = ChannelID::new();
     match flavor {
         ChannelFlavor::Unknown | ChannelFlavor::Cyclic => {
             let snd = Sender {
@@ -133,6 +152,7 @@ where
                     next_available: SendOptions::Unknown,
                 }
                 .into(),
+                id,
             };
 
             let rcv = Receiver {
@@ -143,6 +163,7 @@ where
                     head: Recv::Unknown,
                 }
                 .into(),
+                id,
             };
             (snd, rcv)
         }
@@ -157,6 +178,7 @@ where
                     next_available: SendOptions::Unknown,
                 }
                 .into(),
+                id,
             };
 
             let rcv = Receiver {
@@ -167,6 +189,7 @@ where
                     head: Recv::Unknown,
                 }
                 .into(),
+                id,
             };
             (snd, rcv)
         }
@@ -182,6 +205,7 @@ where {
     let (tx, rx) = channel::unbounded::<ChannelElement<T>>();
     let (resp_t, resp_r) = channel::unbounded::<Time>();
     let view_struct = Arc::new(ViewStruct::new(flavor));
+    let id = ChannelID::new();
     match flavor {
         ChannelFlavor::Unknown | ChannelFlavor::Cyclic => {
             let snd = Sender {
@@ -194,6 +218,7 @@ where {
                     next_available: SendOptions::Unknown,
                 }
                 .into(),
+                id,
             };
 
             let rcv = Receiver {
@@ -204,6 +229,7 @@ where {
                     head: Recv::Unknown,
                 }
                 .into(),
+                id,
             };
             (snd, rcv)
         }
@@ -218,6 +244,7 @@ where {
                     next_available: SendOptions::Unknown,
                 }
                 .into(),
+                id,
             };
 
             let rcv = Receiver {
@@ -228,6 +255,7 @@ where {
                     head: Recv::Unknown,
                 }
                 .into(),
+                id,
             };
             (snd, rcv)
         }
@@ -237,6 +265,7 @@ where {
 pub fn void<T: Clone>() -> Sender<T> {
     Sender {
         underlying: VoidSender::<T>::default().into(),
+        id: ChannelID::new(),
     }
 }
 

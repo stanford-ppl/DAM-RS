@@ -4,7 +4,7 @@ use dam_core::{time::Time, ContextView, TimeView};
 
 use crate::context::Context;
 
-use super::{ChannelFlavor, ChannelID};
+use super::ChannelFlavor;
 
 type ViewType = Option<TimeView>;
 
@@ -16,8 +16,6 @@ struct ViewData {
 
 pub(crate) struct ViewStruct {
     views: RwLock<ViewData>,
-
-    pub channel_id: ChannelID,
     flavor: ChannelFlavor,
 
     current_send_receive_delta: AtomicUsize,
@@ -27,7 +25,6 @@ impl ViewStruct {
     pub fn new(flavor: ChannelFlavor) -> Self {
         Self {
             views: Default::default(),
-            channel_id: ChannelID::new(),
             flavor,
             current_send_receive_delta: AtomicUsize::new(0),
         }
