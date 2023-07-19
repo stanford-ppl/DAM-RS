@@ -3,6 +3,8 @@ mod tests {
 
     use std::{fs, path::Path};
 
+    use dam_core::{ContextView, TimeViewable};
+
     use crate::channel::{bounded, unbounded, void};
     use crate::context::broadcast_context::BroadcastContext;
     use crate::context::generator_context::GeneratorContext;
@@ -743,7 +745,8 @@ mod tests {
         parent.run();
         parent.cleanup();
         // let fil = formatted_dir.to_str().unwrap();
-        dbg!(xvals.out_val);
+        // dbg!(xvals.out_val);
+        dbg!(xvals.view().tick_lower_bound());
     }
 
     #[test]

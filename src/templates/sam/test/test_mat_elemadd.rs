@@ -48,14 +48,9 @@ mod tests {
         let c1_crd = read_inputs::<u32>(&c1_crd_filename);
         let c_vals = read_inputs::<f32>(&c_vals_filename);
 
-        let chan_size = 16;
+        let chan_size = 4096;
 
-        let mk_bounded = || {
-            bounded_with_flavor::<Token<u32, u32>>(
-                chan_size,
-                crate::channel::ChannelFlavor::Acyclic,
-            )
-        };
+        let mk_bounded = || bounded::<Token<u32, u32>>(chan_size);
 
         // fiberlookup_bi
         let (bi_out_ref_sender, bi_out_ref_receiver) = mk_bounded();
