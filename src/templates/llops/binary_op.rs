@@ -28,6 +28,7 @@ mod tests {
         assert_eq!(test_add(a, b), c);
     }
 
+    #[test]
     fn generator_checker_test() {
         /*
            gen1 |arg1_send ... arg1_recv| checker
