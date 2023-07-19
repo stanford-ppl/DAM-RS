@@ -1,21 +1,13 @@
-use std::{
-    marker::PhantomData,
-    sync::{Arc},
-};
+use std::{marker::PhantomData, sync::Arc};
 
 use crossbeam::channel;
 use dam_core::{time::Time, TimeManager};
 use dam_macros::log_producer;
 use enum_dispatch::enum_dispatch;
 
-use crate::{context::Context};
+use crate::context::Context;
 
-use super::{
-    events::SendEvent, view_struct::ViewStruct, ChannelElement,
-    EnqueueError,
-};
-
-use dam_core::metric::LogProducer;
+use super::{view_struct::ViewStruct, ChannelElement, EnqueueError};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum SendOptions {
@@ -107,8 +99,6 @@ impl<T: Clone> SenderFlavor<T> for CyclicSender<T> {
         self.under_send(elem).unwrap();
         self.send_receive_delta += 1;
 
-        Self::log(SendEvent::Send(self.view_struct.channel_id));
-
         Ok(())
     }
 
@@ -155,10 +145,6 @@ impl<T> CyclicSender<T> {
             return false;
         }
         self.update_len();
-        Self::log(SendEvent::Len(
-            self.view_struct.channel_id,
-            self.send_receive_delta,
-        ));
 
         self.send_receive_delta == self.capacity
     }
@@ -169,12 +155,6 @@ impl<T> CyclicSender<T> {
         self.next_available = SendOptions::Unknown;
 
         let real_srd = self.view_struct.current_srd();
-        if real_srd > self.send_receive_delta {
-            println!(
-                "Channel: {:?} Real SRD: {real_srd:?}, current SRD: {:?}",
-                self.view_struct.channel_id, self.send_receive_delta
-            );
-        }
         assert!(real_srd <= self.send_receive_delta);
         let srd_diff = self.send_receive_delta - real_srd;
 
