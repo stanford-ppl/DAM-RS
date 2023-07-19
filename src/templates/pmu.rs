@@ -11,7 +11,8 @@ use crate::{
 
 use dam_core::{
     identifier::{Identifiable, Identifier},
-    log_graph::get_graph,
+    log_graph::{get_log, RegistryEvent},
+    metric::NODE,
     time::Time,
     ContextView, ParentView, TimeManaged, TimeView, TimeViewable,
 };
@@ -79,9 +80,9 @@ impl<T: DAMType, IT: IndexLike, AT: DAMType> PMU<T, IT, AT> {
             identifier: Identifier::new(),
         };
         pmu.reader.writer_view = Some(pmu.writer.view());
-        let mut handle = get_graph().register_handle(pmu.id());
-        handle.add_child(pmu.reader.id());
-        handle.add_child(pmu.writer.id());
+        let log = &get_log(NODE);
+        log.log(RegistryEvent::WithChild(pmu.reader.id(), pmu.reader.name()));
+        log.log(RegistryEvent::WithChild(pmu.writer.id(), pmu.writer.name()));
         pmu
     }
 

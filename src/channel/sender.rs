@@ -1,17 +1,17 @@
 use std::{
     marker::PhantomData,
-    sync::{atomic::AtomicUsize, Arc, RwLock},
+    sync::{Arc},
 };
 
 use crossbeam::channel;
-use dam_core::{time::Time, ContextView, TimeManager, TimeView};
+use dam_core::{time::Time, TimeManager};
 use dam_macros::log_producer;
 use enum_dispatch::enum_dispatch;
 
-use crate::{context::Context, types::DAMType};
+use crate::{context::Context};
 
 use super::{
-    events::SendEvent, view_struct::ViewStruct, ChannelElement, ChannelFlavor, ChannelID,
+    events::SendEvent, view_struct::ViewStruct, ChannelElement,
     EnqueueError,
 };
 
