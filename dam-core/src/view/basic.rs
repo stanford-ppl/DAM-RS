@@ -110,8 +110,23 @@ pub struct BasicContextView {
     under: Arc<TimeInfo>,
 }
 
+impl LogProducer for BasicContextView {
+    const LOG_NAME: &'static str = "BasicContextView";
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub enum ContextViewEvent {
+    WaitUntil(Time),
+    Park,
+    Unpark,
+}
+
+#[distributed_slice(METRICS)]
+static CONTEXTVIEW_NAME: &'static str = "BasicContextView";
 impl ContextView for BasicContextView {
     fn wait_until(&self, when: Time) -> Time {
+        Self::log(ContextViewEvent::WaitUntil(when));
+
         // Check time first. Since time is non-decreasing, if this cond is true, then it's always true.
         let cur_time = self.under.time.load();
         if cur_time >= when {
@@ -132,9 +147,11 @@ impl ContextView for BasicContextView {
             // Unlock the signal buffer
             drop(signal_buffer);
 
+            Self::log(ContextViewEvent::Park);
             while !done.load(std::sync::atomic::Ordering::Acquire) {
                 std::thread::park();
             }
+            Self::log(ContextViewEvent::Unpark);
 
             return self.under.time.load();
         }
