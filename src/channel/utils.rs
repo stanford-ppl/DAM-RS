@@ -2,21 +2,15 @@ use crate::types::DAMType;
 use dam_core::time::Time;
 use dam_core::TimeManager;
 
-use super::ChannelElement;
-use super::DequeueError;
-use super::EnqueueError;
-use super::Receiver;
-use super::Recv;
-use super::SendOptions;
-use super::Sender;
+use super::*;
 
 use std::cmp::Ordering;
 
-pub struct RecvBundle<T> {
+pub struct RecvBundle<T: DAMType> {
     receivers: Vec<Receiver<T>>,
 }
 
-pub struct SendBundle<T> {
+pub struct SendBundle<T: DAMType> {
     senders: Vec<Sender<T>>,
 }
 
@@ -43,17 +37,10 @@ pub fn dequeue<T: DAMType>(
     manager: &mut TimeManager,
     recv: &mut Receiver<T>,
 ) -> Result<ChannelElement<T>, DequeueError> {
-    loop {
-        let v = recv.recv();
-        match v {
-            Recv::Nothing(time) => manager.advance(time + 1), // Nothing here, so tick forward until there might be
-            Recv::Closed => return Err(DequeueError {}), // Channel is closed, so let the dequeuer know
-            Recv::Something(stuff) => {
-                manager.advance(stuff.time);
-                return Ok(stuff);
-            }
-            Recv::Unknown => panic!("Can't receive an Unknown!"),
-        }
+    match recv.dequeue(manager) {
+        Recv::Something(ce) => Ok(ce),
+        Recv::Closed => Err(DequeueError {}),
+        _ => unreachable!(),
     }
 }
 
@@ -61,17 +48,10 @@ pub fn peek_next<T: DAMType>(
     manager: &mut TimeManager,
     recv: &mut Receiver<T>,
 ) -> Result<ChannelElement<T>, DequeueError> {
-    loop {
-        let v: Recv<T> = recv.peek();
-        match v {
-            Recv::Nothing(time) => manager.advance(time + 1), // Nothing here, so tick forward until there might be
-            Recv::Closed => return Err(DequeueError {}), // Channel is closed, so let the dequeuer know
-            Recv::Something(stuff) => {
-                manager.advance(stuff.time);
-                return Ok(stuff);
-            }
-            Recv::Unknown => panic!("Can't peek_next an unknown!"),
-        }
+    match recv.peek_next(manager) {
+        Recv::Something(ce) => Ok(ce),
+        Recv::Closed => Err(DequeueError {}),
+        Recv::Unknown | Recv::Nothing(_) => unreachable!(),
     }
 }
 
@@ -102,25 +82,7 @@ pub fn enqueue<T: DAMType>(
     send: &mut Sender<T>,
     data: ChannelElement<T>,
 ) -> Result<(), EnqueueError> {
-    let mut data_copy = data.clone();
-    loop {
-        data_copy.update_time(manager.tick() + 1);
-        let v = send.send(data_copy.clone());
-        match v {
-            Ok(()) => return Ok(()),
-            Err(SendOptions::Never) => {
-                return Err(EnqueueError {});
-            }
-            Err(SendOptions::CheckBackAt(time)) | Err(SendOptions::AvailableAt(time)) => {
-                // Have to make sure that we're making progress
-                assert!(time > manager.tick());
-                manager.advance(time);
-            }
-            Err(SendOptions::Unknown) => {
-                unreachable!("We should always know when to try again!")
-            }
-        }
-    }
+    send.enqueue(manager, data)
 }
 
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]

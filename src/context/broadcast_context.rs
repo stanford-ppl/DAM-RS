@@ -13,7 +13,7 @@ use super::Context;
 
 #[time_managed]
 #[identifiable]
-pub struct BroadcastContext<T> {
+pub struct BroadcastContext<T: Clone> {
     receiver: Receiver<T>,
     targets: Vec<Sender<T>>,
 }
@@ -73,7 +73,7 @@ mod tests {
         channel::bounded,
         context::{
             checker_context::CheckerContext, generator_context::GeneratorContext,
-            parent::BasicParentContext, Context, ParentContext,
+            parent::BasicParentContext, Context,
         },
     };
 

@@ -14,9 +14,10 @@ pub struct LogInfo {
 
 static LOG_INFO: OnceLock<LogInfo> = OnceLock::new();
 pub fn get_log_info() -> LogInfo {
-    LOG_INFO
+    let result = LOG_INFO
         .get_or_init(|| get_config().log_config.clone().into())
-        .clone()
+        .clone();
+    result
 }
 
 // The "ALL" string is special in that it either includes or excludes everything.
@@ -84,7 +85,6 @@ impl From<LogConfig> for LogInfo {
             all_options.filter(|(_, v)| if let Value::Boolean(x) = v { *x } else { false });
 
         let include = HashSet::from_iter(filtered.map(|(k, _)| k));
-
         Self {
             path: value.path.map(PathBuf::from),
             include,

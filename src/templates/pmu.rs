@@ -11,7 +11,8 @@ use crate::{
 
 use dam_core::{
     identifier::{Identifiable, Identifier},
-    log_graph::get_graph,
+    log_graph::{get_log, with_log_scope, RegistryEvent},
+    metric::NODE,
     time::Time,
     ContextView, ParentView, TimeManaged, TimeView, TimeViewable,
 };
@@ -34,14 +35,16 @@ impl<T: DAMType, IT: IndexLike, AT: DAMType> Context for PMU<T, IT, AT> {
     fn run(&mut self) {
         std::thread::scope(|s| {
             s.spawn(|| {
-                self.reader.register();
-                self.reader.run();
-                self.reader.cleanup();
+                with_log_scope(self.reader.id(), self.reader.name(), || {
+                    self.reader.run();
+                    self.reader.cleanup();
+                });
             });
             s.spawn(|| {
-                self.writer.register();
-                self.writer.run();
-                self.writer.cleanup();
+                with_log_scope(self.writer.id(), self.writer.name(), || {
+                    self.writer.run();
+                    self.writer.cleanup();
+                });
             });
         });
     }
@@ -79,9 +82,22 @@ impl<T: DAMType, IT: IndexLike, AT: DAMType> PMU<T, IT, AT> {
             identifier: Identifier::new(),
         };
         pmu.reader.writer_view = Some(pmu.writer.view());
-        let mut handle = get_graph().register_handle(pmu.id());
-        handle.add_child(pmu.reader.id());
-        handle.add_child(pmu.writer.id());
+        with_log_scope(pmu.id(), pmu.name(), || {
+            let log = &get_log(NODE);
+            log.log(RegistryEvent::WithChild(
+                pmu.id(),
+                pmu.name(),
+                pmu.reader.id(),
+                pmu.reader.name(),
+            ));
+            log.log(RegistryEvent::WithChild(
+                pmu.id(),
+                pmu.name(),
+                pmu.writer.id(),
+                pmu.writer.name(),
+            ));
+        });
+
         pmu
     }
 
@@ -94,12 +110,12 @@ impl<T: DAMType, IT: IndexLike, AT: DAMType> PMU<T, IT, AT> {
     }
 }
 
-pub struct PMUReadBundle<T, IT> {
+pub struct PMUReadBundle<T: Clone, IT: Clone> {
     pub addr: Receiver<IT>,
     pub resp: Sender<T>,
 }
 
-pub struct PMUWriteBundle<T, IT, AT> {
+pub struct PMUWriteBundle<T: Clone, IT: Clone, AT: Clone> {
     pub addr: Receiver<IT>,
     pub data: Receiver<T>,
     pub ack: Sender<AT>,
@@ -282,7 +298,6 @@ mod tests {
         context::{
             checker_context::CheckerContext, function_context::FunctionContext,
             generator_context::GeneratorContext, parent::BasicParentContext, Context,
-            ParentContext,
         },
         templates::{
             datastore::Behavior,

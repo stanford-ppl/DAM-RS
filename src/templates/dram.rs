@@ -22,13 +22,13 @@ pub struct DRAMConfig {
     capacity: usize,
 }
 
-pub struct DRAMReadBundle<IT, DT> {
+pub struct DRAMReadBundle<IT: Clone, DT: Clone> {
     addr: Receiver<IT>,
     req_size: Receiver<IT>,
     data: Sender<DT>,
 }
 
-impl<IT, DT> Cleanable for DRAMReadBundle<IT, DT> {
+impl<IT: Clone, DT: Clone> Cleanable for DRAMReadBundle<IT, DT> {
     fn cleanup(&mut self) {
         self.addr.cleanup();
         self.req_size.cleanup();
@@ -36,7 +36,7 @@ impl<IT, DT> Cleanable for DRAMReadBundle<IT, DT> {
     }
 }
 
-impl<IT: DAMType, DT> Peekable for DRAMReadBundle<IT, DT> {
+impl<IT: DAMType, DT: Clone> Peekable for DRAMReadBundle<IT, DT> {
     fn next_event(&mut self) -> crate::channel::utils::EventTime {
         [self.addr.next_event(), self.req_size.next_event()]
             .into_iter()
@@ -45,14 +45,14 @@ impl<IT: DAMType, DT> Peekable for DRAMReadBundle<IT, DT> {
     }
 }
 
-pub struct DRAMWriteBundle<IT: DAMType, DT: DAMType, AT> {
+pub struct DRAMWriteBundle<IT: DAMType, DT: DAMType, AT: Clone> {
     addr: Receiver<IT>,
     request_size: Receiver<IT>,
     data: Receiver<DT>,
     ack: Sender<AT>,
 }
 
-impl<IT: DAMType, DT: DAMType, AT> Cleanable for DRAMWriteBundle<IT, DT, AT> {
+impl<IT: DAMType, DT: DAMType, AT: Clone> Cleanable for DRAMWriteBundle<IT, DT, AT> {
     fn cleanup(&mut self) {
         self.addr.cleanup();
         self.data.cleanup();
@@ -61,7 +61,7 @@ impl<IT: DAMType, DT: DAMType, AT> Cleanable for DRAMWriteBundle<IT, DT, AT> {
     }
 }
 
-impl<IT: DAMType, DT: DAMType, AT> Peekable for DRAMWriteBundle<IT, DT, AT> {
+impl<IT: DAMType, DT: DAMType, AT: Clone> Peekable for DRAMWriteBundle<IT, DT, AT> {
     fn next_event(&mut self) -> crate::channel::utils::EventTime {
         [
             self.addr.next_event(),
@@ -74,12 +74,12 @@ impl<IT: DAMType, DT: DAMType, AT> Peekable for DRAMWriteBundle<IT, DT, AT> {
     }
 }
 
-enum AccessBundle<IT: DAMType, DT: DAMType, AT> {
+enum AccessBundle<IT: DAMType, DT: DAMType, AT: Clone> {
     Write(DRAMWriteBundle<IT, DT, AT>),
     Read(DRAMReadBundle<IT, DT>),
 }
 
-impl<IT: DAMType, DT: DAMType, AT> Peekable for AccessBundle<IT, DT, AT> {
+impl<IT: DAMType, DT: DAMType, AT: Clone> Peekable for AccessBundle<IT, DT, AT> {
     fn next_event(&mut self) -> crate::channel::utils::EventTime {
         match self {
             AccessBundle::Write(wr) => wr.next_event(),
@@ -88,7 +88,7 @@ impl<IT: DAMType, DT: DAMType, AT> Peekable for AccessBundle<IT, DT, AT> {
     }
 }
 
-impl<IT: DAMType, DT: DAMType, AT> Cleanable for AccessBundle<IT, DT, AT> {
+impl<IT: DAMType, DT: DAMType, AT: Clone> Cleanable for AccessBundle<IT, DT, AT> {
     fn cleanup(&mut self) {
         match self {
             AccessBundle::Write(wr) => wr.cleanup(),
@@ -204,7 +204,10 @@ impl<IType: IndexLike, T: DAMType, AT: DAMType> Context for DRAM<IType, T, AT> {
                     request_size,
                     data,
                     ack,
-                }) => match (addr.recv(), request_size.recv()) {
+                }) => match (
+                    addr.dequeue(&mut self.time),
+                    request_size.dequeue(&mut self.time),
+                ) {
                     // This should be the only matched case since we waited for the events to show up.
                     (
                         Recv::Something(ChannelElement {
@@ -267,7 +270,10 @@ impl<IType: IndexLike, T: DAMType, AT: DAMType> Context for DRAM<IType, T, AT> {
                     addr,
                     req_size,
                     data,
-                }) => match (addr.recv(), req_size.recv()) {
+                }) => match (
+                    addr.dequeue(&mut self.time),
+                    req_size.dequeue(&mut self.time),
+                ) {
                     (
                         Recv::Something(ChannelElement {
                             time: _,
@@ -327,7 +333,6 @@ pub mod tests {
         context::{
             checker_context::CheckerContext, function_context::FunctionContext,
             generator_context::GeneratorContext, parent::BasicParentContext, Context,
-            ParentContext,
         },
         templates::{
             datastore::Behavior,

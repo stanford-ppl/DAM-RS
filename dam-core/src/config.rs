@@ -53,7 +53,6 @@ pub fn get_config() -> Config {
                     }
                 }
             }
-
             config
         })
         .clone()

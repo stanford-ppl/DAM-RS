@@ -128,13 +128,11 @@ pub struct AtomicTime {
 impl AtomicTime {
     const UPDATE_ORDERING: std::sync::atomic::Ordering = std::sync::atomic::Ordering::AcqRel;
 
-    // Relaxed is fine since updates are AcqRel
     pub fn load(&self) -> Time {
         let time = self.time.load(std::sync::atomic::Ordering::Relaxed);
         let done = self.done.load(std::sync::atomic::Ordering::Relaxed);
         Time { time, done }
     }
-
     pub fn set_infinite(&self) {
         self.done.fetch_or(true, Self::UPDATE_ORDERING);
     }

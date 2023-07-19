@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     identifier::Identifier,
-    log_graph::get_graph,
+    log_graph::get_registry,
     metric::{LogProducer, METRICS},
     time::{AtomicTime, Time},
 };
@@ -40,11 +40,11 @@ impl TimeManager {
 }
 
 impl LogProducer for TimeManager {
-    const LOG_NAME: &'static str = "time_manager";
+    const LOG_NAME: &'static str = "TimeManager";
 }
 
 #[distributed_slice(METRICS)]
-static TIMEMANAGER_NAME: &'static str = "time_manager";
+static TIMEMANAGER_NAME: &'static str = "TimeManager";
 
 impl TimeManager {
     pub fn incr_cycles(&mut self, incr: u64) {
@@ -79,12 +79,16 @@ impl TimeManager {
 
         drop(signal_buffer);
         if !released.is_empty() {
-            let graph = get_graph();
+            let graph = get_registry();
             Self::log(TimeEvent::ScanAndWrite(
                 tlb,
                 released
                     .into_iter()
-                    .map(|thr| graph.get_identifier(thr))
+                    .map(|thr| {
+                        graph
+                            .get_identifier(thr)
+                            .expect("Not all threads had registered identifiers!")
+                    })
                     .collect(),
             ));
         }
@@ -106,8 +110,23 @@ pub struct BasicContextView {
     under: Arc<TimeInfo>,
 }
 
+impl LogProducer for BasicContextView {
+    const LOG_NAME: &'static str = "BasicContextView";
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub enum ContextViewEvent {
+    WaitUntil(Time),
+    Park,
+    Unpark,
+}
+
+#[distributed_slice(METRICS)]
+static CONTEXTVIEW_NAME: &'static str = "BasicContextView";
 impl ContextView for BasicContextView {
     fn wait_until(&self, when: Time) -> Time {
+        Self::log(ContextViewEvent::WaitUntil(when));
+
         // Check time first. Since time is non-decreasing, if this cond is true, then it's always true.
         let cur_time = self.under.time.load();
         if cur_time >= when {
@@ -128,9 +147,11 @@ impl ContextView for BasicContextView {
             // Unlock the signal buffer
             drop(signal_buffer);
 
+            Self::log(ContextViewEvent::Park);
             while !done.load(std::sync::atomic::Ordering::Acquire) {
                 std::thread::park();
             }
+            Self::log(ContextViewEvent::Unpark);
 
             return self.under.time.load();
         }

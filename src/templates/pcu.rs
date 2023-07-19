@@ -4,7 +4,7 @@ use crate::{
         ChannelElement, Receiver, Sender,
     },
     context::Context,
-    types::DAMType,
+    types::{Cleanable, DAMType},
 };
 
 use super::ops::{ALUOp, PipelineRegister};
@@ -88,7 +88,7 @@ type EgressOpType<ElementType> = fn(
 
 #[time_managed]
 #[identifiable]
-pub struct PCU<ElementType> {
+pub struct PCU<ElementType: Clone> {
     configuration: PCUConfig,
     registers: Vec<Vec<PipelineRegister<ElementType>>>,
 
@@ -214,7 +214,7 @@ impl<ElementType: DAMType> Context for PCU<ElementType> {
     #[cleanup(time_managed)]
     fn cleanup(&mut self) {
         self.input_channels.iter_mut().for_each(|chan| {
-            chan.close();
+            chan.cleanup();
         });
     }
 }
@@ -223,10 +223,10 @@ impl<ElementType: DAMType> Context for PCU<ElementType> {
 mod tests {
 
     use crate::{
-        channel::{bounded_with_flavor},
+        channel::bounded,
         context::{
             checker_context::CheckerContext, generator_context::GeneratorContext,
-            parent::BasicParentContext, Context, ParentContext,
+            parent::BasicParentContext, Context,
         },
         templates::ops::*,
     };
@@ -236,24 +236,22 @@ mod tests {
     #[test]
     fn pcu_test() {
         // two-stage PCU on scalars, with the third stage a no-op.
-        type T = u32;
+
         const CHAN_SIZE: usize = 8;
-        const TEST_ITERATIONS: T = 8192;
+        let ingress_op = PCU::<u16>::READ_ALL_INPUTS;
+        let egress_op = PCU::<u16>::WRITE_ALL_RESULTS;
 
-        let mk_chan =
-            || bounded_with_flavor::<T>(CHAN_SIZE, crate::channel::ChannelFlavor::Acyclic);
-
-        let mut pcu = PCU::<T>::new(
+        let mut pcu = PCU::<u16>::new(
             super::PCUConfig {
                 pipeline_depth: 3,
                 num_registers: 3,
             },
-            PCU::READ_ALL_INPUTS,
-            PCU::WRITE_ALL_RESULTS,
+            ingress_op,
+            egress_op,
         );
 
         pcu.push_stage(super::PipelineStage {
-            op: ALUMulOp::<T>(),
+            op: ALUMulOp::<u16>(),
             forward: vec![(2, 1)],
             prev_register_ids: vec![0, 1],
             next_register_ids: vec![],
@@ -261,42 +259,37 @@ mod tests {
         });
 
         pcu.push_stage(super::PipelineStage {
-            op: ALUAddOp::<T>(),
+            op: ALUAddOp::<u16>(),
             forward: vec![],
             prev_register_ids: vec![0, 1],
             next_register_ids: vec![],
             output_register_ids: vec![0],
         });
 
-        let (arg1_send, arg1_recv) = mk_chan();
-        let (arg2_send, arg2_recv) = mk_chan();
-        let (arg3_send, arg3_recv) = mk_chan();
-        let (pcu_out_send, pcu_out_recv) = mk_chan();
+        let (arg1_send, arg1_recv) = bounded::<u16>(CHAN_SIZE);
+        let (arg2_send, arg2_recv) = bounded::<u16>(CHAN_SIZE);
+        let (arg3_send, arg3_recv) = bounded::<u16>(CHAN_SIZE);
+        let (pcu_out_send, pcu_out_recv) = bounded::<u16>(CHAN_SIZE);
 
         pcu.add_input_channel(arg1_recv);
         pcu.add_input_channel(arg2_recv);
         pcu.add_input_channel(arg3_recv);
         pcu.add_output_channel(pcu_out_send);
 
-        // 0..test_iterations
-        // test_iterations .. 2*test_iterations
-        // 2*test_iterations .. 3*test_iterations
-        let mut gen1 = GeneratorContext::new(|| (0..TEST_ITERATIONS), arg1_send);
-        let mut gen2 =
-            GeneratorContext::new(|| (TEST_ITERATIONS..(2 * TEST_ITERATIONS)), arg2_send);
-        let mut gen3 =
-            GeneratorContext::new(|| ((2 * TEST_ITERATIONS)..(3 * TEST_ITERATIONS)), arg3_send);
+        let mut gen1 = GeneratorContext::new(|| (0u16..32), arg1_send);
+        let mut gen2 = GeneratorContext::new(|| (33u16..64), arg2_send);
+        let mut gen3 = GeneratorContext::new(|| (65u16..96), arg3_send);
         let mut checker = CheckerContext::new(
             || {
-                (0..TEST_ITERATIONS)
-                    .zip(TEST_ITERATIONS..(2 * TEST_ITERATIONS))
-                    .zip((2 * TEST_ITERATIONS)..(3 * TEST_ITERATIONS))
+                (0u16..32)
+                    .zip(33u16..64)
+                    .zip(65u16..96)
                     .map(|((a, b), c)| (a * b) + c)
             },
             pcu_out_recv,
         );
 
-        let mut parent = BasicParentContext::new();
+        let mut parent = BasicParentContext::default();
         parent.add_child(&mut gen1);
         parent.add_child(&mut gen2);
         parent.add_child(&mut gen3);

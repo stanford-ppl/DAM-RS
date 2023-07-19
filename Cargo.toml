@@ -13,8 +13,12 @@ ntest = "0.9.0"
 enum_delegate = "0.2.0"
 dam-macros = { version = "0.1.0", path = "dam-macros" }
 dam-core = { version = "0.1.0", path = "dam-core" }
+linkme = "0.3.12"
+serde = "1.0.171"
+serde_json = "1.0.103"
+enum_dispatch = "0.3.12"
 
 [profile.release-with-debug]
 inherits = "release"
-debug = true
+debug = 1
 lto = "thin"
