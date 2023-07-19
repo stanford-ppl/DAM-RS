@@ -1,4 +1,4 @@
-use dam_core::{identifier::Identifiable, log_graph::get_graph, TimeViewable};
+use dam_core::{identifier::Identifiable, log_graph::get_registry, TimeViewable};
 
 pub mod broadcast_context;
 pub mod checker_context;
@@ -12,6 +12,6 @@ pub trait Context: Send + Sync + TimeViewable + Identifiable {
     fn cleanup(&mut self);
 
     fn register(&self) {
-        get_graph().register(self.id(), self.name());
+        get_registry().register(self.id(), self.name());
     }
 }

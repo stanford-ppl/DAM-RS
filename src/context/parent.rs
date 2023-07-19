@@ -1,5 +1,8 @@
 use dam_core::{
-    identifier::Identifiable, log_graph::get_graph, ContextView, ParentView, TimeView, TimeViewable,
+    log_graph::{get_log, RegistryEvent},
+    metric::NODE,
+    time::Time,
+    ContextView, ParentView, TimeView, TimeViewable,
 };
 use dam_macros::identifiable;
 
@@ -15,8 +18,6 @@ pub struct BasicParentContext<'a> {
 
 impl<'a> BasicParentContext<'a> {
     pub fn add_child(&mut self, child: &'a mut ChildType) {
-        let mut handle = get_graph().register_handle(self.id());
-        handle.add_child(child.id());
         self.children.push(child);
     }
 }
@@ -27,10 +28,12 @@ impl<'a> Context for BasicParentContext<'a> {
     }
 
     fn run(&mut self) {
+        self.register();
         std::thread::scope(|s| {
             self.children.iter_mut().for_each(|child| {
                 let id = child.id();
                 let name = child.name();
+                get_log(NODE).log(RegistryEvent::WithChild(child.id(), child.name()));
                 std::thread::Builder::new()
                     .name(format!("{}({})", child.id(), child.name()))
                     .spawn_scoped(s, || {
@@ -44,7 +47,12 @@ impl<'a> Context for BasicParentContext<'a> {
     }
 
     fn cleanup(&mut self) {
-        get_graph().drop_subgraph(self.id(), self.view().tick_lower_bound());
+        let finish_time = self
+            .children
+            .iter()
+            .map(|child| child.view().tick_lower_bound())
+            .max();
+        get_log(NODE).log(RegistryEvent::Cleaned(finish_time.unwrap_or(Time::new(0))))
     }
 }
 

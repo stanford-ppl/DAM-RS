@@ -3,7 +3,7 @@ pub mod utils;
 pub use channel_id::*;
 
 mod events;
-use events::*;
+
 
 mod flavors;
 pub use flavors::*;
