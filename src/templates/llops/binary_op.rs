@@ -1,9 +1,13 @@
 use ndarray::{ArrayBase, Dim, OwnedRepr};
 
-pub fn test_add(
-    arg1: ArrayBase<OwnedRepr<i32>, Dim<[usize; 2]>>,
-    arg2: ArrayBase<OwnedRepr<i32>, Dim<[usize; 2]>>,
-) -> ArrayBase<OwnedRepr<i32>, Dim<[usize; 2]>> {
+pub fn test_add<A: Clone + Send + Sync>(
+    arg1: ArrayBase<OwnedRepr<A>, Dim<[usize; 2]>>,
+    arg2: ArrayBase<OwnedRepr<A>, Dim<[usize; 2]>>,
+) -> ArrayBase<OwnedRepr<A>, Dim<[usize; 2]>>
+where
+    ArrayBase<OwnedRepr<A>, Dim<[usize; 2]>>:
+        std::ops::Add<Output = ArrayBase<OwnedRepr<A>, Dim<[usize; 2]>>>,
+{
     arg1 + arg2
 }
 
