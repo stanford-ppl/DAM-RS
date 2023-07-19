@@ -28,6 +28,8 @@ pub trait SenderFlavor<T> {
         manager: &mut TimeManager,
         data: ChannelElement<T>,
     ) -> Result<(), EnqueueError>;
+
+    fn cleanup(&mut self);
 }
 
 #[enum_dispatch]
@@ -65,6 +67,8 @@ impl<T> SenderFlavor<T> for VoidSender<T> {
     ) -> Result<(), EnqueueError> {
         Ok(())
     }
+
+    fn cleanup(&mut self) {} // Nothing to clean up either.
 }
 
 pub(super) enum SenderState<T> {
@@ -126,6 +130,10 @@ impl<T: Clone> SenderFlavor<T> for CyclicSender<T> {
                 }
             }
         }
+    }
+
+    fn cleanup(&mut self) {
+        self.underlying = SenderState::Closed;
     }
 }
 

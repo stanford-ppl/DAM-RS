@@ -87,7 +87,9 @@ impl<T: DAMType> Sender<T> {
 }
 
 impl<T: Clone> Cleanable for Sender<T> {
-    fn cleanup(&mut self) {}
+    fn cleanup(&mut self) {
+        self.underlying.cleanup();
+    }
 }
 
 #[log_producer]
@@ -122,7 +124,9 @@ impl<T: DAMType> Receiver<T> {
 }
 
 impl<T: Clone> Cleanable for Receiver<T> {
-    fn cleanup(&mut self) {}
+    fn cleanup(&mut self) {
+        self.underlying.cleanup();
+    }
 }
 
 pub fn bounded<T>(capacity: usize) -> (Sender<T>, Receiver<T>)
