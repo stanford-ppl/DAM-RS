@@ -1,7 +1,8 @@
 use std::{
     cell::RefCell,
-    collections::HashMap,
+    collections::{hash_map::DefaultHasher, HashMap},
     fs::{create_dir_all, File},
+    hash::{Hash, Hasher},
     io::{BufWriter, Write},
     path::PathBuf,
     sync::{Arc, Mutex, OnceLock},
@@ -66,12 +67,11 @@ impl EventLogger {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum RegistryEvent {
     // Registers the name of this node
-    Created(String),
+    ScopeStart(Identifier, String),
+    ScopeEnd(Identifier, String),
 
     // Registers a child
-    WithChild(Identifier, String),
-
-    Executing(String),
+    WithChild(Identifier, String, Identifier, String),
 
     Cleaned(Time),
 }
@@ -85,13 +85,12 @@ impl GlobalExecutionRegistry {
         self.registry.get(&thread).map(|x| x.value().clone())
     }
 
-    pub fn register(&self, id: Identifier, name: String) {
-        let current = std::thread::current().id();
-        if self.registry.contains_key(&current) {
-            return;
-        }
-        self.registry.insert(std::thread::current().id(), id);
-        set_task(id, name);
+    pub fn register(&self, id: Identifier) -> Option<Identifier> {
+        self.registry.insert(std::thread::current().id(), id)
+    }
+
+    pub fn unregister(&self) {
+        self.registry.remove(&std::thread::current().id());
     }
 }
 
@@ -102,10 +101,16 @@ pub fn get_registry() -> &'static GlobalExecutionRegistry {
     })
 }
 
+fn thread_id_to_u64(tid: ThreadId) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    tid.hash(&mut hasher);
+    hasher.finish()
+}
+
 // Each thread tracks its own logs.
 #[derive(Debug)]
 pub struct ThreadLocalLog {
-    logs: HashMap<&'static str, EventLogger>,
+    logs: HashMap<(&'static str, Option<Identifier>), EventLogger>,
     current_context: Option<Identifier>,
 }
 
@@ -118,22 +123,27 @@ impl ThreadLocalLog {
     }
 
     pub fn get_log(&mut self, key: &'static str) -> EventLogger {
-        match self.logs.get(key) {
+        let lookup_key = &(key, self.current_context);
+        match self.logs.get(lookup_key) {
             Some(log) => log.clone(),
             None => {
-                let new_log = self.make_log(key);
-                self.logs.insert(key, new_log.clone());
+                let new_log = Self::make_log(key, self.current_context);
+                self.logs.insert(*lookup_key, new_log.clone());
                 new_log
             }
         }
     }
 
-    fn make_log(&self, key: &'static str) -> EventLogger {
+    fn make_log(key: &'static str, context: Option<Identifier>) -> EventLogger {
         let policy = get_log_info();
         let log = if policy.include.contains(key) {
+            let thread_hash = thread_id_to_u64(std::thread::current().id());
             let underlying: Option<Arc<Mutex<BufWriter<File>>>> = policy.path.map(|path| {
                 create_dir_all(&path).unwrap();
-                let suffix = format!("{}_{key}.json", self.current_context.unwrap());
+                let suffix = match context {
+                    Some(ctx) => format!("{}_{key}_{thread_hash}.json", ctx),
+                    None => format!("NoCtx_{key}_{thread_hash}.json"),
+                };
                 let full_path = path.join(PathBuf::from(suffix));
                 Arc::new(Mutex::new(BufWriter::new(File::create(full_path).unwrap())))
             });
@@ -163,11 +173,18 @@ pub fn get_log(key: &'static str) -> EventLogger {
     LOGS.with(|local_logs| local_logs.borrow_mut().get_log(key))
 }
 
-pub fn set_task(id: Identifier, name: String) {
-    LOGS.with(|local_logs| local_logs.borrow_mut().current_context = Some(id));
-    get_log(NODE).log(RegistryEvent::Created(name));
-    get_log(NODE).log(RegistryEvent::Created(format!(
-        "{:?}",
-        std::thread::current().id()
-    )));
+pub fn with_log_scope<F: FnOnce()>(id: Identifier, name: String, closure: F) {
+    let ident_opt = Some(id);
+    LOGS.with(|local_logs| {
+        let mut ctx = ident_opt;
+        std::mem::swap(&mut local_logs.borrow_mut().current_context, &mut ctx);
+        let old_id = get_registry().register(id);
+        get_log(NODE).log(RegistryEvent::ScopeStart(id, name.clone()));
+        closure();
+        get_log(NODE).log(RegistryEvent::ScopeEnd(id, name));
+        if let Some(old) = old_id {
+            get_registry().register(old);
+        }
+        std::mem::swap(&mut local_logs.borrow_mut().current_context, &mut ctx);
+    })
 }

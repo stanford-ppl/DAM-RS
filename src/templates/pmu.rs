@@ -11,7 +11,7 @@ use crate::{
 
 use dam_core::{
     identifier::{Identifiable, Identifier},
-    log_graph::{get_log, RegistryEvent},
+    log_graph::{get_log, with_log_scope, RegistryEvent},
     metric::NODE,
     time::Time,
     ContextView, ParentView, TimeManaged, TimeView, TimeViewable,
@@ -35,14 +35,16 @@ impl<T: DAMType, IT: IndexLike, AT: DAMType> Context for PMU<T, IT, AT> {
     fn run(&mut self) {
         std::thread::scope(|s| {
             s.spawn(|| {
-                self.reader.register();
-                self.reader.run();
-                self.reader.cleanup();
+                with_log_scope(self.reader.id(), self.reader.name(), || {
+                    self.reader.run();
+                    self.reader.cleanup();
+                });
             });
             s.spawn(|| {
-                self.writer.register();
-                self.writer.run();
-                self.writer.cleanup();
+                with_log_scope(self.writer.id(), self.writer.name(), || {
+                    self.writer.run();
+                    self.writer.cleanup();
+                });
             });
         });
     }
@@ -80,9 +82,22 @@ impl<T: DAMType, IT: IndexLike, AT: DAMType> PMU<T, IT, AT> {
             identifier: Identifier::new(),
         };
         pmu.reader.writer_view = Some(pmu.writer.view());
-        let log = &get_log(NODE);
-        log.log(RegistryEvent::WithChild(pmu.reader.id(), pmu.reader.name()));
-        log.log(RegistryEvent::WithChild(pmu.writer.id(), pmu.writer.name()));
+        with_log_scope(pmu.id(), pmu.name(), || {
+            let log = &get_log(NODE);
+            log.log(RegistryEvent::WithChild(
+                pmu.id(),
+                pmu.name(),
+                pmu.reader.id(),
+                pmu.reader.name(),
+            ));
+            log.log(RegistryEvent::WithChild(
+                pmu.id(),
+                pmu.name(),
+                pmu.writer.id(),
+                pmu.writer.name(),
+            ));
+        });
+
         pmu
     }
 

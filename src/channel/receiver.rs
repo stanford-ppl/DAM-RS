@@ -1,14 +1,14 @@
 use std::sync::Arc;
 
 use crossbeam::channel;
-use dam_core::metric::LogProducer;
+
 use dam_core::{time::Time, TimeManager};
-use dam_macros::log_producer;
+
 use enum_dispatch::enum_dispatch;
 
-use crate::{context::Context};
+use crate::context::Context;
 
-use super::{events::ReceiverEvent, view_struct::ViewStruct, ChannelElement, Recv};
+use super::{view_struct::ViewStruct, ChannelElement, Recv};
 
 pub(super) enum ReceiverState<T> {
     Open(channel::Receiver<T>),
@@ -29,7 +29,6 @@ pub(super) enum ReceiverImpl<T: Clone> {
     AcyclicReceiver(AcyclicReceiver<T>),
 }
 
-#[log_producer]
 pub(super) struct CyclicReceiver<T> {
     pub(super) underlying: ReceiverState<ChannelElement<T>>,
     pub(super) resp: channel::Sender<Time>,
@@ -44,7 +43,6 @@ impl<T: Clone> ReceiverFlavor<T> for CyclicReceiver<T> {
     }
 
     fn peek(&mut self) -> Recv<T> {
-        Self::log(ReceiverEvent::Peek(self.view_struct.channel_id));
         let recv_time = self.view_struct.receiver_tlb();
         match self.head {
             Recv::Nothing(time) if time >= recv_time => {
@@ -101,7 +99,6 @@ impl<T: Clone> ReceiverFlavor<T> for CyclicReceiver<T> {
 impl<T: Clone> CyclicReceiver<T> {
     fn recv(&mut self) -> Recv<T> {
         let res = self.peek();
-        Self::log(ReceiverEvent::Recv(self.view_struct.channel_id));
         match &res {
             Recv::Something(stuff) => {
                 self.register_recv(stuff.time);
@@ -148,7 +145,6 @@ impl<T: Clone> CyclicReceiver<T> {
     }
 }
 
-#[log_producer]
 pub struct AcyclicReceiver<T> {
     pub(super) underlying: ReceiverState<ChannelElement<T>>,
     pub(super) resp: channel::Sender<Time>,
@@ -163,7 +159,6 @@ impl<T: Clone> ReceiverFlavor<T> for AcyclicReceiver<T> {
     }
 
     fn peek(&mut self) -> Recv<T> {
-        Self::log(ReceiverEvent::Peek(self.view_struct.channel_id));
         let recv_time = self.view_struct.receiver_tlb();
         match self.head {
             Recv::Nothing(time) if time >= recv_time => {
@@ -186,7 +181,6 @@ impl<T: Clone> ReceiverFlavor<T> for AcyclicReceiver<T> {
         return self.head.clone();
     }
     fn peek_next(&mut self, manager: &mut TimeManager) -> Recv<T> {
-        Self::log(ReceiverEvent::Peek(self.view_struct.channel_id));
         match &self.head {
             Recv::Something(ce) => {
                 manager.advance(ce.time);
@@ -208,7 +202,6 @@ impl<T: Clone> ReceiverFlavor<T> for AcyclicReceiver<T> {
     }
 
     fn dequeue(&mut self, manager: &mut TimeManager) -> Recv<T> {
-        Self::log(ReceiverEvent::Recv(self.view_struct.channel_id));
         if let Recv::Something(x) = &self.head {
             let time = x.time;
             let mut result = Recv::Unknown;
