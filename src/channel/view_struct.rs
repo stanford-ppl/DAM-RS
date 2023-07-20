@@ -19,6 +19,8 @@ pub(crate) struct ViewStruct {
     flavor: ChannelFlavor,
 
     current_send_receive_delta: AtomicUsize,
+    total_sent: AtomicUsize,
+    total_received: AtomicUsize,
 }
 
 impl ViewStruct {
@@ -27,6 +29,8 @@ impl ViewStruct {
             views: Default::default(),
             flavor,
             current_send_receive_delta: AtomicUsize::new(0),
+            total_sent: AtomicUsize::new(0),
+            total_received: AtomicUsize::new(0),
         }
     }
 
@@ -39,11 +43,15 @@ impl ViewStruct {
     }
 
     pub fn register_send(&self) -> usize {
+        self.total_sent
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         self.current_send_receive_delta
             .fetch_add(1, std::sync::atomic::Ordering::AcqRel)
     }
 
     pub fn register_recv(&self) -> usize {
+        self.total_received
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         self.current_send_receive_delta
             .fetch_sub(1, std::sync::atomic::Ordering::AcqRel)
     }

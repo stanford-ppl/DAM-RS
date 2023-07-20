@@ -26,3 +26,7 @@ inherits = "release"
 debug = 1
 lto = "thin"
 codegen-units = 1
+
+[profile.dev.build-override]
+codegen-units = 1
+opt-level = 3
