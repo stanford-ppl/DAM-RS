@@ -157,7 +157,7 @@ impl<T> CyclicSender<T> {
         self.send_receive_delta == self.capacity
     }
 
-    fn update_srd(&mut self) {
+    fn update_srd(&mut self) -> bool {
         let send_time = self.view_struct.sender_tlb();
         // We don't know when it'll be available.
         self.next_available = SendOptions::Unknown;
@@ -166,68 +166,55 @@ impl<T> CyclicSender<T> {
         assert!(real_srd <= self.send_receive_delta);
         let srd_diff = self.send_receive_delta - real_srd;
 
-        // Always pop at least one off.
-        if srd_diff > 0 {
+        let mut retval = false;
+
+        for _ in 0..srd_diff {
             match self.resp.recv() {
                 Ok(time) if time <= send_time => {
                     assert!(self.send_receive_delta > 0);
                     self.send_receive_delta -= 1;
+                    retval = true;
                 }
                 Ok(time) => {
                     // Got a time in the future
                     assert!(self.next_available == SendOptions::Unknown);
                     self.next_available = SendOptions::AvailableAt(time);
-                    return;
+                    return true;
                 }
                 Err(channel::RecvError) => {
                     self.next_available = SendOptions::Never;
-                    return;
+                    return true;
                 }
             }
         }
-
-        // Try to finish off whatever's left.
-        loop {
-            match self.resp.try_recv() {
-                Ok(time) if time <= send_time => {
-                    assert!(self.send_receive_delta > 0);
-                    self.send_receive_delta -= 1;
-                }
-                Ok(time) => {
-                    // Got a time in the future
-                    assert!(self.next_available == SendOptions::Unknown);
-                    self.next_available = SendOptions::AvailableAt(time);
-                    return;
-                }
-                Err(channel::TryRecvError::Disconnected) => {
-                    self.next_available = SendOptions::Never;
-                    return;
-                }
-                Err(channel::TryRecvError::Empty) => {
-                    return;
-                }
-            }
-        }
+        return retval;
     }
 
     fn update_len(&mut self) {
         let send_time = self.view_struct.sender_tlb();
 
-        if let SendOptions::AvailableAt(time) = self.next_available {
-            if time <= send_time {
+        match self.next_available {
+            SendOptions::Never => return,
+            SendOptions::AvailableAt(time) if time <= send_time => {
                 // Next available time has already passed, so we pop an element off.
                 // Additionally, to avoid work, we don't update next_available immediately.
                 self.next_available = SendOptions::Unknown;
                 assert_ne!(self.send_receive_delta, 0);
                 self.send_receive_delta -= 1;
-            } else {
-                // Next available time in the future, becomes a no-op.
+                return;
+            }
+
+            // If we were supposed to check back in sometime in the past, or we don't know, then we continue.
+            SendOptions::CheckBackAt(time) if time <= send_time => {}
+            SendOptions::Unknown => {}
+
+            // In these cases, we were already told to check back in the future.
+            SendOptions::AvailableAt(_) | SendOptions::CheckBackAt(_) => {
                 return;
             }
         }
 
-        self.update_srd();
-        if self.send_receive_delta < self.capacity {
+        if self.update_srd() {
             return;
         }
 
