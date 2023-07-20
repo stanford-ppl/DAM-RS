@@ -3,6 +3,7 @@ mod tests {
 
     use std::{fs, path::Path};
 
+    use dam_core::identifier::Identifiable;
     use dam_core::{ContextView, TimeViewable};
 
     use crate::channel::{bounded, unbounded, void};
@@ -93,10 +94,11 @@ mod tests {
         let v3_crd = read_inputs::<u32>(&v3_crd_filename);
         let v_vals = read_inputs::<f32>(&v_vals_filename);
 
-        let chan_size = 32784;
+        let chan_size = 4096;
 
         let mk_bounded = || bounded::<Token<u32, u32>>(chan_size);
         let mk_boundedf = || bounded::<Token<f32, u32>>(chan_size);
+        let mk_intersect_bounded = || unbounded::<Token<u32, u32>>();
 
         // fiberlookup_bi
         let (qi_in_ref_sender, qi_in_ref_receiver) = mk_bounded();
@@ -146,9 +148,9 @@ mod tests {
         };
         let mut vi_rdscanner = CompressedCrdRdScan::new(vi_data, v0_seg, v0_crd);
 
-        let (intersecti_out_crd_sender, intersecti_out_crd_receiver) = mk_bounded();
-        let (intersecti_out_ref1_sender, intersecti_out_ref1_receiver) = mk_bounded();
-        let (intersecti_out_ref2_sender, intersecti_out_ref2_receiver) = mk_bounded();
+        let (intersecti_out_crd_sender, intersecti_out_crd_receiver) = mk_intersect_bounded();
+        let (intersecti_out_ref1_sender, intersecti_out_ref1_receiver) = mk_intersect_bounded();
+        let (intersecti_out_ref2_sender, intersecti_out_ref2_receiver) = mk_intersect_bounded();
         let intersecti_data = CrdJoinerData::<u32, u32> {
             in_crd1: vi_out_crd_receiver,
             in_ref1: vi_out_ref_receiver,
@@ -172,14 +174,15 @@ mod tests {
         broadcast1.add_target(bc_ki_out_crd_sender);
         broadcast1.add_target(bc1_ki_out_crd_sender);
 
-        let (bc_intersecti_out_crd_sender, bc_intersecti_out_crd_receiver) = mk_bounded();
-        let (bc1_intersecti_out_crd_sender, bc1_intersecti_out_crd_receiver) = mk_bounded();
+        let (bc_intersecti_out_crd_sender, bc_intersecti_out_crd_receiver) = mk_intersect_bounded();
+        let (bc1_intersecti_out_crd_sender, bc1_intersecti_out_crd_receiver) =
+            mk_intersect_bounded();
         let mut broadcast2 = BroadcastContext::new(intersecti_out_crd_receiver);
         broadcast2.add_target(bc_intersecti_out_crd_sender);
         broadcast2.add_target(bc1_intersecti_out_crd_sender);
 
-        let (intersecti2_out_crd_sender, intersecti2_out_crd_receiver) = mk_bounded();
-        let (intersecti2_out_ref2_sender, intersecti2_out_ref2_receiver) = mk_bounded();
+        let (intersecti2_out_crd_sender, intersecti2_out_crd_receiver) = mk_intersect_bounded();
+        let (intersecti2_out_ref2_sender, intersecti2_out_ref2_receiver) = mk_intersect_bounded();
         let intersecti2_data = CrdJoinerData::<u32, u32> {
             in_crd1: bc_ki_out_crd_receiver,
             in_ref1: bc_ki_out_ref_receiver,
@@ -191,8 +194,8 @@ mod tests {
         };
         let mut intersect_i2 = Intersect::new(intersecti2_data);
 
-        let (intersecti3_out_ref1_sender, intersecti3_out_ref1_receiver) = mk_bounded();
-        let (intersecti3_out_ref2_sender, intersecti3_out_ref2_receiver) = mk_bounded();
+        let (intersecti3_out_ref1_sender, intersecti3_out_ref1_receiver) = mk_intersect_bounded();
+        let (intersecti3_out_ref2_sender, intersecti3_out_ref2_receiver) = mk_intersect_bounded();
 
         let intersecti3_data = CrdJoinerData::<u32, u32> {
             in_crd1: bc1_ki_out_crd_receiver,
@@ -232,8 +235,8 @@ mod tests {
         };
         let mut kj_rdscanner = CompressedCrdRdScan::new(kj_data, k2_seg, k2_crd);
 
-        let (intersectj_out_crd_sender, intersectj_out_crd_receiver) = mk_bounded();
-        let (intersectj_out_ref2_sender, intersectj_out_ref2_receiver) = mk_bounded();
+        let (intersectj_out_crd_sender, intersectj_out_crd_receiver) = mk_intersect_bounded();
+        let (intersectj_out_ref2_sender, intersectj_out_ref2_receiver) = mk_intersect_bounded();
         let intersectj_data = CrdJoinerData::<u32, u32> {
             in_crd1: vj_out_crd_receiver,
             in_ref1: vj_out_ref_receiver,
@@ -247,8 +250,8 @@ mod tests {
 
         let (intersectj3_out_crd_sender, intersectj3_out_crd_receiver) =
             unbounded::<Token<u32, u32>>();
-        let (intersectj3_out_ref1_sender, intersectj3_out_ref1_receiver) = mk_bounded();
-        let (intersectj3_out_ref2_sender, intersectj3_out_ref2_receiver) = mk_bounded();
+        let (intersectj3_out_ref1_sender, intersectj3_out_ref1_receiver) = mk_intersect_bounded();
+        let (intersectj3_out_ref2_sender, intersectj3_out_ref2_receiver) = mk_intersect_bounded();
 
         let intersectj3_data = CrdJoinerData::<u32, u32> {
             in_crd1: kj_out_crd_receiver,
@@ -260,9 +263,13 @@ mod tests {
             out_ref2: intersectj3_out_ref2_sender,
         };
         let mut intersect_j3 = Intersect::new(intersectj3_data);
+        dbg!(intersect_j.id());
+        dbg!(intersect_j3.id());
 
-        let (bc_intersectj3_out_ref2_sender, bc_intersectj3_out_ref2_receiver) = mk_bounded();
-        let (bc1_intersectj3_out_ref2_sender, bc1_intersectj3_out_ref2_receiver) = mk_bounded();
+        let (bc_intersectj3_out_ref2_sender, bc_intersectj3_out_ref2_receiver) =
+            mk_intersect_bounded();
+        let (bc1_intersectj3_out_ref2_sender, bc1_intersectj3_out_ref2_receiver) =
+            mk_intersect_bounded();
         let mut broadcast9 = BroadcastContext::new(intersectj3_out_ref2_receiver);
         broadcast9.add_target(bc_intersectj3_out_ref2_sender);
         broadcast9.add_target(bc1_intersectj3_out_ref2_sender);
@@ -342,9 +349,9 @@ mod tests {
         };
         let mut vl_rdscanner = CompressedCrdRdScan::new(vl_data, v1_seg, v1_crd);
 
-        let (intersectl_out_crd_sender, intersectl_out_crd_receiver) = mk_bounded();
-        let (intersectl_out_ref1_sender, intersectl_out_ref1_receiver) = mk_bounded();
-        let (intersectl_out_ref2_sender, intersectl_out_ref2_receiver) = mk_bounded();
+        let (intersectl_out_crd_sender, intersectl_out_crd_receiver) = mk_intersect_bounded();
+        let (intersectl_out_ref1_sender, intersectl_out_ref1_receiver) = mk_intersect_bounded();
+        let (intersectl_out_ref2_sender, intersectl_out_ref2_receiver) = mk_intersect_bounded();
         let intersectl_data = CrdJoinerData::<u32, u32> {
             in_crd1: vl_out_crd_receiver,
             in_ref1: vl_out_ref_receiver,
@@ -355,6 +362,7 @@ mod tests {
             out_ref2: intersectl_out_ref2_sender,
         };
         let mut intersect_l = Intersect::new(intersectl_data);
+        dbg!(intersect_l.id());
 
         let (vm_out_ref_sender, vm_out_ref_receiver) = mk_bounded();
         let (vm_out_crd_sender, vm_out_crd_receiver) = mk_bounded();
@@ -408,9 +416,9 @@ mod tests {
         };
         let mut qm_rdscanner = CompressedCrdRdScan::new(qm_data, q3_seg, q3_crd);
 
-        let (intersectm_out_crd_sender, intersectm_out_crd_receiver) = mk_bounded();
-        let (intersectm_out_ref1_sender, intersectm_out_ref1_receiver) = mk_bounded();
-        let (intersectm_out_ref2_sender, intersectm_out_ref2_receiver) = mk_bounded();
+        let (intersectm_out_crd_sender, intersectm_out_crd_receiver) = mk_intersect_bounded();
+        let (intersectm_out_ref1_sender, intersectm_out_ref1_receiver) = mk_intersect_bounded();
+        let (intersectm_out_ref2_sender, intersectm_out_ref2_receiver) = mk_intersect_bounded();
         let intersectm_data = CrdJoinerData::<u32, u32> {
             in_crd1: vm_out_crd_receiver,
             in_ref1: vm_out_ref_receiver,
@@ -421,6 +429,7 @@ mod tests {
             out_ref2: intersectm_out_ref2_sender,
         };
         let mut intersect_m = Intersect::new(intersectm_data);
+        dbg!(intersect_m.id());
 
         let (bc_km_out_ref_sender, bc_km_out_ref_receiver) = mk_bounded();
         let (bc1_km_out_ref_sender, bc1_km_out_ref_receiver) = mk_bounded();
@@ -434,8 +443,9 @@ mod tests {
         broadcast13.add_target(bc_km_out_crd_sender);
         broadcast13.add_target(bc1_km_out_crd_sender);
 
-        let (bc_intersectm_out_crd_sender, bc_intersectm_out_crd_receiver) = mk_bounded();
-        let (bc1_intersectm_out_crd_sender, bc1_intersectm_out_crd_receiver) = mk_bounded();
+        let (bc_intersectm_out_crd_sender, bc_intersectm_out_crd_receiver) = mk_intersect_bounded();
+        let (bc1_intersectm_out_crd_sender, bc1_intersectm_out_crd_receiver) =
+            mk_intersect_bounded();
         let mut broadcast12 = BroadcastContext::new(intersectm_out_crd_receiver);
         broadcast12.add_target(bc_intersectm_out_crd_sender);
         broadcast12.add_target(bc1_intersectm_out_crd_sender);
@@ -451,12 +461,13 @@ mod tests {
             out_ref2: intersectm2_out_ref2_sender,
         };
         let mut intersect_m2 = Intersect::new(intersectm2_data);
+        dbg!(intersect_m2.id());
 
         // TODO: Used later on in the code, change back to bounded
-        let (intersectm3_out_crd_sender, intersectm3_out_crd_receiver) = mk_bounded();
+        let (intersectm3_out_crd_sender, intersectm3_out_crd_receiver) = mk_intersect_bounded();
         // let (intersectm3_out_ref1_sender, intersectm3_out_ref1_receiver) =
-        let (intersectm3_out_ref1_sender, intersectm3_out_ref1_receiver) = mk_bounded();
-        let (intersectm3_out_ref2_sender, intersectm3_out_ref2_receiver) = mk_bounded();
+        let (intersectm3_out_ref1_sender, intersectm3_out_ref1_receiver) = mk_intersect_bounded();
+        let (intersectm3_out_ref2_sender, intersectm3_out_ref2_receiver) = mk_intersect_bounded();
 
         let intersectm3_data = CrdJoinerData::<u32, u32> {
             in_crd1: bc1_km_out_crd_receiver,
@@ -469,8 +480,10 @@ mod tests {
         };
         let mut intersect_m3 = Intersect::new(intersectm3_data);
 
-        let (bc_intersectm3_out_crd_sender, bc_intersectm3_out_crd_receiver) = mk_bounded();
-        let (bc1_intersectm3_out_crd_sender, bc1_intersectm3_out_crd_receiver) = mk_bounded();
+        let (bc_intersectm3_out_crd_sender, bc_intersectm3_out_crd_receiver) =
+            mk_intersect_bounded();
+        let (bc1_intersectm3_out_crd_sender, bc1_intersectm3_out_crd_receiver) =
+            mk_intersect_bounded();
         let mut broadcast16 = BroadcastContext::new(intersectm3_out_crd_receiver);
         broadcast16.add_target(bc_intersectm3_out_crd_sender);
         broadcast16.add_target(bc1_intersectm3_out_crd_sender);
@@ -510,28 +523,28 @@ mod tests {
         );
 
         // Reduce
-        let (red_out_sender, red_out_receiver) = unbounded::<Token<f32, u32>>();
+        let (red_out_sender, red_out_receiver) = mk_boundedf();
         let red_data = ReduceData::<f32, u32> {
             in_val: mul_out_receiver,
             out_val: red_out_sender,
         };
         let mut red = Reduce::new(red_data);
 
-        let (bc_out_red_sender, bc_out_red_receiver) = unbounded::<Token<f32, u32>>();
-        let (bc1_out_red_sender, bc1_out_red_receiver) = unbounded::<Token<f32, u32>>();
+        let (bc_out_red_sender, bc_out_red_receiver) = mk_boundedf();
+        let (bc1_out_red_sender, bc1_out_red_receiver) = mk_boundedf();
         let mut broadcast6 = BroadcastContext::new(red_out_receiver);
         broadcast6.add_target(bc_out_red_sender);
         broadcast6.add_target(bc1_out_red_sender);
 
         // Max Reduce
-        let (max_out_val_sender, max_out_val_receiver) = unbounded::<Token<f32, u32>>();
+        let (max_out_val_sender, max_out_val_receiver) = mk_boundedf();
         let max_data = ReduceData::<f32, u32> {
             in_val: bc_out_red_receiver,
             out_val: max_out_val_sender,
         };
         let mut max_red = MaxReduce::new(max_data, f32::MIN);
 
-        let (rep_out_val_sender, rep_out_val_receiver) = unbounded::<Token<f32, u32>>();
+        let (rep_out_val_sender, rep_out_val_receiver) = mk_boundedf();
         let rep_data = RepeatData::<f32, u32> {
             in_ref: max_out_val_receiver,
             in_repsig: bc1_out_repsig_l_receiver,
@@ -540,7 +553,7 @@ mod tests {
         let mut rep = Repeat::new(rep_data);
 
         // Sub ALU, using Add name to correspond to SAM implementation
-        let (add_out_sender, add_out_receiver) = unbounded::<Token<f32, u32>>();
+        let (add_out_sender, add_out_receiver) = mk_boundedf();
         let mut add = make_alu(
             bc1_out_red_receiver,
             rep_out_val_receiver,
@@ -549,24 +562,24 @@ mod tests {
         );
 
         // Exp
-        let (exp_out_sender, exp_out_receiver) = unbounded::<Token<f32, u32>>();
+        let (exp_out_sender, exp_out_receiver) = mk_boundedf();
         let mut exp = make_unary_alu(add_out_receiver, exp_out_sender, ALUExpOp());
 
-        let (bc_exp_out_sender, bc_exp_out_receiver) = unbounded::<Token<f32, u32>>();
-        let (bc1_exp_out_sender, bc1_exp_out_receiver) = unbounded::<Token<f32, u32>>();
+        let (bc_exp_out_sender, bc_exp_out_receiver) = mk_boundedf();
+        let (bc1_exp_out_sender, bc1_exp_out_receiver) = mk_boundedf();
         let mut broadcast14 = BroadcastContext::new(exp_out_receiver);
         broadcast14.add_target(bc_exp_out_sender);
         broadcast14.add_target(bc1_exp_out_sender);
 
         // Reduce
-        let (red1_out_sender, red1_out_receiver) = unbounded::<Token<f32, u32>>();
+        let (red1_out_sender, red1_out_receiver) = mk_boundedf();
         let red1_data = ReduceData::<f32, u32> {
             in_val: bc_exp_out_receiver,
             out_val: red1_out_sender,
         };
         let mut red1 = Reduce::new(red1_data);
 
-        let (rep1_out_val_sender, rep1_out_val_receiver) = unbounded::<Token<f32, u32>>();
+        let (rep1_out_val_sender, rep1_out_val_receiver) = mk_boundedf();
         let rep1_data = RepeatData::<f32, u32> {
             in_ref: red1_out_receiver,
             in_repsig: bc2_out_repsig_l_receiver,
@@ -575,7 +588,7 @@ mod tests {
         let mut rep1 = Repeat::new(rep1_data);
 
         // Div ALU
-        let (div_out_sender, div_out_receiver) = unbounded::<Token<f32, u32>>();
+        let (div_out_sender, div_out_receiver) = mk_boundedf();
         let mut div = make_alu(
             bc1_exp_out_receiver,
             rep1_out_val_receiver,
@@ -583,7 +596,7 @@ mod tests {
             ALUDivOp(),
         );
 
-        // let (out_drop_val_sender, out_drop_val_receiver) = unbounded::<Token<f32, u32>>();
+        // let (out_drop_val_sender, out_drop_val_receiver) = mk_boundedf();
         // let (out_drop_crd_sender, out_drop_crd_receiver) = unbounded::<Token<u32, u32>>();
 
         // let val_drop_data = ValDropData::<u32, f32, u32> {
@@ -595,14 +608,14 @@ mod tests {
 
         // let mut val_drop = ValDrop::new(val_drop_data);
 
-        let (out_repsig_m_sender, out_repsig_m_receiver) = unbounded::<Repsiggen>();
+        let (out_repsig_m_sender, out_repsig_m_receiver) = bounded::<Repsiggen>(chan_size);
         let repsig_m_data = RepSigGenData::<u32, u32> {
             input: bc_intersectm3_out_crd_receiver,
             out_repsig: out_repsig_m_sender,
         };
         let mut repsigm = RepeatSigGen::new(repsig_m_data);
 
-        let (rep_m_out_val_sender, rep_m_out_val_receiver) = unbounded::<Token<f32, u32>>();
+        let (rep_m_out_val_sender, rep_m_out_val_receiver) = mk_boundedf();
         let rep2_data = RepeatData::<f32, u32> {
             // in_ref: out_drop_val_receiver,
             in_ref: div_out_receiver,
@@ -620,8 +633,8 @@ mod tests {
             ALUMulOp(),
         );
 
-        let (out_spacc_val_sender, out_spacc_val_receiver) = unbounded::<Token<f32, u32>>();
-        let (out_spacc_icrd_sender, out_spacc_icrd_receiver) = unbounded::<Token<u32, u32>>();
+        let (out_spacc_val_sender, out_spacc_val_receiver) = mk_boundedf();
+        let (out_spacc_icrd_sender, out_spacc_icrd_receiver) = mk_bounded();
         let spacc_data = Spacc1Data::<u32, f32, u32> {
             in_crd_outer: bc2_kl_out_crd_receiver,
             in_crd_inner: bc1_intersectm3_out_crd_receiver,
@@ -747,14 +760,5 @@ mod tests {
         // let fil = formatted_dir.to_str().unwrap();
         // dbg!(xvals.out_val);
         dbg!(xvals.view().tick_lower_bound());
-    }
-
-    #[test]
-    fn get_path() {
-        let filename = "/home/rubensl/sam_config.toml";
-        let contents = fs::read_to_string(filename).unwrap();
-        let data: Data = toml::from_str(&contents).unwrap();
-
-        dbg!(data);
     }
 }
