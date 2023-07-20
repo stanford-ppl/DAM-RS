@@ -36,6 +36,7 @@ pub trait SenderFlavor<T> {
 pub(super) enum SenderImpl<T: Clone> {
     VoidSender(VoidSender<T>),
     CyclicSender(CyclicSender<T>),
+    AcyclicSender(AcyclicSender<T>),
 }
 
 #[derive(Debug)]
@@ -78,13 +79,13 @@ pub(super) enum SenderState<T> {
 
 #[log_producer]
 pub(super) struct CyclicSender<T> {
-    pub(super) underlying: SenderState<ChannelElement<T>>,
-    pub(super) resp: channel::Receiver<Time>,
-    pub(super) send_receive_delta: usize,
-    pub(super) capacity: usize,
+    underlying: SenderState<ChannelElement<T>>,
+    resp: channel::Receiver<Time>,
+    send_receive_delta: usize,
+    capacity: usize,
 
-    pub(super) view_struct: Arc<ViewStruct>,
-    pub(super) next_available: SendOptions,
+    view_struct: Arc<ViewStruct>,
+    next_available: SendOptions,
 }
 impl<T: Clone> SenderFlavor<T> for CyclicSender<T> {
     fn attach_sender(&self, sender: &dyn Context) {
@@ -225,6 +226,136 @@ impl<T> CyclicSender<T> {
         self.update_srd();
         if self.next_available == SendOptions::Unknown {
             self.next_available = SendOptions::CheckBackAt(new_time + 1)
+        }
+    }
+}
+
+impl<T> CyclicSender<T> {
+    pub(crate) fn new(
+        sender: channel::Sender<ChannelElement<T>>,
+        resp: channel::Receiver<Time>,
+        capacity: usize,
+        view_struct: Arc<ViewStruct>,
+    ) -> Self {
+        Self {
+            underlying: SenderState::Open(sender),
+            resp,
+            send_receive_delta: 0,
+            capacity,
+            view_struct,
+            next_available: SendOptions::Unknown,
+        }
+    }
+}
+
+pub(super) struct AcyclicSender<T> {
+    underlying: SenderState<ChannelElement<T>>,
+    resp: channel::Receiver<Time>,
+    send_receive_delta: usize,
+    capacity: usize,
+
+    view_struct: Arc<ViewStruct>,
+    next_available: SendOptions,
+}
+
+impl<T: Clone> SenderFlavor<T> for AcyclicSender<T> {
+    fn attach_sender(&self, sender: &dyn Context) {
+        self.view_struct.attach_sender(sender)
+    }
+
+    fn try_send(&mut self, data: ChannelElement<T>) -> Result<(), SendOptions> {
+        if self.send_receive_delta == self.capacity {
+            let sender_time = self.view_struct.sender_tlb();
+            match self.next_available {
+                SendOptions::AvailableAt(time) if time > sender_time => {
+                    return Err(self.next_available);
+                }
+                SendOptions::Never => return Err(SendOptions::Never),
+
+                // Unknown is the base state.
+                SendOptions::Unknown => {
+                    let new_time = self.resp.recv().unwrap();
+                    if new_time <= sender_time {
+                        self.send_receive_delta -= 1;
+                    } else {
+                        self.next_available = SendOptions::AvailableAt(new_time);
+                        return Err(self.next_available);
+                    }
+                }
+
+                // We're ready, so we pop the availability and continue with the write.
+                SendOptions::AvailableAt(_) => {
+                    self.next_available = SendOptions::Unknown;
+                    self.send_receive_delta -= 1;
+                }
+
+                SendOptions::CheckBackAt(_) => {
+                    unreachable!("We should never have to check back in an acyclic sender");
+                }
+            }
+        }
+        assert!(self.send_receive_delta < self.capacity);
+        // Not full, proceed.
+        match &self.underlying {
+            SenderState::Open(sender) => match sender.send(data) {
+                Ok(_) => {
+                    self.send_receive_delta += 1;
+                    self.view_struct.register_send();
+                    Ok(())
+                }
+                Err(_) => {
+                    self.underlying = SenderState::Closed;
+                    self.next_available = SendOptions::Never;
+                    Err(SendOptions::Never)
+                } // Channel is closed
+            },
+            SenderState::Closed => {
+                self.underlying = SenderState::Closed;
+                self.next_available = SendOptions::Never;
+                Err(SendOptions::Never)
+            }
+        }
+    }
+
+    fn enqueue(
+        &mut self,
+        manager: &mut TimeManager,
+        data: ChannelElement<T>,
+    ) -> Result<(), EnqueueError> {
+        match self.try_send(data.clone()) {
+            Ok(_) => Ok(()),
+            Err(SendOptions::AvailableAt(time)) => {
+                manager.advance(time);
+                let mut cp = data.clone();
+                cp.update_time(time + 1);
+                self.try_send(cp)
+                    .expect("Should have succeeded on the second attempt!");
+                Ok(())
+            }
+            Err(SendOptions::Never) => Err(EnqueueError {}),
+            Err(_) => unreachable!("Not possible to get an Unknown or CheckBackAt"),
+        }
+    }
+
+    fn cleanup(&mut self) {
+        self.underlying = SenderState::Closed;
+    }
+}
+
+impl<T> AcyclicSender<T> {
+    pub(crate) fn new(
+        sender: channel::Sender<ChannelElement<T>>,
+        resp: channel::Receiver<Time>,
+        capacity: usize,
+        view_struct: Arc<ViewStruct>,
+    ) -> Self {
+        Self {
+            underlying: SenderState::Open(sender),
+            resp,
+            send_receive_delta: 0,
+            capacity,
+            view_struct,
+            next_available: SendOptions::Unknown,
         }
     }
 }
