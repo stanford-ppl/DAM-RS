@@ -295,12 +295,12 @@ impl<T: Clone> SenderFlavor<T> for AcyclicSender<T> {
             }
         }
         assert!(self.send_receive_delta < self.capacity);
+        self.view_struct.register_send();
         // Not full, proceed.
         match &self.underlying {
             SenderState::Open(sender) => match sender.send(data) {
                 Ok(_) => {
                     self.send_receive_delta += 1;
-                    self.view_struct.register_send();
                     Ok(())
                 }
                 Err(_) => {
