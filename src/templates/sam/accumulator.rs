@@ -184,130 +184,155 @@ where
 
     fn run(&mut self) {
         let mut accum_storage: BTreeMap<CrdType, ValType> = BTreeMap::new();
+        let state = "READY";
 
         loop {
-            let in_ocrd = peek_next(&mut self.time, &mut self.spacc1_data.in_crd_outer);
-            let in_icrd = peek_next(&mut self.time, &mut self.spacc1_data.in_crd_inner);
-            let in_val = peek_next(&mut self.time, &mut self.spacc1_data.in_val);
+            let in_ocrd = peek_next(&mut self.time, &mut self.spacc1_data.in_crd_outer).unwrap();
+            let in_icrd = peek_next(&mut self.time, &mut self.spacc1_data.in_crd_inner).unwrap();
+            let in_val = peek_next(&mut self.time, &mut self.spacc1_data.in_val).unwrap();
 
             // dbg!(in_ocrd.as_ref().unwrap().data.clone());
             // dbg!(in_icrd.as_ref().unwrap().data.clone());
             // dbg!(in_val.as_ref().unwrap().data.clone());
-
-            match in_icrd {
-                Ok(curr_in) => {
-                    // let val_deq = dequeue(&mut self.time, &mut self.spacc1_data.in_val);
-                    match in_ocrd.unwrap().data.clone() {
-                        Token::Val(_) => {
-                            // In acc state
-                            match in_val.unwrap().data.clone() {
-                                Token::Val(val) => match curr_in.data.clone() {
-                                    Token::Val(crd) => {
-                                        *accum_storage.entry(crd).or_insert(ValType::default()) +=
-                                            val.clone();
-                                        // dbg!(accum_storage.clone());
-                                        dequeue(&mut self.time, &mut self.spacc1_data.in_crd_inner)
-                                            .unwrap();
-                                        dequeue(&mut self.time, &mut self.spacc1_data.in_val)
-                                            .unwrap();
-                                    }
-                                    Token::Stop(_) => {
-                                        dequeue(&mut self.time, &mut self.spacc1_data.in_crd_outer)
-                                            .unwrap();
-                                    }
-                                    Token::Done => {
-                                        panic!("Shouldn't have a done token for coords if in acc state");
-                                    }
-                                    _ => {
-                                        panic!("Invalid token");
-                                    }
-                                },
-                                Token::Stop(_) => {
-                                    dequeue(&mut self.time, &mut self.spacc1_data.in_crd_outer)
-                                        .unwrap();
-                                    dequeue(&mut self.time, &mut self.spacc1_data.in_crd_inner)
-                                        .unwrap();
-                                    dequeue(&mut self.time, &mut self.spacc1_data.in_val).unwrap();
-                                    continue;
-                                }
+            match in_ocrd.data {
+                Token::Val(_) => {
+                    // match icrd
+                    match in_val.data {
+                        Token::Val(val) => match in_icrd.data {
+                            Token::Val(crd) => {
+                                *accum_storage.entry(crd).or_insert(ValType::default()) +=
+                                    val.clone();
+                            }
+                            Token::Stop(stkn) => match in_val.data {
+                                Token::Stop(_) => todo!(),
                                 _ => {
-                                    panic!("Invalid token found, val token should be similar type to crd");
+                                    panic!("Expected stop token for all 3 inputs");
                                 }
-                            }
-                        }
-                        Token::Stop(stkn) => {
-                            for (key, value) in &accum_storage {
-                                let icrd_chan_elem = ChannelElement::new(
-                                    self.time.tick() + 1,
-                                    // Token::Val(accum_storage.keys().next().unwrap().clone()),
-                                    Token::Val(key.clone()),
-                                );
-                                enqueue(
-                                    &mut self.time,
-                                    &mut self.spacc1_data.out_crd_inner,
-                                    icrd_chan_elem,
-                                )
-                                .unwrap();
-                                let val_chan_elem = ChannelElement::new(
-                                    self.time.tick() + 1,
-                                    Token::<ValType, StopType>::Val(value.clone()),
-                                );
-                                enqueue(
-                                    &mut self.time,
-                                    &mut self.spacc1_data.out_val,
-                                    val_chan_elem,
-                                )
-                                .unwrap();
-                                // dbg!(key.clone());
-                                // dbg!(value.clone());
-                            }
-                            let val_stkn_chan_elem = ChannelElement::new(
-                                self.time.tick() + 1,
-                                Token::Stop(stkn.clone()),
-                            );
-                            enqueue(
-                                &mut self.time,
-                                &mut self.spacc1_data.out_val,
-                                val_stkn_chan_elem.clone(),
-                            )
-                            .unwrap();
-                            let crd_stkn_chan_elem = ChannelElement::new(
-                                self.time.tick() + 1,
-                                Token::Stop(stkn.clone()),
-                            );
-                            enqueue(
-                                &mut self.time,
-                                &mut self.spacc1_data.out_crd_inner,
-                                crd_stkn_chan_elem,
-                            )
-                            .unwrap();
-                            accum_storage.clear();
-                            dequeue(&mut self.time, &mut self.spacc1_data.in_crd_outer).unwrap();
-                        }
-                        Token::Done => {
-                            let icrd_chan_elem =
-                                ChannelElement::new(self.time.tick() + 1, Token::Done);
-                            enqueue(
-                                &mut self.time,
-                                &mut self.spacc1_data.out_crd_inner,
-                                icrd_chan_elem,
-                            )
-                            .unwrap();
-                            let val_chan_elem =
-                                ChannelElement::new(self.time.tick() + 1, Token::Done);
-                            enqueue(&mut self.time, &mut self.spacc1_data.out_val, val_chan_elem)
-                                .unwrap();
-                            return;
-                        }
-                        _ => {
-                            panic!("Invalid case in spacc1");
-                        }
+                            },
+                            Token::Empty => todo!(),
+                            Token::Done => todo!(),
+                        },
+                        Token::Stop(_) => todo!(),
+                        Token::Empty => todo!(),
+                        Token::Done => todo!(),
                     }
                 }
-                Err(_) => {
-                    panic!("Unexpected error in dequeueing of crd_outer");
-                }
             }
+
+            // match in_icrd {
+            //     Ok(curr_in) => {
+            //         // let val_deq = dequeue(&mut self.time, &mut self.spacc1_data.in_val);
+            //         match in_ocrd.unwrap().data.clone() {
+            //             Token::Val(_) => {
+            //                 // In acc state
+            //                 match in_val.unwrap().data.clone() {
+            //                     Token::Val(val) => match curr_in.data.clone() {
+            //                         Token::Val(crd) => {
+            //                             *accum_storage.entry(crd).or_insert(ValType::default()) +=
+            //                                 val.clone();
+            //                             // dbg!(accum_storage.clone());
+            //                             dequeue(&mut self.time, &mut self.spacc1_data.in_crd_inner)
+            //                                 .unwrap();
+            //                             dequeue(&mut self.time, &mut self.spacc1_data.in_val)
+            //                                 .unwrap();
+            //                         }
+            //                         Token::Stop(_) => {
+            //                             dequeue(&mut self.time, &mut self.spacc1_data.in_crd_outer)
+            //                                 .unwrap();
+            //                         }
+            //                         Token::Done => {
+            //                             panic!("Shouldn't have a done token for coords if in acc state");
+            //                         }
+            //                         _ => {
+            //                             panic!("Invalid token");
+            //                         }
+            //                     },
+            //                     Token::Stop(_) => {
+            //                         dequeue(&mut self.time, &mut self.spacc1_data.in_crd_outer)
+            //                             .unwrap();
+            //                         dequeue(&mut self.time, &mut self.spacc1_data.in_crd_inner)
+            //                             .unwrap();
+            //                         dequeue(&mut self.time, &mut self.spacc1_data.in_val).unwrap();
+            //                         continue;
+            //                     }
+            //                     _ => {
+            //                         panic!("Invalid token found, val token should be similar type to crd");
+            //                     }
+            //                 }
+            //             }
+            //             Token::Stop(stkn) => {
+            //                 for (key, value) in &accum_storage {
+            //                     let icrd_chan_elem = ChannelElement::new(
+            //                         self.time.tick() + 1,
+            //                         // Token::Val(accum_storage.keys().next().unwrap().clone()),
+            //                         Token::Val(key.clone()),
+            //                     );
+            //                     enqueue(
+            //                         &mut self.time,
+            //                         &mut self.spacc1_data.out_crd_inner,
+            //                         icrd_chan_elem,
+            //                     )
+            //                     .unwrap();
+            //                     let val_chan_elem = ChannelElement::new(
+            //                         self.time.tick() + 1,
+            //                         Token::<ValType, StopType>::Val(value.clone()),
+            //                     );
+            //                     enqueue(
+            //                         &mut self.time,
+            //                         &mut self.spacc1_data.out_val,
+            //                         val_chan_elem,
+            //                     )
+            //                     .unwrap();
+            //                     // dbg!(key.clone());
+            //                     // dbg!(value.clone());
+            //                 }
+            //                 let val_stkn_chan_elem = ChannelElement::new(
+            //                     self.time.tick() + 1,
+            //                     Token::Stop(stkn.clone()),
+            //                 );
+            //                 enqueue(
+            //                     &mut self.time,
+            //                     &mut self.spacc1_data.out_val,
+            //                     val_stkn_chan_elem.clone(),
+            //                 )
+            //                 .unwrap();
+            //                 let crd_stkn_chan_elem = ChannelElement::new(
+            //                     self.time.tick() + 1,
+            //                     Token::Stop(stkn.clone()),
+            //                 );
+            //                 enqueue(
+            //                     &mut self.time,
+            //                     &mut self.spacc1_data.out_crd_inner,
+            //                     crd_stkn_chan_elem,
+            //                 )
+            //                 .unwrap();
+            //                 accum_storage.clear();
+            //                 dequeue(&mut self.time, &mut self.spacc1_data.in_crd_outer).unwrap();
+            //             }
+            //             Token::Done => {
+            //                 let icrd_chan_elem =
+            //                     ChannelElement::new(self.time.tick() + 1, Token::Done);
+            //                 enqueue(
+            //                     &mut self.time,
+            //                     &mut self.spacc1_data.out_crd_inner,
+            //                     icrd_chan_elem,
+            //                 )
+            //                 .unwrap();
+            //                 let val_chan_elem =
+            //                     ChannelElement::new(self.time.tick() + 1, Token::Done);
+            //                 enqueue(&mut self.time, &mut self.spacc1_data.out_val, val_chan_elem)
+            //                     .unwrap();
+            //                 return;
+            //             }
+            //             _ => {
+            //                 panic!("Invalid case in spacc1");
+            //             }
+            //         }
+            //     }
+            //     Err(_) => {
+            //         panic!("Unexpected error in dequeueing of crd_outer");
+            //     }
+            // }
             self.time.incr_cycles(1);
         }
     }
