@@ -114,7 +114,7 @@ impl<T: Clone> CyclicReceiver<T> {
                 self.head = Recv::Unknown;
             }
             Recv::Nothing(_) | Recv::Closed => {}
-            Recv::Unknown => unreachable!(),
+            Recv::Unknown => panic!("We shouldn't be receiving unknowns!"),
         }
         res
     }
