@@ -38,7 +38,6 @@ pub struct UncompressedCrdRdScan<ValType: Clone, StopType: Clone> {
 #[identifiable]
 pub struct CompressedCrdRdScan<ValType: Clone, StopType: Clone> {
     rd_scan_data: RdScanData<ValType, StopType>,
-    // meta_dim: ValType,
     seg_arr: Vec<ValType>,
     crd_arr: Vec<ValType>,
 }
@@ -242,12 +241,10 @@ where
                 Ok(curr_ref) => match curr_ref.data {
                     Token::Val(val) => {
                         let idx: usize = val.try_into().unwrap();
-                        // let idx: usize = usize::try_from(val).unwrap();
                         let mut curr_addr = self.seg_arr[idx].clone();
                         let stop_addr = self.seg_arr[idx + 1].clone();
                         while curr_addr < stop_addr {
                             let read_addr: usize = curr_addr.clone().try_into().unwrap();
-                            // let read_addr: usize = usize::try_from(curr_addr).unwrap();
                             let coord = self.crd_arr[read_addr].clone();
                             let curr_time = self.time.tick();
                             // dbg!(coord.clone());

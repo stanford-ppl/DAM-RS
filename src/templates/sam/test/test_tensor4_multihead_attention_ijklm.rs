@@ -28,8 +28,8 @@ mod tests {
 
     #[test]
     fn test_multihead_attention() {
-        // let test_name = "tensor4_fused_mul_T1";
-        let test_name = "tensor4_mha";
+        // let test_name = "tensor4_mha";
+        let test_name = "tensor4_mha1";
         let filename = home::home_dir().unwrap().join("sam_config.toml");
         let contents = fs::read_to_string(filename).unwrap();
         let data: Data = toml::from_str(&contents).unwrap();
@@ -65,6 +65,16 @@ mod tests {
         let v3_crd_filename = base_path.join("tensor_V_mode_3_crd");
         let v_vals_filename = base_path.join("tensor_V_mode_vals");
 
+        // let a0_seg_filename = base_path.join("tensor_A_mode_0_seg");
+        // let a0_crd_filename = base_path.join("tensor_A_mode_0_crd");
+        // let a1_seg_filename = base_path.join("tensor_A_mode_1_seg");
+        // let a1_crd_filename = base_path.join("tensor_A_mode_1_crd");
+        // let a2_seg_filename = base_path.join("tensor_A_mode_2_seg");
+        // let a2_crd_filename = base_path.join("tensor_A_mode_2_crd");
+        // let a3_seg_filename = base_path.join("tensor_A_mode_3_seg");
+        // let a3_crd_filename = base_path.join("tensor_A_mode_3_crd");
+        // let a_vals_filename = base_path.join("tensor_A_mode_vals");
+
         let q0_seg = read_inputs::<u32>(&q0_seg_filename);
         let q0_crd = read_inputs::<u32>(&q0_crd_filename);
         let q1_seg = read_inputs::<u32>(&q1_seg_filename);
@@ -95,7 +105,17 @@ mod tests {
         let v3_crd = read_inputs::<u32>(&v3_crd_filename);
         let v_vals = read_inputs::<f32>(&v_vals_filename);
 
-        let chan_size = 32784;
+        // let a0_seg = read_inputs::<u32>(&a0_seg_filename);
+        // let a0_crd = read_inputs::<u32>(&a0_crd_filename);
+        // let a1_seg = read_inputs::<u32>(&a1_seg_filename);
+        // let a1_crd = read_inputs::<u32>(&a1_crd_filename);
+        // let a2_seg = read_inputs::<u32>(&a2_seg_filename);
+        // let a2_crd = read_inputs::<u32>(&a2_crd_filename);
+        // let a3_seg = read_inputs::<u32>(&a3_seg_filename);
+        // let a3_crd = read_inputs::<u32>(&a3_crd_filename);
+        // let a_vals = read_inputs::<f32>(&a_vals_filename);
+
+        let chan_size = 32;
 
         let mk_bounded = || {
             bounded_with_flavor::<Token<u32, u32>>(
@@ -790,5 +810,11 @@ mod tests {
         // let fil = formatted_dir.to_str().unwrap();
         // dbg!(xvals.out_val);
         dbg!(xvals.view().tick_lower_bound());
+
+        // assert_eq!(x0_wrscanner.crd_arr, a0_crd);
+        // assert_eq!(x1_wrscanner.crd_arr, a1_crd);
+        // assert_eq!(x2_wrscanner.crd_arr, a2_crd);
+        // assert_eq!(x3_wrscanner.crd_arr, a3_crd);
+        // assert_eq!(xvals.out_val, a_vals);
     }
 }
