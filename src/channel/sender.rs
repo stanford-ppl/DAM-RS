@@ -131,7 +131,7 @@ impl<T: Clone> SenderFlavor<T> for CyclicSender<T> {
                     manager.advance(time);
                 }
                 Err(SendOptions::Unknown) => {
-                    unreachable!("We should always know when to try again!")
+                    panic!("We should always know when to try again!")
                 }
             }
         }
@@ -294,7 +294,7 @@ impl<T: Clone> SenderFlavor<T> for AcyclicSender<T> {
                 }
 
                 SendOptions::CheckBackAt(_) => {
-                    unreachable!("We should never have to check back in an acyclic sender");
+                    panic!("We should never have to check back in an acyclic sender");
                 }
             }
         }
@@ -338,7 +338,7 @@ impl<T: Clone> SenderFlavor<T> for AcyclicSender<T> {
                 Ok(())
             }
             Err(SendOptions::Never) => Err(EnqueueError {}),
-            Err(_) => unreachable!("Not possible to get an Unknown or CheckBackAt"),
+            Err(_) => panic!("Not possible to get an Unknown or CheckBackAt"),
         }
     }
 
