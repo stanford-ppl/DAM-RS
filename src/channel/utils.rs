@@ -40,7 +40,7 @@ pub fn dequeue<T: DAMType>(
     match recv.dequeue(manager) {
         Recv::Something(ce) => Ok(ce),
         Recv::Closed => Err(DequeueError {}),
-        _ => unreachable!(),
+        _ => panic!("Should only ever get something or closed on dequeue"),
     }
 }
 
