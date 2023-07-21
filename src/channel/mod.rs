@@ -92,6 +92,7 @@ impl<T: DAMType> Sender<T> {
 impl<T: Clone> Cleanable for Sender<T> {
     fn cleanup(&mut self) {
         self.underlying.cleanup();
+        Self::log(SendEvent::Cleanup(self.id));
     }
 }
 
@@ -129,6 +130,7 @@ impl<T: DAMType> Receiver<T> {
 impl<T: Clone> Cleanable for Receiver<T> {
     fn cleanup(&mut self) {
         self.underlying.cleanup();
+        Self::log(ReceiverEvent::Cleanup(self.id));
     }
 }
 
