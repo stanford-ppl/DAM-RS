@@ -192,8 +192,8 @@ pub fn unbounded<T: Clone>() -> (Sender<T>, Receiver<T>) {
 pub fn unbounded_with_flavor<T: Clone>(flavor: ChannelFlavor) -> (Sender<T>, Receiver<T>)
 where {
     let (tx, rx) = channel::unbounded::<ChannelElement<T>>();
-    let (resp_t, _) = channel::bounded(0); // This will immediately block if ever written to.
-    let resp_r = channel::never();
+    let (resp_t, resp_r) = channel::unbounded();
+    // TODO: Make dedicated unbounded senders/receivers.
     let view_struct = Arc::new(ViewStruct::new(flavor));
     let id = ChannelID::new();
     match flavor {
