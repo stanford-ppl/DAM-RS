@@ -28,6 +28,7 @@ use self::events::SendEvent;
 use self::receiver::AcyclicReceiver;
 use self::receiver::CyclicReceiver;
 use self::receiver::{ReceiverFlavor, ReceiverImpl};
+use self::sender::AcyclicSender;
 use self::sender::CyclicSender;
 use self::sender::VoidSender;
 use self::sender::{SendOptions, SenderFlavor, SenderImpl};
@@ -87,7 +88,9 @@ impl<T: DAMType> Sender<T> {
 }
 
 impl<T: Clone> Cleanable for Sender<T> {
-    fn cleanup(&mut self) {}
+    fn cleanup(&mut self) {
+        self.underlying.cleanup();
+    }
 }
 
 #[log_producer]
@@ -122,7 +125,9 @@ impl<T: DAMType> Receiver<T> {
 }
 
 impl<T: Clone> Cleanable for Receiver<T> {
-    fn cleanup(&mut self) {}
+    fn cleanup(&mut self) {
+        self.underlying.cleanup();
+    }
 }
 
 pub fn bounded<T>(capacity: usize) -> (Sender<T>, Receiver<T>)
@@ -143,15 +148,7 @@ where
     match flavor {
         ChannelFlavor::Unknown | ChannelFlavor::Cyclic => {
             let snd = Sender {
-                underlying: CyclicSender {
-                    underlying: sender::SenderState::Open(tx),
-                    resp: resp_r,
-                    send_receive_delta: 0,
-                    capacity,
-                    view_struct: view_struct.clone(),
-                    next_available: SendOptions::Unknown,
-                }
-                .into(),
+                underlying: CyclicSender::new(tx, resp_r, capacity, view_struct.clone()).into(),
                 id,
             };
 
@@ -169,15 +166,7 @@ where
         }
         ChannelFlavor::Acyclic => {
             let snd = Sender {
-                underlying: CyclicSender {
-                    underlying: sender::SenderState::Open(tx),
-                    resp: resp_r,
-                    send_receive_delta: 0,
-                    capacity,
-                    view_struct: view_struct.clone(),
-                    next_available: SendOptions::Unknown,
-                }
-                .into(),
+                underlying: AcyclicSender::new(tx, resp_r, capacity, view_struct.clone()).into(),
                 id,
             };
 
@@ -203,21 +192,14 @@ pub fn unbounded<T: Clone>() -> (Sender<T>, Receiver<T>) {
 pub fn unbounded_with_flavor<T: Clone>(flavor: ChannelFlavor) -> (Sender<T>, Receiver<T>)
 where {
     let (tx, rx) = channel::unbounded::<ChannelElement<T>>();
-    let (resp_t, resp_r) = channel::unbounded::<Time>();
+    let (resp_t, _) = channel::bounded(0); // This will immediately block if ever written to.
+    let resp_r = channel::never();
     let view_struct = Arc::new(ViewStruct::new(flavor));
     let id = ChannelID::new();
     match flavor {
         ChannelFlavor::Unknown | ChannelFlavor::Cyclic => {
             let snd = Sender {
-                underlying: CyclicSender {
-                    underlying: sender::SenderState::Open(tx),
-                    resp: resp_r,
-                    send_receive_delta: 0,
-                    capacity: usize::MAX,
-                    view_struct: view_struct.clone(),
-                    next_available: SendOptions::Unknown,
-                }
-                .into(),
+                underlying: CyclicSender::new(tx, resp_r, usize::MAX, view_struct.clone()).into(),
                 id,
             };
 
@@ -235,15 +217,7 @@ where {
         }
         ChannelFlavor::Acyclic => {
             let snd = Sender {
-                underlying: CyclicSender {
-                    underlying: sender::SenderState::Open(tx),
-                    resp: resp_r,
-                    send_receive_delta: 0,
-                    capacity: usize::MAX,
-                    view_struct: view_struct.clone(),
-                    next_available: SendOptions::Unknown,
-                }
-                .into(),
+                underlying: AcyclicSender::new(tx, resp_r, usize::MAX, view_struct.clone()).into(),
                 id,
             };
 

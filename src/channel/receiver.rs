@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crossbeam::channel;
+use crossbeam::channel::{self, RecvError, TryRecvError};
 
 use dam_core::{time::Time, TimeManager};
 
@@ -21,6 +21,7 @@ pub(crate) trait ReceiverFlavor<T> {
     fn peek(&mut self) -> Recv<T>;
     fn peek_next(&mut self, manager: &mut TimeManager) -> Recv<T>;
     fn dequeue(&mut self, manager: &mut TimeManager) -> Recv<T>;
+    fn cleanup(&mut self);
 }
 
 #[enum_dispatch]
@@ -94,6 +95,10 @@ impl<T: Clone> ReceiverFlavor<T> for CyclicReceiver<T> {
             }
         }
     }
+
+    fn cleanup(&mut self) {
+        self.underlying = ReceiverState::Closed;
+    }
 }
 
 impl<T: Clone> CyclicReceiver<T> {
@@ -110,16 +115,16 @@ impl<T: Clone> CyclicReceiver<T> {
         res
     }
 
-    fn under(&mut self) -> &crossbeam::channel::Receiver<ChannelElement<T>> {
+    fn try_recv(&mut self) -> Result<ChannelElement<T>, TryRecvError> {
         match &self.underlying {
-            ReceiverState::Open(chan) => chan,
-            ReceiverState::Closed => panic!("Attempting to read from a closed channel!"),
+            ReceiverState::Open(chan) => chan.try_recv(),
+            ReceiverState::Closed => Err(TryRecvError::Disconnected),
         }
     }
 
     fn try_update_head(&mut self, nothing_time: Time) -> bool {
         let mut retflag = false;
-        self.head = match self.under().try_recv() {
+        self.head = match self.try_recv() {
             Ok(data) => {
                 retflag = true;
                 Recv::Something(data)
@@ -190,7 +195,7 @@ impl<T: Clone> ReceiverFlavor<T> for AcyclicReceiver<T> {
             Recv::Closed => return Recv::Closed,
         }
 
-        self.head = match self.under().recv() {
+        self.head = match self.under_recv() {
             Ok(stuff) => {
                 manager.advance(stuff.time);
                 Recv::Something(stuff)
@@ -216,7 +221,7 @@ impl<T: Clone> ReceiverFlavor<T> for AcyclicReceiver<T> {
         }
 
         // At this point, we can just block!
-        match self.under().recv() {
+        match self.under_recv() {
             Ok(ce) => {
                 self.register_recv(ce.time);
                 manager.advance(ce.time);
@@ -228,19 +233,16 @@ impl<T: Clone> ReceiverFlavor<T> for AcyclicReceiver<T> {
             }
         }
     }
+
+    fn cleanup(&mut self) {
+        self.underlying = ReceiverState::Closed;
+    }
 }
 
 impl<T: Clone> AcyclicReceiver<T> {
-    fn under(&mut self) -> &crossbeam::channel::Receiver<ChannelElement<T>> {
-        match &self.underlying {
-            ReceiverState::Open(chan) => chan,
-            ReceiverState::Closed => panic!("Attempting to read from a closed channel!"),
-        }
-    }
-
     fn try_update_head(&mut self, nothing_time: Time) -> bool {
         let mut retflag = false;
-        self.head = match self.under().try_recv() {
+        self.head = match self.try_recv() {
             Ok(data) => {
                 retflag = true;
                 Recv::Something(data)
@@ -256,6 +258,20 @@ impl<T: Clone> AcyclicReceiver<T> {
             Err(channel::TryRecvError::Empty) => Recv::Nothing(nothing_time),
         };
         return retflag;
+    }
+
+    fn try_recv(&mut self) -> Result<ChannelElement<T>, TryRecvError> {
+        match &self.underlying {
+            ReceiverState::Open(chan) => chan.try_recv(),
+            ReceiverState::Closed => Err(TryRecvError::Disconnected),
+        }
+    }
+
+    fn under_recv(&mut self) -> Result<ChannelElement<T>, RecvError> {
+        match &self.underlying {
+            ReceiverState::Open(chan) => chan.recv(),
+            ReceiverState::Closed => Err(RecvError),
+        }
     }
 
     fn register_recv(&mut self, time: Time) {
