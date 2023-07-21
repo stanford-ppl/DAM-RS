@@ -6,7 +6,7 @@ mod tests {
     use dam_core::identifier::Identifiable;
     use dam_core::{ContextView, TimeViewable};
 
-    use crate::channel::{bounded, unbounded, void};
+    use crate::channel::{bounded, bounded_with_flavor, unbounded, void};
     use crate::context::broadcast_context::BroadcastContext;
     use crate::context::generator_context::GeneratorContext;
     use crate::context::parent::BasicParentContext;
@@ -97,9 +97,19 @@ mod tests {
 
         let chan_size = 32784;
 
-        let mk_bounded = || bounded::<Token<u32, u32>>(chan_size);
+        let mk_bounded = || {
+            bounded_with_flavor::<Token<u32, u32>>(
+                chan_size,
+                crate::channel::ChannelFlavor::Acyclic,
+            )
+        };
         let mk_boundedf = || bounded::<Token<f32, u32>>(chan_size);
-        let mk_intersect_bounded = || bounded::<Token<u32, u32>>(chan_size);
+        let mk_intersect_bounded = || {
+            bounded_with_flavor::<Token<u32, u32>>(
+                chan_size,
+                crate::channel::ChannelFlavor::Acyclic,
+            )
+        };
 
         // fiberlookup_bi
         let (qi_in_ref_sender, qi_in_ref_receiver) = mk_bounded();
