@@ -216,6 +216,9 @@ impl<ElementType: DAMType> Context for PCU<ElementType> {
         self.input_channels.iter_mut().for_each(|chan| {
             chan.cleanup();
         });
+        self.output_channels.iter_mut().for_each(|chan| {
+            chan.cleanup();
+        });
     }
 }
 
