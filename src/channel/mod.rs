@@ -27,9 +27,11 @@ use self::events::ReceiverEvent;
 use self::events::SendEvent;
 use self::receiver::AcyclicReceiver;
 use self::receiver::CyclicReceiver;
+use self::receiver::InfiniteReceiver;
 use self::receiver::{ReceiverFlavor, ReceiverImpl};
 use self::sender::AcyclicSender;
 use self::sender::CyclicSender;
+use self::sender::InfiniteSender;
 use self::sender::VoidSender;
 use self::sender::{SendOptions, SenderFlavor, SenderImpl};
 use self::view_struct::ViewStruct;
@@ -185,55 +187,23 @@ where
     }
 }
 
-pub fn unbounded<T: Clone>() -> (Sender<T>, Receiver<T>) {
-    unbounded_with_flavor(ChannelFlavor::Unknown)
-}
-
-pub fn unbounded_with_flavor<T: Clone>(flavor: ChannelFlavor) -> (Sender<T>, Receiver<T>)
+pub fn unbounded<T: Clone>() -> (Sender<T>, Receiver<T>)
 where {
     let (tx, rx) = channel::unbounded::<ChannelElement<T>>();
-    let (resp_t, resp_r) = channel::unbounded();
     // TODO: Make dedicated unbounded senders/receivers.
-    let view_struct = Arc::new(ViewStruct::new(flavor));
+    let view_struct = Arc::new(ViewStruct::new(ChannelFlavor::Unknown));
     let id = ChannelID::new();
-    match flavor {
-        ChannelFlavor::Unknown | ChannelFlavor::Cyclic => {
-            let snd = Sender {
-                underlying: CyclicSender::new(tx, resp_r, usize::MAX, view_struct.clone()).into(),
-                id,
-            };
 
-            let rcv = Receiver {
-                underlying: CyclicReceiver {
-                    underlying: receiver::ReceiverState::Open(rx),
-                    resp: resp_t,
-                    view_struct,
-                    head: Recv::Unknown,
-                }
-                .into(),
-                id,
-            };
-            (snd, rcv)
-        }
-        ChannelFlavor::Acyclic => {
-            let snd = Sender {
-                underlying: AcyclicSender::new(tx, resp_r, usize::MAX, view_struct.clone()).into(),
-                id,
-            };
+    let snd = Sender {
+        underlying: InfiniteSender::new(sender::SenderState::Open(tx), view_struct.clone()).into(),
+        id,
+    };
 
-            let rcv = Receiver {
-                underlying: AcyclicReceiver {
-                    underlying: receiver::ReceiverState::Open(rx),
-                    resp: resp_t,
-                    view_struct,
-                    head: Recv::Unknown,
-                }
-                .into(),
-                id,
-            };
-            (snd, rcv)
-        }
-    }
+    let rcv = Receiver {
+        underlying: InfiniteReceiver::new(receiver::ReceiverState::Open(rx), view_struct).into(),
+        id,
+    };
+    (snd, rcv)
 }
 
 pub fn void<T: Clone>() -> Sender<T> {

@@ -7,7 +7,10 @@ use enum_dispatch::enum_dispatch;
 
 use crate::context::Context;
 
-use super::{view_struct::ViewStruct, ChannelElement, EnqueueError};
+use super::{
+    view_struct::{self, ViewStruct},
+    ChannelElement, DequeueError, EnqueueError,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum SendOptions {
@@ -37,6 +40,7 @@ pub(super) enum SenderImpl<T: Clone> {
     VoidSender(VoidSender<T>),
     CyclicSender(CyclicSender<T>),
     AcyclicSender(AcyclicSender<T>),
+    InfiniteSender(InfiniteSender<T>),
 }
 
 #[derive(Debug)]
@@ -358,5 +362,54 @@ impl<T> AcyclicSender<T> {
             view_struct,
             next_available: SendOptions::Unknown,
         }
+    }
+}
+
+pub(super) struct InfiniteSender<T> {
+    underlying: SenderState<ChannelElement<T>>,
+    view_struct: Arc<ViewStruct>,
+}
+
+impl<T> InfiniteSender<T> {
+    pub(super) fn new(
+        underlying: SenderState<ChannelElement<T>>,
+        view_struct: Arc<ViewStruct>,
+    ) -> Self {
+        Self {
+            underlying,
+            view_struct,
+        }
+    }
+}
+
+impl<T: Clone> SenderFlavor<T> for InfiniteSender<T> {
+    fn attach_sender(&self, sender: &dyn Context) {
+        self.view_struct.attach_sender(sender);
+    }
+
+    fn try_send(&mut self, elem: ChannelElement<T>) -> Result<(), SendOptions> {
+        assert!(elem.time >= self.view_struct.sender_tlb());
+        let _ = self.view_struct.register_send();
+        match &self.underlying {
+            SenderState::Open(chan) => match chan.send(elem) {
+                Ok(_) => Ok(()),
+                Err(_) => Err(SendOptions::Never),
+            },
+            SenderState::Closed => Err(SendOptions::Never),
+        }
+    }
+
+    fn enqueue(
+        &mut self,
+        manager: &mut TimeManager,
+        data: ChannelElement<T>,
+    ) -> Result<(), EnqueueError> {
+        let mut data_copy = data.clone();
+        data_copy.update_time(manager.tick() + 1);
+        self.try_send(data_copy).map_err(|_| EnqueueError {})
+    }
+
+    fn cleanup(&mut self) {
+        self.underlying = SenderState::Closed;
     }
 }
