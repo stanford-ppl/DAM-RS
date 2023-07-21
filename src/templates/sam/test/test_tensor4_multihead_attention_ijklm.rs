@@ -115,7 +115,7 @@ mod tests {
         // let a3_crd = read_inputs::<u32>(&a3_crd_filename);
         // let a_vals = read_inputs::<f32>(&a_vals_filename);
 
-        let chan_size = 32;
+        let chan_size = 4096;
 
         let mk_bounded = || {
             bounded_with_flavor::<Token<u32, u32>>(
@@ -123,7 +123,12 @@ mod tests {
                 crate::channel::ChannelFlavor::Acyclic,
             )
         };
-        let mk_boundedf = || bounded::<Token<f32, u32>>(chan_size);
+        let mk_boundedf = || {
+            bounded_with_flavor::<Token<f32, u32>>(
+                chan_size,
+                crate::channel::ChannelFlavor::Acyclic,
+            )
+        };
         let mk_intersect_bounded = || {
             bounded_with_flavor::<Token<u32, u32>>(
                 chan_size,
@@ -279,8 +284,7 @@ mod tests {
         };
         let mut intersect_j = Intersect::new(intersectj_data);
 
-        let (intersectj3_out_crd_sender, intersectj3_out_crd_receiver) =
-            unbounded::<Token<u32, u32>>();
+        let (intersectj3_out_crd_sender, intersectj3_out_crd_receiver) = mk_intersect_bounded();
         let (intersectj3_out_ref1_sender, intersectj3_out_ref1_receiver) = mk_intersect_bounded();
         let (intersectj3_out_ref2_sender, intersectj3_out_ref2_receiver) = mk_intersect_bounded();
 
