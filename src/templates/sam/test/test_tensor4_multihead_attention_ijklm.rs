@@ -15,6 +15,7 @@ mod tests {
     use crate::templates::sam::accumulator::{MaxReduce, Reduce, ReduceData, Spacc1, Spacc1Data};
     use crate::templates::sam::alu::{make_alu, make_unary_alu};
     use crate::templates::sam::array::{Array, ArrayData};
+    use crate::templates::sam::crd_manager::{CrdDrop, CrdManagerData};
     use crate::templates::sam::joiner::{CrdJoinerData, Intersect};
     use crate::templates::sam::primitive::{ALUExpOp, Repsiggen, Token};
     use crate::templates::sam::rd_scanner::{CompressedCrdRdScan, RdScanData};
@@ -94,11 +95,11 @@ mod tests {
         let v3_crd = read_inputs::<u32>(&v3_crd_filename);
         let v_vals = read_inputs::<f32>(&v_vals_filename);
 
-        let chan_size = 4096;
+        let chan_size = 32784;
 
         let mk_bounded = || bounded::<Token<u32, u32>>(chan_size);
         let mk_boundedf = || bounded::<Token<f32, u32>>(chan_size);
-        let mk_intersect_bounded = || unbounded::<Token<u32, u32>>();
+        let mk_intersect_bounded = || bounded::<Token<u32, u32>>(chan_size);
 
         // fiberlookup_bi
         let (qi_in_ref_sender, qi_in_ref_receiver) = mk_bounded();
@@ -263,8 +264,8 @@ mod tests {
             out_ref2: intersectj3_out_ref2_sender,
         };
         let mut intersect_j3 = Intersect::new(intersectj3_data);
-        dbg!(intersect_j.id());
-        dbg!(intersect_j3.id());
+        // dbg!(intersect_j.id());
+        // dbg!(intersect_j3.id());
 
         let (bc_intersectj3_out_ref2_sender, bc_intersectj3_out_ref2_receiver) =
             mk_intersect_bounded();
@@ -285,9 +286,11 @@ mod tests {
 
         let (bc_qk_out_crd_sender, bc_qk_out_crd_receiver) = mk_bounded();
         let (bc1_qk_out_crd_sender, bc1_qk_out_crd_receiver) = mk_bounded();
+        let (bc2_qk_out_crd_sender, bc2_qk_out_crd_receiver) = mk_bounded();
         let mut broadcast7 = BroadcastContext::new(qk_out_crd_receiver);
         broadcast7.add_target(bc_qk_out_crd_sender);
         broadcast7.add_target(bc1_qk_out_crd_sender);
+        broadcast7.add_target(bc2_qk_out_crd_sender);
 
         // repeatsiggen
         let (out_repsig_k_sender, out_repsig_k_receiver) = bounded::<Repsiggen>(chan_size);
@@ -331,14 +334,14 @@ mod tests {
         };
         let mut kl_rdscanner = CompressedCrdRdScan::new(kl_data, k1_seg, k1_crd);
 
-        let (bc_kl_out_crd_sender, bc_kl_out_crd_receiver) = mk_bounded();
-        // let (bc1_kl_out_crd_sender, bc1_kl_out_crd_receiver) =
-        //     mk_bounded();
-        let (bc2_kl_out_crd_sender, bc2_kl_out_crd_receiver) = mk_bounded();
-        let mut broadcast15 = BroadcastContext::new(kl_out_crd_receiver);
-        broadcast15.add_target(bc_kl_out_crd_sender);
+        // let (bc_kl_out_crd_sender, bc_kl_out_crd_receiver) = mk_bounded();
+        // // let (bc1_kl_out_crd_sender, bc1_kl_out_crd_receiver) =
+        // //     mk_bounded();
+        // // let (bc2_kl_out_crd_sender, bc2_kl_out_crd_receiver) = mk_bounded();
+        // let mut broadcast15 = BroadcastContext::new(kl_out_crd_receiver);
+        // broadcast15.add_target(bc_kl_out_crd_sender);
         // broadcast15.add_target(bc1_kl_out_crd_sender);
-        broadcast15.add_target(bc2_kl_out_crd_sender);
+        // broadcast15.add_target(bc2_kl_out_crd_sender);
 
         let (vl_out_ref_sender, vl_out_ref_receiver) = mk_bounded();
         let (vl_out_crd_sender, vl_out_crd_receiver) = mk_bounded();
@@ -355,14 +358,20 @@ mod tests {
         let intersectl_data = CrdJoinerData::<u32, u32> {
             in_crd1: vl_out_crd_receiver,
             in_ref1: vl_out_ref_receiver,
-            in_crd2: bc_kl_out_crd_receiver,
+            in_crd2: kl_out_crd_receiver,
             in_ref2: kl_out_ref_receiver,
             out_crd: intersectl_out_crd_sender,
             out_ref1: intersectl_out_ref1_sender,
             out_ref2: intersectl_out_ref2_sender,
         };
         let mut intersect_l = Intersect::new(intersectl_data);
-        dbg!(intersect_l.id());
+        // dbg!(intersect_l.id());
+
+        let (bc_intersectl_out_crd_sender, bc_intersectl_out_crd_receiver) = mk_bounded();
+        let (bc1_intersectl_out_crd_sender, bc1_intersectl_out_crd_receiver) = mk_bounded();
+        let mut broadcast17 = BroadcastContext::new(intersectl_out_crd_receiver);
+        broadcast17.add_target(bc_intersectl_out_crd_sender);
+        broadcast17.add_target(bc1_intersectl_out_crd_sender);
 
         let (vm_out_ref_sender, vm_out_ref_receiver) = mk_bounded();
         let (vm_out_crd_sender, vm_out_crd_receiver) = mk_bounded();
@@ -385,7 +394,7 @@ mod tests {
         // repeatsiggen
         let (out_repsig_l_sender, out_repsig_l_receiver) = bounded::<Repsiggen>(chan_size);
         let repsig_l_data = RepSigGenData::<u32, u32> {
-            input: intersectl_out_crd_receiver,
+            input: bc_intersectl_out_crd_receiver,
             out_repsig: out_repsig_l_sender,
         };
         let mut repsig_l = RepeatSigGen::new(repsig_l_data);
@@ -429,7 +438,7 @@ mod tests {
             out_ref2: intersectm_out_ref2_sender,
         };
         let mut intersect_m = Intersect::new(intersectm_data);
-        dbg!(intersect_m.id());
+        // dbg!(intersect_m.id());
 
         let (bc_km_out_ref_sender, bc_km_out_ref_receiver) = mk_bounded();
         let (bc1_km_out_ref_sender, bc1_km_out_ref_receiver) = mk_bounded();
@@ -461,9 +470,8 @@ mod tests {
             out_ref2: intersectm2_out_ref2_sender,
         };
         let mut intersect_m2 = Intersect::new(intersectm2_data);
-        dbg!(intersect_m2.id());
+        // dbg!(intersect_m2.id());
 
-        // TODO: Used later on in the code, change back to bounded
         let (intersectm3_out_crd_sender, intersectm3_out_crd_receiver) = mk_intersect_bounded();
         // let (intersectm3_out_ref1_sender, intersectm3_out_ref1_receiver) =
         let (intersectm3_out_ref1_sender, intersectm3_out_ref1_receiver) = mk_intersect_bounded();
@@ -505,7 +513,6 @@ mod tests {
         let mut arrayvals_k = Array::<u32, f32, u32>::new(arrayvals_k_data, k_vals);
 
         // arrayvals_v
-        // TODO: Used later on in the code, change back to bounded
         let (v_out_val_sender, v_out_val_receiver) = mk_boundedf();
         let arrayvals_v_data = ArrayData::<u32, f32, u32> {
             in_ref: intersectm2_out_ref2_receiver,
@@ -633,10 +640,22 @@ mod tests {
             ALUMulOp(),
         );
 
+        // let (drop_out_ocrd_sender, drop_out_ocrd_receiver) = unbounded::<Token<u32, u32>>();
+        let (drop_out_icrd_sender, drop_out_icrd_receiver) = unbounded::<Token<u32, u32>>();
+
+        let crd_drop_data = CrdManagerData::<u32, u32> {
+            in_crd_outer: bc2_qk_out_crd_receiver,
+            in_crd_inner: bc1_intersectl_out_crd_receiver,
+            out_crd_outer: void(),
+            out_crd_inner: drop_out_icrd_sender,
+        };
+
+        let mut drop = CrdDrop::new(crd_drop_data);
+
         let (out_spacc_val_sender, out_spacc_val_receiver) = mk_boundedf();
         let (out_spacc_icrd_sender, out_spacc_icrd_receiver) = mk_bounded();
         let spacc_data = Spacc1Data::<u32, f32, u32> {
-            in_crd_outer: bc2_kl_out_crd_receiver,
+            in_crd_outer: drop_out_icrd_receiver,
             in_crd_inner: bc1_intersectm3_out_crd_receiver,
             in_val: mul2_out_receiver,
             out_val: out_spacc_val_sender,
@@ -705,8 +724,9 @@ mod tests {
         parent.add_child(&mut broadcast12);
         parent.add_child(&mut broadcast13);
         parent.add_child(&mut broadcast14);
-        parent.add_child(&mut broadcast15);
         parent.add_child(&mut broadcast16);
+        parent.add_child(&mut broadcast17);
+        parent.add_child(&mut drop);
         parent.add_child(&mut intersect_i);
         parent.add_child(&mut intersect_i2);
         parent.add_child(&mut intersect_i3);

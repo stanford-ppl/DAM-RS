@@ -1,7 +1,5 @@
-use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
-use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::{env, thread};
@@ -34,7 +32,7 @@ fn process_file<T: std::str::FromStr>(file_path: &PathBuf, shared_map: Arc<Mutex
     map.push(vector);
 }
 
-pub fn par_read_inputs<T>(base_path: &PathBuf, files: &Vec<String>, val_file: String) -> Vec<Vec<T>>
+pub fn par_read_inputs<T>(base_path: &PathBuf, files: &Vec<String>) -> Vec<Vec<T>>
 // ) -> HashMap<PathBuf, Vec<Vec<T>>>
 where
     T: std::str::FromStr + std::marker::Send,
