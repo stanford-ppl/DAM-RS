@@ -223,7 +223,7 @@ impl<ElementType: DAMType> Context for PCU<ElementType> {
 mod tests {
 
     use crate::{
-        channel::bounded,
+        channel::bounded_with_flavor,
         context::{
             checker_context::CheckerContext, generator_context::GeneratorContext,
             parent::BasicParentContext, Context,
@@ -266,10 +266,14 @@ mod tests {
             output_register_ids: vec![0],
         });
 
-        let (arg1_send, arg1_recv) = bounded::<u16>(CHAN_SIZE);
-        let (arg2_send, arg2_recv) = bounded::<u16>(CHAN_SIZE);
-        let (arg3_send, arg3_recv) = bounded::<u16>(CHAN_SIZE);
-        let (pcu_out_send, pcu_out_recv) = bounded::<u16>(CHAN_SIZE);
+        let (arg1_send, arg1_recv) =
+            bounded_with_flavor(CHAN_SIZE, crate::channel::ChannelFlavor::Acyclic);
+        let (arg2_send, arg2_recv) =
+            bounded_with_flavor(CHAN_SIZE, crate::channel::ChannelFlavor::Acyclic);
+        let (arg3_send, arg3_recv) =
+            bounded_with_flavor(CHAN_SIZE, crate::channel::ChannelFlavor::Acyclic);
+        let (pcu_out_send, pcu_out_recv) =
+            bounded_with_flavor(CHAN_SIZE, crate::channel::ChannelFlavor::Acyclic);
 
         pcu.add_input_channel(arg1_recv);
         pcu.add_input_channel(arg2_recv);

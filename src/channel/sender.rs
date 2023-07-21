@@ -322,13 +322,14 @@ impl<T: Clone> SenderFlavor<T> for AcyclicSender<T> {
         manager: &mut TimeManager,
         data: ChannelElement<T>,
     ) -> Result<(), EnqueueError> {
-        match self.try_send(data.clone()) {
+        let mut data_clone = data.clone();
+        data_clone.update_time(manager.tick() + 1);
+        match self.try_send(data_clone.clone()) {
             Ok(_) => Ok(()),
             Err(SendOptions::AvailableAt(time)) => {
                 manager.advance(time);
-                let mut cp = data.clone();
-                cp.update_time(time + 1);
-                self.try_send(cp)
+                data_clone.update_time(time + 1);
+                self.try_send(data_clone)
                     .expect("Should have succeeded on the second attempt!");
                 Ok(())
             }
