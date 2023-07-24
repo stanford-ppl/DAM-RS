@@ -7,6 +7,7 @@ pub mod joiner;
 pub mod primitive;
 pub mod rd_scanner;
 pub mod repeat;
+pub mod scatter_gather;
 pub mod shape_operator;
 pub mod test;
 pub mod utils;

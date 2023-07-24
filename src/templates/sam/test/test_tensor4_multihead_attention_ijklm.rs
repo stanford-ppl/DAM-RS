@@ -135,6 +135,8 @@ mod tests {
                 crate::channel::ChannelFlavor::Acyclic,
             )
         };
+        let mk_repsiggen_bounded =
+            || bounded_with_flavor::<Repsiggen>(chan_size, crate::channel::ChannelFlavor::Acyclic);
 
         // fiberlookup_bi
         let (qi_in_ref_sender, qi_in_ref_receiver) = mk_bounded();
@@ -327,7 +329,7 @@ mod tests {
         broadcast7.add_target(bc2_qk_out_crd_sender);
 
         // repeatsiggen
-        let (out_repsig_k_sender, out_repsig_k_receiver) = bounded::<Repsiggen>(chan_size);
+        let (out_repsig_k_sender, out_repsig_k_receiver) = mk_repsiggen_bounded();
         let repsig_k_data = RepSigGenData::<u32, u32> {
             input: bc_qk_out_crd_receiver,
             // input: qk_out_crd_receiver,
@@ -335,8 +337,8 @@ mod tests {
         };
         let mut repsig_k = RepeatSigGen::new(repsig_k_data);
 
-        let (bc_out_repsig_k_sender, bc_out_repsig_k_receiver) = bounded::<Repsiggen>(chan_size);
-        let (bc1_out_repsig_k_sender, bc1_out_repsig_k_receiver) = bounded::<Repsiggen>(chan_size);
+        let (bc_out_repsig_k_sender, bc_out_repsig_k_receiver) = mk_repsiggen_bounded();
+        let (bc1_out_repsig_k_sender, bc1_out_repsig_k_receiver) = mk_repsiggen_bounded();
         let mut broadcast8 = BroadcastContext::new(out_repsig_k_receiver);
         broadcast8.add_target(bc_out_repsig_k_sender);
         broadcast8.add_target(bc1_out_repsig_k_sender);
@@ -426,16 +428,16 @@ mod tests {
         let mut km_rdscanner = CompressedCrdRdScan::new(km_data, k3_seg, k3_crd);
 
         // repeatsiggen
-        let (out_repsig_l_sender, out_repsig_l_receiver) = bounded::<Repsiggen>(chan_size);
+        let (out_repsig_l_sender, out_repsig_l_receiver) = mk_repsiggen_bounded();
         let repsig_l_data = RepSigGenData::<u32, u32> {
             input: bc_intersectl_out_crd_receiver,
             out_repsig: out_repsig_l_sender,
         };
         let mut repsig_l = RepeatSigGen::new(repsig_l_data);
 
-        let (bc_out_repsig_l_sender, bc_out_repsig_l_receiver) = bounded::<Repsiggen>(chan_size);
-        let (bc1_out_repsig_l_sender, bc1_out_repsig_l_receiver) = bounded::<Repsiggen>(chan_size);
-        let (bc2_out_repsig_l_sender, bc2_out_repsig_l_receiver) = bounded::<Repsiggen>(chan_size);
+        let (bc_out_repsig_l_sender, bc_out_repsig_l_receiver) = mk_repsiggen_bounded();
+        let (bc1_out_repsig_l_sender, bc1_out_repsig_l_receiver) = mk_repsiggen_bounded();
+        let (bc2_out_repsig_l_sender, bc2_out_repsig_l_receiver) = mk_repsiggen_bounded();
         let mut broadcast10 = BroadcastContext::new(out_repsig_l_receiver);
         broadcast10.add_target(bc_out_repsig_l_sender);
         broadcast10.add_target(bc1_out_repsig_l_sender);
@@ -649,7 +651,7 @@ mod tests {
 
         // let mut val_drop = ValDrop::new(val_drop_data);
 
-        let (out_repsig_m_sender, out_repsig_m_receiver) = bounded::<Repsiggen>(chan_size);
+        let (out_repsig_m_sender, out_repsig_m_receiver) = mk_repsiggen_bounded();
         let repsig_m_data = RepSigGenData::<u32, u32> {
             input: bc_intersectm3_out_crd_receiver,
             out_repsig: out_repsig_m_sender,
@@ -675,7 +677,7 @@ mod tests {
         );
 
         // let (drop_out_ocrd_sender, drop_out_ocrd_receiver) = unbounded::<Token<u32, u32>>();
-        let (drop_out_icrd_sender, drop_out_icrd_receiver) = unbounded::<Token<u32, u32>>();
+        let (drop_out_icrd_sender, drop_out_icrd_receiver) = mk_bounded();
 
         let crd_drop_data = CrdManagerData::<u32, u32> {
             in_crd_outer: bc2_qk_out_crd_receiver,
