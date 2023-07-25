@@ -109,7 +109,6 @@ impl<'a> Program<'a> {
         let all_node_ids = self.all_node_ids();
         // check that all of our edge targets are in the nodes
         self.edges.iter().chain(self.void_edges.iter()).for_each(|edge| {
-            println!("Edge ID: {:?}", edge.id());
             edge.sender()
                 .iter()
                 .chain(edge.receiver().iter())
