@@ -699,9 +699,9 @@ mod tests {
 
         let (bc_km_out_ref_sender4, bc_km_out_ref_receiver4) = parent.bounded(chan_size);
         let (bc1_km_out_ref_sender4, bc1_km_out_ref_receiver4) = parent.bounded(chan_size);
-        let mut broadcast23 = BroadcastContext::new(km_out_ref_receiver4);
-        broadcast23.add_target(bc_km_out_ref_sender4);
-        broadcast23.add_target(bc1_km_out_ref_sender4);
+        let mut broadcast40 = BroadcastContext::new(km_out_ref_receiver4);
+        broadcast40.add_target(bc_km_out_ref_sender4);
+        broadcast40.add_target(bc1_km_out_ref_sender4);
 
         // repeatsiggen
         let (out_repsig_l_sender1, out_repsig_l_receiver1) = parent.bounded::<Repsiggen>(chan_size);
@@ -1877,6 +1877,8 @@ mod tests {
         parent.add_child(broadcast36);
         parent.add_child(broadcast37);
         parent.add_child(broadcast38);
+        parent.add_child(broadcast39);
+        parent.add_child(broadcast40);
         parent.add_child(drop2);
         parent.add_child(drop3);
         parent.add_child(drop4);
