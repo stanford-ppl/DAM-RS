@@ -86,21 +86,30 @@ impl<'a> Program<'a> {
         )
     }
 
-    pub fn init(&mut self) {
+    pub fn check(&self) {
         // Make sure that all edges have registered endpoints.
         self.edges.iter().for_each(|edge| {
-            assert!(edge.sender().is_some());
-            assert!(edge.receiver().is_some());
+            if edge.sender().is_none() {
+                panic!("Edge {:?} had no sender!", edge.id());
+            }
+            if edge.receiver().is_none() {
+                panic!("Edge {:?} had no receiver!", edge.id());
+            }
         });
 
         self.void_edges.iter().for_each(|edge| {
-            assert!(edge.sender().is_some());
-            assert!(edge.receiver().is_none());
+            if edge.sender().is_none() {
+                panic!("Void edge {:?} had no sender!", edge.id());
+            }
+            if let Some(recv) = edge.receiver() {
+                panic!("Void edge {:?} had a receiver! ({recv:?})", edge.id());
+            }
         });
 
         let all_node_ids = self.all_node_ids();
         // check that all of our edge targets are in the nodes
         self.edges.iter().chain(self.void_edges.iter()).for_each(|edge| {
+            println!("Edge ID: {:?}", edge.id());
             edge.sender()
                 .iter()
                 .chain(edge.receiver().iter())
@@ -110,9 +119,12 @@ impl<'a> Program<'a> {
                     }
                 })
         });
+    }
 
+    pub fn init(&mut self) {
         // construct the edge reachability graph.
         // an edge is reachable from another edge
+        self.check();
 
         self.void_edges
             .iter()
@@ -166,7 +178,7 @@ impl<'a> Program<'a> {
                 }
             }
 
-            for node in all_node_ids {
+            for node in self.all_node_ids() {
                 if !manually_managed_nodes.contains(&node) {
                     let handle = ChannelOrContext::Context(node);
                     graph_node_map.insert(handle, edge_graph.add_node(handle));
@@ -241,6 +253,7 @@ impl<'a> Program<'a> {
     }
 
     pub fn print_graph(&self) {
+        self.check();
         let mut graph = DiGraph::<Identifier, ChannelID>::new();
         let ids = self.all_node_ids();
         let mut id_node_map = HashMap::new();
@@ -250,8 +263,12 @@ impl<'a> Program<'a> {
 
         for edge in &self.edges {
             graph.add_edge(
-                *id_node_map.get(&edge.sender().unwrap()).unwrap(),
-                *id_node_map.get(&edge.receiver().unwrap()).unwrap(),
+                *id_node_map
+                    .get(&edge.sender().expect("Edge didn't have a sender!"))
+                    .expect("Edge sender was not registered in id_node_map!"),
+                *id_node_map
+                    .get(&edge.receiver().expect("Edge didn't have a receiver!"))
+                    .expect("Edge receiver was not registered in id_node_map!"),
                 edge.id(),
             );
         }
