@@ -106,6 +106,8 @@ impl<'a> Program<'a> {
         self.void_edges
             .iter()
             .for_each(|edge| edge.set_flavor(crate::channel::ChannelFlavor::Void));
+
+        self.nodes.iter_mut().for_each(|child| child.init());
     }
 
     pub fn run(&mut self) {
