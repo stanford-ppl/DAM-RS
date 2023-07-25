@@ -95,6 +95,9 @@ impl<'a> Program<'a> {
                 })
         });
 
+        // construct the edge reachability graph.
+        // an edge is reachable from another edge
+
         // One of the major things to do here is to optimize all of the edges.
         self.edges
             .iter()
@@ -103,9 +106,6 @@ impl<'a> Program<'a> {
         self.void_edges
             .iter()
             .for_each(|edge| edge.set_flavor(crate::channel::ChannelFlavor::Void));
-
-        // construct the edge reachability graph.
-        // an edge is reachable from another edge
     }
 
     pub fn run(&mut self) {
