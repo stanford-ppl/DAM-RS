@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{marker::PhantomData, sync::Arc};
 
 use crossbeam::channel::{self, RecvError, TryRecvError};
 
@@ -9,11 +9,11 @@ use enum_dispatch::enum_dispatch;
 use crate::context::Context;
 
 use super::{
-    view_struct::{self, ViewStruct},
+    view_struct::{ChannelSpec},
     ChannelElement, Recv,
 };
 
-pub(super) enum ReceiverState<T> {
+pub(crate) enum ReceiverState<T> {
     Open(channel::Receiver<T>),
     Closed,
 }
@@ -28,18 +28,55 @@ pub(crate) trait ReceiverFlavor<T> {
 }
 
 #[enum_dispatch]
-pub(super) enum ReceiverImpl<T: Clone> {
+pub(crate) enum ReceiverImpl<T: Clone> {
     CyclicReceiver(CyclicReceiver<T>),
     AcyclicReceiver(AcyclicReceiver<T>),
     InfiniteReceiver(InfiniteReceiver<T>),
+    UndefinedReceiver(UndefinedReceiver<T>),
 }
 
-pub(super) struct CyclicReceiver<T> {
-    pub(super) underlying: ReceiverState<ChannelElement<T>>,
-    pub(super) resp: channel::Sender<Time>,
+pub struct UndefinedReceiver<T> {
+    spec: Arc<ChannelSpec>,
+    _marker: PhantomData<T>,
+}
 
-    pub(super) view_struct: Arc<ViewStruct>,
-    pub(super) head: Recv<T>,
+impl<T> UndefinedReceiver<T> {
+    pub fn new(spec: Arc<ChannelSpec>) -> Self {
+        Self {
+            spec,
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<T> ReceiverFlavor<T> for UndefinedReceiver<T> {
+    fn attach_receiver(&self, receiver: &dyn Context) {
+        self.spec.attach_receiver(receiver);
+    }
+
+    fn peek(&mut self) -> Recv<T> {
+        panic!();
+    }
+
+    fn peek_next(&mut self, _manager: &mut TimeManager) -> Recv<T> {
+        panic!();
+    }
+
+    fn dequeue(&mut self, _manager: &mut TimeManager) -> Recv<T> {
+        panic!();
+    }
+
+    fn cleanup(&mut self) {
+        panic!();
+    }
+}
+
+pub(crate) struct CyclicReceiver<T> {
+    pub(crate) underlying: ReceiverState<ChannelElement<T>>,
+    pub(crate) resp: channel::Sender<Time>,
+
+    pub(crate) view_struct: Arc<ChannelSpec>,
+    pub(crate) head: Recv<T>,
 }
 
 impl<T: Clone> ReceiverFlavor<T> for CyclicReceiver<T> {
@@ -106,6 +143,18 @@ impl<T: Clone> ReceiverFlavor<T> for CyclicReceiver<T> {
 }
 
 impl<T: Clone> CyclicReceiver<T> {
+    pub fn new(
+        underlying: channel::Receiver<ChannelElement<T>>,
+        resp: channel::Sender<Time>,
+        view_struct: Arc<ChannelSpec>,
+    ) -> Self {
+        Self {
+            underlying: ReceiverState::Open(underlying),
+            resp,
+            view_struct,
+            head: Recv::Unknown,
+        }
+    }
     fn recv(&mut self) -> Recv<T> {
         let res = self.peek();
         match &res {
@@ -155,11 +204,11 @@ impl<T: Clone> CyclicReceiver<T> {
 }
 
 pub struct AcyclicReceiver<T> {
-    pub(super) underlying: ReceiverState<ChannelElement<T>>,
-    pub(super) resp: channel::Sender<Time>,
+    pub(crate) underlying: ReceiverState<ChannelElement<T>>,
+    pub(crate) resp: channel::Sender<Time>,
 
-    pub(super) view_struct: Arc<ViewStruct>,
-    pub(super) head: Recv<T>,
+    pub(crate) view_struct: Arc<ChannelSpec>,
+    pub(crate) head: Recv<T>,
 }
 
 impl<T: Clone> ReceiverFlavor<T> for AcyclicReceiver<T> {
@@ -244,6 +293,19 @@ impl<T: Clone> ReceiverFlavor<T> for AcyclicReceiver<T> {
 }
 
 impl<T: Clone> AcyclicReceiver<T> {
+    pub fn new(
+        underlying: channel::Receiver<ChannelElement<T>>,
+        resp: channel::Sender<Time>,
+        view_struct: Arc<ChannelSpec>,
+    ) -> Self {
+        Self {
+            underlying: ReceiverState::Open(underlying),
+            resp,
+            view_struct,
+            head: Recv::Unknown,
+        }
+    }
+
     fn try_update_head(&mut self, nothing_time: Time) -> bool {
         let mut retflag = false;
         self.head = match self.try_recv() {
@@ -289,7 +351,7 @@ impl<T: Clone> AcyclicReceiver<T> {
 pub struct InfiniteReceiver<T> {
     underlying: ReceiverState<ChannelElement<T>>,
 
-    view_struct: Arc<ViewStruct>,
+    view_struct: Arc<ChannelSpec>,
     head: Recv<T>,
 }
 
@@ -375,9 +437,9 @@ impl<T: Clone> ReceiverFlavor<T> for InfiniteReceiver<T> {
 }
 
 impl<T: Clone> InfiniteReceiver<T> {
-    pub(super) fn new(
+    pub(crate) fn new(
         underlying: ReceiverState<ChannelElement<T>>,
-        view_struct: Arc<ViewStruct>,
+        view_struct: Arc<ChannelSpec>,
     ) -> Self {
         Self {
             underlying,

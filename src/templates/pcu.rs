@@ -226,11 +226,8 @@ impl<ElementType: DAMType> Context for PCU<ElementType> {
 mod tests {
 
     use crate::{
-        channel::bounded_with_flavor,
-        context::{
-            checker_context::CheckerContext, generator_context::GeneratorContext,
-            parent::BasicParentContext, Context,
-        },
+        context::{checker_context::CheckerContext, generator_context::GeneratorContext},
+        simulation::Program,
         templates::ops::*,
     };
 
@@ -239,6 +236,7 @@ mod tests {
     #[test]
     fn pcu_test() {
         // two-stage PCU on scalars, with the third stage a no-op.
+        let mut parent = Program::default();
 
         const CHAN_SIZE: usize = 8;
         let ingress_op = PCU::<u16>::READ_ALL_INPUTS;
@@ -269,24 +267,20 @@ mod tests {
             output_register_ids: vec![0],
         });
 
-        let (arg1_send, arg1_recv) =
-            bounded_with_flavor(CHAN_SIZE, crate::channel::ChannelFlavor::Acyclic);
-        let (arg2_send, arg2_recv) =
-            bounded_with_flavor(CHAN_SIZE, crate::channel::ChannelFlavor::Acyclic);
-        let (arg3_send, arg3_recv) =
-            bounded_with_flavor(CHAN_SIZE, crate::channel::ChannelFlavor::Acyclic);
-        let (pcu_out_send, pcu_out_recv) =
-            bounded_with_flavor(CHAN_SIZE, crate::channel::ChannelFlavor::Acyclic);
+        let (arg1_send, arg1_recv) = parent.bounded(CHAN_SIZE);
+        let (arg2_send, arg2_recv) = parent.bounded(CHAN_SIZE);
+        let (arg3_send, arg3_recv) = parent.bounded(CHAN_SIZE);
+        let (pcu_out_send, pcu_out_recv) = parent.bounded(CHAN_SIZE);
 
         pcu.add_input_channel(arg1_recv);
         pcu.add_input_channel(arg2_recv);
         pcu.add_input_channel(arg3_recv);
         pcu.add_output_channel(pcu_out_send);
 
-        let mut gen1 = GeneratorContext::new(|| (0u16..32), arg1_send);
-        let mut gen2 = GeneratorContext::new(|| (33u16..64), arg2_send);
-        let mut gen3 = GeneratorContext::new(|| (65u16..96), arg3_send);
-        let mut checker = CheckerContext::new(
+        let gen1 = GeneratorContext::new(|| (0u16..32), arg1_send);
+        let gen2 = GeneratorContext::new(|| (33u16..64), arg2_send);
+        let gen3 = GeneratorContext::new(|| (65u16..96), arg3_send);
+        let checker = CheckerContext::new(
             || {
                 (0u16..32)
                     .zip(33u16..64)
@@ -296,14 +290,12 @@ mod tests {
             pcu_out_recv,
         );
 
-        let mut parent = BasicParentContext::default();
-        parent.add_child(&mut gen1);
-        parent.add_child(&mut gen2);
-        parent.add_child(&mut gen3);
-        parent.add_child(&mut pcu);
-        parent.add_child(&mut checker);
+        parent.add_child(gen1);
+        parent.add_child(gen2);
+        parent.add_child(gen3);
+        parent.add_child(pcu);
+        parent.add_child(checker);
         parent.init();
         parent.run();
-        parent.cleanup();
     }
 }
