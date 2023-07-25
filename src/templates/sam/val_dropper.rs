@@ -147,11 +147,10 @@ where
 #[cfg(test)]
 mod tests {
     use crate::{
-        channel::unbounded,
         context::{
-            checker_context::CheckerContext, generator_context::GeneratorContext,
-            parent::BasicParentContext, Context,
+            checker_context::CheckerContext, generator_context::GeneratorContext, Context,
         },
+        simulation::Program,
         templates::sam::primitive::Token,
         token_vec,
     };
@@ -183,29 +182,28 @@ mod tests {
         ORT1: Iterator<Item = Token<f32, u32>> + 'static,
         ORT2: Iterator<Item = Token<u32, u32>> + 'static,
     {
-        let (in_val_sender, in_val_receiver) = unbounded::<Token<f32, u32>>();
-        let (in_crd_sender, in_crd_receiver) = unbounded::<Token<u32, u32>>();
-        let (out_val_sender, out_val_receiver) = unbounded::<Token<f32, u32>>();
-        let (out_crd_sender, out_crd_receiver) = unbounded::<Token<u32, u32>>();
+        let mut parent = Program::default();
+        let (in_val_sender, in_val_receiver) = parent.unbounded::<Token<f32, u32>>();
+        let (in_crd_sender, in_crd_receiver) = parent.unbounded::<Token<u32, u32>>();
+        let (out_val_sender, out_val_receiver) = parent.unbounded::<Token<f32, u32>>();
+        let (out_crd_sender, out_crd_receiver) = parent.unbounded::<Token<u32, u32>>();
         let data = ValDropData::<u32, f32, u32> {
             in_val: in_val_receiver,
             in_crd: in_crd_receiver,
             out_val: out_val_sender,
             out_crd: out_crd_sender,
         };
-        let mut val_drop = ValDrop::new(data);
-        let mut gen1 = GeneratorContext::new(in_val, in_val_sender);
-        let mut gen2 = GeneratorContext::new(in_crd, in_crd_sender);
-        let mut out_val_checker = CheckerContext::new(out_val, out_val_receiver);
-        let mut out_crd_checker = CheckerContext::new(out_crd, out_crd_receiver);
-        let mut parent = BasicParentContext::default();
-        parent.add_child(&mut gen1);
-        parent.add_child(&mut gen2);
-        parent.add_child(&mut out_val_checker);
-        parent.add_child(&mut out_crd_checker);
-        parent.add_child(&mut val_drop);
+        let val_drop = ValDrop::new(data);
+        let gen1 = GeneratorContext::new(in_val, in_val_sender);
+        let gen2 = GeneratorContext::new(in_crd, in_crd_sender);
+        let out_val_checker = CheckerContext::new(out_val, out_val_receiver);
+        let out_crd_checker = CheckerContext::new(out_crd, out_crd_receiver);
+        parent.add_child(gen1);
+        parent.add_child(gen2);
+        parent.add_child(out_val_checker);
+        parent.add_child(out_crd_checker);
+        parent.add_child(val_drop);
         parent.init();
         parent.run();
-        parent.cleanup();
     }
 }

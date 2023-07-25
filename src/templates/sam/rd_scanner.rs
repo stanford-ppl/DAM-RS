@@ -362,11 +362,10 @@ where
 #[cfg(test)]
 mod tests {
     use crate::{
-        channel::unbounded,
         context::{
-            checker_context::CheckerContext, generator_context::GeneratorContext,
-            parent::BasicParentContext, Context,
+            checker_context::CheckerContext, generator_context::GeneratorContext, Context,
         },
+        simulation::Program,
         templates::sam::primitive::Token,
     };
 
@@ -425,27 +424,27 @@ mod tests {
         CRT: Iterator<Item = Token<u32, u32>> + 'static,
         ORT: Iterator<Item = Token<u32, u32>> + 'static,
     {
+        let mut parent = Program::default();
         let meta_dim: u32 = 32;
-        let (ref_sender, ref_receiver) = unbounded::<Token<u32, u32>>();
-        let (crd_sender, crd_receiver) = unbounded::<Token<u32, u32>>();
-        let (in_ref_sender, in_ref_receiver) = unbounded::<Token<u32, u32>>();
+        let (ref_sender, ref_receiver) = parent.unbounded::<Token<u32, u32>>();
+        let (crd_sender, crd_receiver) = parent.unbounded::<Token<u32, u32>>();
+        let (in_ref_sender, in_ref_receiver) = parent.unbounded::<Token<u32, u32>>();
         let data = RdScanData::<u32, u32> {
             in_ref: in_ref_receiver,
             out_ref: ref_sender,
             out_crd: crd_sender,
         };
-        let mut ucr = UncompressedCrdRdScan::new(data, meta_dim);
-        let mut gen1 = GeneratorContext::new(in_ref, in_ref_sender);
-        let mut crd_checker = CheckerContext::new(out_crd, crd_receiver);
-        let mut ref_checker = CheckerContext::new(out_ref, ref_receiver);
-        let mut parent = BasicParentContext::default();
-        parent.add_child(&mut gen1);
-        parent.add_child(&mut crd_checker);
-        parent.add_child(&mut ref_checker);
-        parent.add_child(&mut ucr);
+        let ucr = UncompressedCrdRdScan::new(data, meta_dim);
+        let gen1 = GeneratorContext::new(in_ref, in_ref_sender);
+        let crd_checker = CheckerContext::new(out_crd, crd_receiver);
+        let ref_checker = CheckerContext::new(out_ref, ref_receiver);
+
+        parent.add_child(gen1);
+        parent.add_child(crd_checker);
+        parent.add_child(ref_checker);
+        parent.add_child(ucr);
         parent.init();
         parent.run();
-        parent.cleanup();
     }
 
     #[test]
@@ -536,25 +535,25 @@ mod tests {
         CRT: Iterator<Item = Token<u32, u32>> + 'static,
         ORT: Iterator<Item = Token<u32, u32>> + 'static,
     {
-        let (ref_sender, ref_receiver) = unbounded::<Token<u32, u32>>();
-        let (crd_sender, crd_receiver) = unbounded::<Token<u32, u32>>();
-        let (in_ref_sender, in_ref_receiver) = unbounded::<Token<u32, u32>>();
+        let mut parent = Program::default();
+        let (ref_sender, ref_receiver) = parent.unbounded::<Token<u32, u32>>();
+        let (crd_sender, crd_receiver) = parent.unbounded::<Token<u32, u32>>();
+        let (in_ref_sender, in_ref_receiver) = parent.unbounded::<Token<u32, u32>>();
         let data = RdScanData::<u32, u32> {
             in_ref: in_ref_receiver,
             out_ref: ref_sender,
             out_crd: crd_sender,
         };
-        let mut cr = CompressedCrdRdScan::new(data, seg_arr, crd_arr);
-        let mut gen1 = GeneratorContext::new(in_ref, in_ref_sender);
-        let mut crd_checker = CheckerContext::new(out_crd, crd_receiver);
-        let mut ref_checker = CheckerContext::new(out_ref, ref_receiver);
-        let mut parent = BasicParentContext::default();
-        parent.add_child(&mut gen1);
-        parent.add_child(&mut crd_checker);
-        parent.add_child(&mut ref_checker);
-        parent.add_child(&mut cr);
+        let cr = CompressedCrdRdScan::new(data, seg_arr, crd_arr);
+        let gen1 = GeneratorContext::new(in_ref, in_ref_sender);
+        let crd_checker = CheckerContext::new(out_crd, crd_receiver);
+        let ref_checker = CheckerContext::new(out_ref, ref_receiver);
+
+        parent.add_child(gen1);
+        parent.add_child(crd_checker);
+        parent.add_child(ref_checker);
+        parent.add_child(cr);
         parent.init();
         parent.run();
-        parent.cleanup();
     }
 }

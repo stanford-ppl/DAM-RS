@@ -389,14 +389,10 @@ where
 
 #[cfg(test)]
 mod tests {
-    use dam_core::TimeViewable;
 
     use crate::{
-        channel::unbounded,
-        context::{
-            checker_context::CheckerContext, generator_context::GeneratorContext,
-            parent::BasicParentContext, Context,
-        },
+        context::{checker_context::CheckerContext, generator_context::GeneratorContext},
+        simulation::Program,
         templates::sam::primitive::Token,
         token_vec,
     };
@@ -445,22 +441,21 @@ mod tests {
         IRT: Iterator<Item = Token<u32, u32>> + 'static,
         ORT: Iterator<Item = Token<u32, u32>> + 'static,
     {
-        let (in_val_sender, in_val_receiver) = unbounded::<Token<u32, u32>>();
-        let (out_val_sender, out_val_receiver) = unbounded::<Token<u32, u32>>();
+        let mut parent = Program::default();
+        let (in_val_sender, in_val_receiver) = parent.unbounded();
+        let (out_val_sender, out_val_receiver) = parent.unbounded();
         let data = ReduceData::<u32, u32> {
             in_val: in_val_receiver,
             out_val: out_val_sender,
         };
-        let mut red = Reduce::new(data);
-        let mut gen1 = GeneratorContext::new(in_val, in_val_sender);
-        let mut val_checker = CheckerContext::new(out_val, out_val_receiver);
-        let mut parent = BasicParentContext::default();
-        parent.add_child(&mut gen1);
-        parent.add_child(&mut val_checker);
-        parent.add_child(&mut red);
+        let red = Reduce::new(data);
+        let gen1 = GeneratorContext::new(in_val, in_val_sender);
+        let val_checker = CheckerContext::new(out_val, out_val_receiver);
+        parent.add_child(gen1);
+        parent.add_child(val_checker);
+        parent.add_child(red);
         parent.init();
         parent.run();
-        parent.cleanup();
     }
 
     fn spacc1_test<IRT1, IRT2, IRT3, ORT1, ORT2>(
@@ -476,11 +471,13 @@ mod tests {
         ORT1: Iterator<Item = Token<u32, u32>> + 'static,
         ORT2: Iterator<Item = Token<f32, u32>> + 'static,
     {
-        let (in_ocrd_sender, in_ocrd_receiver) = unbounded::<Token<u32, u32>>();
-        let (in_icrd_sender, in_icrd_receiver) = unbounded::<Token<u32, u32>>();
-        let (in_val_sender, in_val_receiver) = unbounded::<Token<f32, u32>>();
-        let (out_val_sender, out_val_receiver) = unbounded::<Token<f32, u32>>();
-        let (out_icrd_sender, out_icrd_receiver) = unbounded::<Token<u32, u32>>();
+        let mut parent = Program::default();
+        // let mut parent.unbounded = || parent.parent.unbounded();
+        let (in_ocrd_sender, in_ocrd_receiver) = parent.unbounded();
+        let (in_icrd_sender, in_icrd_receiver) = parent.unbounded();
+        let (in_val_sender, in_val_receiver) = parent.unbounded();
+        let (out_val_sender, out_val_receiver) = parent.unbounded();
+        let (out_icrd_sender, out_icrd_receiver) = parent.unbounded();
         let data = Spacc1Data::<u32, f32, u32> {
             in_crd_outer: in_ocrd_receiver,
             in_crd_inner: in_icrd_receiver,
@@ -488,22 +485,20 @@ mod tests {
             out_val: out_val_sender,
             out_crd_inner: out_icrd_sender,
         };
-        let mut red = Spacc1::new(data);
-        let mut gen1 = GeneratorContext::new(in_ocrd, in_ocrd_sender);
-        let mut gen2 = GeneratorContext::new(in_icrd, in_icrd_sender);
-        let mut gen3 = GeneratorContext::new(in_val, in_val_sender);
-        let mut icrd_checker = CheckerContext::new(out_icrd, out_icrd_receiver);
-        let mut val_checker = CheckerContext::new(out_val, out_val_receiver);
-        let mut parent = BasicParentContext::default();
-        parent.add_child(&mut gen1);
-        parent.add_child(&mut gen2);
-        parent.add_child(&mut gen3);
-        parent.add_child(&mut icrd_checker);
-        parent.add_child(&mut val_checker);
-        parent.add_child(&mut red);
+        let red = Spacc1::new(data);
+        let gen1 = GeneratorContext::new(in_ocrd, in_ocrd_sender);
+        let gen2 = GeneratorContext::new(in_icrd, in_icrd_sender);
+        let gen3 = GeneratorContext::new(in_val, in_val_sender);
+        let icrd_checker = CheckerContext::new(out_icrd, out_icrd_receiver);
+        let val_checker = CheckerContext::new(out_val, out_val_receiver);
+        parent.add_child(gen1);
+        parent.add_child(gen2);
+        parent.add_child(gen3);
+        parent.add_child(icrd_checker);
+        parent.add_child(val_checker);
+        parent.add_child(red);
         parent.init();
         parent.run();
-        parent.cleanup();
     }
 
     fn max_reduce_test<IRT, ORT>(in_val: fn() -> IRT, out_val: fn() -> ORT)
@@ -511,21 +506,21 @@ mod tests {
         IRT: Iterator<Item = Token<f32, u32>> + 'static,
         ORT: Iterator<Item = Token<f32, u32>> + 'static,
     {
-        let (in_val_sender, in_val_receiver) = unbounded::<Token<f32, u32>>();
-        let (out_val_sender, out_val_receiver) = unbounded::<Token<f32, u32>>();
+        let mut parent = Program::default();
+        let (in_val_sender, in_val_receiver) = parent.unbounded::<Token<f32, u32>>();
+        let (out_val_sender, out_val_receiver) = parent.unbounded::<Token<f32, u32>>();
         let data = ReduceData::<f32, u32> {
             in_val: in_val_receiver,
             out_val: out_val_sender,
         };
-        let mut red = MaxReduce::new(data, f32::MIN);
-        let mut gen1 = GeneratorContext::new(in_val, in_val_sender);
-        let mut val_checker = CheckerContext::new(out_val, out_val_receiver);
-        let mut parent = BasicParentContext::default();
-        parent.add_child(&mut gen1);
-        parent.add_child(&mut val_checker);
-        parent.add_child(&mut red);
+        let red = MaxReduce::new(data, f32::MIN);
+        let gen1 = GeneratorContext::new(in_val, in_val_sender);
+        let val_checker = CheckerContext::new(out_val, out_val_receiver);
+
+        parent.add_child(gen1);
+        parent.add_child(val_checker);
+        parent.add_child(red);
         parent.init();
         parent.run();
-        parent.cleanup();
     }
 }

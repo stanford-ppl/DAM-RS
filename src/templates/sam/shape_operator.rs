@@ -140,11 +140,10 @@ where
 #[cfg(test)]
 mod tests {
     use crate::{
-        channel::unbounded,
         context::{
-            checker_context::CheckerContext, generator_context::GeneratorContext,
-            parent::BasicParentContext, Context,
+            checker_context::CheckerContext, generator_context::GeneratorContext, Context,
         },
+        simulation::Program,
         templates::sam::primitive::Token,
         token_vec,
     };
@@ -170,9 +169,10 @@ mod tests {
         IRT2: Iterator<Item = Token<u32, u32>> + 'static,
         ORT: Iterator<Item = Token<u32, u32>> + 'static,
     {
-        let (in_ocrd_sender, in_ocrd_receiver) = unbounded::<Token<u32, u32>>();
-        let (in_icrd_sender, in_icrd_receiver) = unbounded::<Token<u32, u32>>();
-        let (out_crd_sender, out_crd_receiver) = unbounded::<Token<u32, u32>>();
+        let mut parent = Program::default();
+        let (in_ocrd_sender, in_ocrd_receiver) = parent.unbounded::<Token<u32, u32>>();
+        let (in_icrd_sender, in_icrd_receiver) = parent.unbounded::<Token<u32, u32>>();
+        let (out_crd_sender, out_crd_receiver) = parent.unbounded::<Token<u32, u32>>();
 
         let crd_drop_data = FlattenData::<u32, u32> {
             in_crd_outer: in_ocrd_receiver,
@@ -180,17 +180,16 @@ mod tests {
             out_crd: out_crd_sender,
         };
 
-        let mut flat = Flatten::new(crd_drop_data, 4);
-        let mut ocrd_gen = GeneratorContext::new(in_ocrd, in_ocrd_sender);
-        let mut icrd_gen = GeneratorContext::new(in_icrd, in_icrd_sender);
-        let mut out_crd_checker = CheckerContext::new(out_crd, out_crd_receiver);
-        let mut parent = BasicParentContext::default();
-        parent.add_child(&mut ocrd_gen);
-        parent.add_child(&mut icrd_gen);
-        parent.add_child(&mut out_crd_checker);
-        parent.add_child(&mut flat);
+        let flat = Flatten::new(crd_drop_data, 4);
+        let ocrd_gen = GeneratorContext::new(in_ocrd, in_ocrd_sender);
+        let icrd_gen = GeneratorContext::new(in_icrd, in_icrd_sender);
+        let out_crd_checker = CheckerContext::new(out_crd, out_crd_receiver);
+
+        parent.add_child(ocrd_gen);
+        parent.add_child(icrd_gen);
+        parent.add_child(out_crd_checker);
+        parent.add_child(flat);
         parent.init();
         parent.run();
-        parent.cleanup();
     }
 }

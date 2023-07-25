@@ -236,6 +236,7 @@ impl<'a> Program<'a> {
         }
 
         for edge in &self.edges {
+            dbg!(edge.id());
             graph.add_edge(
                 *id_node_map.get(&edge.sender().unwrap()).unwrap(),
                 *id_node_map.get(&edge.receiver().unwrap()).unwrap(),

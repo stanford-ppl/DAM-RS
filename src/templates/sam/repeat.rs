@@ -245,12 +245,11 @@ where
 
 #[cfg(test)]
 mod tests {
+    use crate::simulation::Program;
     use crate::templates::sam::repeat::Repsiggen;
     use crate::{
-        channel::unbounded,
         context::{
-            checker_context::CheckerContext, generator_context::GeneratorContext,
-            parent::BasicParentContext, Context,
+            checker_context::CheckerContext, generator_context::GeneratorContext, Context,
         },
         repsig_vec,
         templates::sam::primitive::Token,
@@ -308,35 +307,34 @@ mod tests {
         IRT2: Iterator<Item = Token<u32, u32>> + 'static,
         ORT: Iterator<Item = Token<u32, u32>> + 'static,
     {
-        let (in_repsig_ref_sender, in_repsig_ref_receiver) = unbounded::<Token<u32, u32>>();
-        let (out_repsig_sender, out_repsig_receiver) = unbounded::<Repsiggen>();
+        let mut parent = Program::default();
+        let (in_repsig_ref_sender, in_repsig_ref_receiver) = parent.unbounded::<Token<u32, u32>>();
+        let (out_repsig_sender, out_repsig_receiver) = parent.unbounded::<Repsiggen>();
         let repsig_data = RepSigGenData::<u32, u32> {
             input: in_repsig_ref_receiver,
             out_repsig: out_repsig_sender,
         };
-        let mut repsig = RepeatSigGen::new(repsig_data);
+        let repsig = RepeatSigGen::new(repsig_data);
 
-        let (in_ref_sender, in_ref_receiver) = unbounded::<Token<u32, u32>>();
-        let (out_ref_sender, out_ref_receiver) = unbounded::<Token<u32, u32>>();
+        let (in_ref_sender, in_ref_receiver) = parent.unbounded::<Token<u32, u32>>();
+        let (out_ref_sender, out_ref_receiver) = parent.unbounded::<Token<u32, u32>>();
         let data = RepeatData::<u32, u32> {
             in_ref: in_ref_receiver,
             in_repsig: out_repsig_receiver,
             out_ref: out_ref_sender,
         };
-        let mut rep = Repeat::new(data);
-        let mut repsig_gen = GeneratorContext::new(in_ref_sig, in_repsig_ref_sender);
-        let mut gen1 = GeneratorContext::new(in_ref, in_ref_sender);
+        let rep = Repeat::new(data);
+        let repsig_gen = GeneratorContext::new(in_ref_sig, in_repsig_ref_sender);
+        let gen1 = GeneratorContext::new(in_ref, in_ref_sender);
         // let mut gen2 = GeneratorContext::new(in_repsig, in_repsig_sender);
-        let mut val_checker = CheckerContext::new(out_ref, out_ref_receiver);
-        let mut parent = BasicParentContext::default();
-        parent.add_child(&mut gen1);
-        parent.add_child(&mut repsig_gen);
-        parent.add_child(&mut val_checker);
-        parent.add_child(&mut rep);
-        parent.add_child(&mut repsig);
+        let val_checker = CheckerContext::new(out_ref, out_ref_receiver);
+        parent.add_child(gen1);
+        parent.add_child(repsig_gen);
+        parent.add_child(val_checker);
+        parent.add_child(rep);
+        parent.add_child(repsig);
         parent.init();
         parent.run();
-        parent.cleanup();
     }
 
     fn repeat_test<IRT1, IRT2, ORT>(
@@ -348,26 +346,26 @@ mod tests {
         IRT2: Iterator<Item = Repsiggen> + 'static,
         ORT: Iterator<Item = Token<u32, u32>> + 'static,
     {
-        let (in_ref_sender, in_ref_receiver) = unbounded::<Token<u32, u32>>();
-        let (in_repsig_sender, in_repsig_receiver) = unbounded::<Repsiggen>();
-        let (out_ref_sender, out_ref_receiver) = unbounded::<Token<u32, u32>>();
+        let mut parent = Program::default();
+        let (in_ref_sender, in_ref_receiver) = parent.unbounded::<Token<u32, u32>>();
+        let (in_repsig_sender, in_repsig_receiver) = parent.unbounded::<Repsiggen>();
+        let (out_ref_sender, out_ref_receiver) = parent.unbounded::<Token<u32, u32>>();
         let data = RepeatData::<u32, u32> {
             in_ref: in_ref_receiver,
             in_repsig: in_repsig_receiver,
             out_ref: out_ref_sender,
         };
-        let mut rep = Repeat::new(data);
-        let mut gen1 = GeneratorContext::new(in_ref, in_ref_sender);
-        let mut gen2 = GeneratorContext::new(in_repsig, in_repsig_sender);
-        let mut val_checker = CheckerContext::new(out_ref, out_ref_receiver);
-        let mut parent = BasicParentContext::default();
-        parent.add_child(&mut gen1);
-        parent.add_child(&mut gen2);
-        parent.add_child(&mut val_checker);
-        parent.add_child(&mut rep);
+        let rep = Repeat::new(data);
+        let gen1 = GeneratorContext::new(in_ref, in_ref_sender);
+        let gen2 = GeneratorContext::new(in_repsig, in_repsig_sender);
+        let val_checker = CheckerContext::new(out_ref, out_ref_receiver);
+
+        parent.add_child(gen1);
+        parent.add_child(gen2);
+        parent.add_child(val_checker);
+        parent.add_child(rep);
         parent.init();
         parent.run();
-        parent.cleanup();
     }
 
     fn repsiggen_test<IRT, ORT>(in_ref: fn() -> IRT, out_repsig: fn() -> ORT)
@@ -375,22 +373,22 @@ mod tests {
         IRT: Iterator<Item = Token<u32, u32>> + 'static,
         ORT: Iterator<Item = Repsiggen> + 'static,
     {
-        let (in_ref_sender, in_ref_receiver) = unbounded::<Token<u32, u32>>();
-        let (out_repsig_sender, out_repsig_receiver) = unbounded::<Repsiggen>();
+        let mut parent = Program::default();
+        let (in_ref_sender, in_ref_receiver) = parent.unbounded::<Token<u32, u32>>();
+        let (out_repsig_sender, out_repsig_receiver) = parent.unbounded::<Repsiggen>();
         let data = RepSigGenData::<u32, u32> {
             input: in_ref_receiver,
             out_repsig: out_repsig_sender,
         };
 
-        let mut repsig = RepeatSigGen::new(data);
-        let mut gen1 = GeneratorContext::new(in_ref, in_ref_sender);
-        let mut val_checker = CheckerContext::new(out_repsig, out_repsig_receiver);
-        let mut parent = BasicParentContext::default();
-        parent.add_child(&mut gen1);
-        parent.add_child(&mut val_checker);
-        parent.add_child(&mut repsig);
+        let repsig = RepeatSigGen::new(data);
+        let gen1 = GeneratorContext::new(in_ref, in_ref_sender);
+        let val_checker = CheckerContext::new(out_repsig, out_repsig_receiver);
+
+        parent.add_child(gen1);
+        parent.add_child(val_checker);
+        parent.add_child(repsig);
         parent.init();
         parent.run();
-        parent.cleanup();
     }
 }

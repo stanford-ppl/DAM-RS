@@ -491,11 +491,10 @@ where
 #[cfg(test)]
 mod tests {
     use crate::{
-        channel::{bounded, unbounded},
         context::{
-            checker_context::CheckerContext, generator_context::GeneratorContext,
-            parent::BasicParentContext, Context,
+            checker_context::CheckerContext, generator_context::GeneratorContext, Context,
         },
+        simulation::Program,
         templates::sam::primitive::Token,
         token_vec,
     };
@@ -563,13 +562,14 @@ mod tests {
     {
         let chan_size = 4;
 
-        let (in_crd1_sender, in_crd1_receiver) = bounded::<Token<u32, u32>>(chan_size);
-        let (in_crd2_sender, in_crd2_receiver) = bounded::<Token<u32, u32>>(chan_size);
-        let (in_ref1_sender, in_ref1_receiver) = bounded::<Token<u32, u32>>(chan_size);
-        let (in_ref2_sender, in_ref2_receiver) = bounded::<Token<u32, u32>>(chan_size);
-        let (out_crd_sender, out_crd_receiver) = bounded::<Token<u32, u32>>(chan_size);
-        let (out_ref1_sender, out_ref1_receiver) = bounded::<Token<u32, u32>>(chan_size);
-        let (out_ref2_sender, out_ref2_receiver) = bounded::<Token<u32, u32>>(chan_size);
+        let mut parent = Program::default();
+        let (in_crd1_sender, in_crd1_receiver) = parent.bounded::<Token<u32, u32>>(chan_size);
+        let (in_crd2_sender, in_crd2_receiver) = parent.bounded::<Token<u32, u32>>(chan_size);
+        let (in_ref1_sender, in_ref1_receiver) = parent.bounded::<Token<u32, u32>>(chan_size);
+        let (in_ref2_sender, in_ref2_receiver) = parent.bounded::<Token<u32, u32>>(chan_size);
+        let (out_crd_sender, out_crd_receiver) = parent.bounded::<Token<u32, u32>>(chan_size);
+        let (out_ref1_sender, out_ref1_receiver) = parent.bounded::<Token<u32, u32>>(chan_size);
+        let (out_ref2_sender, out_ref2_receiver) = parent.bounded::<Token<u32, u32>>(chan_size);
 
         let data = CrdJoinerData::<u32, u32> {
             in_crd1: in_crd1_receiver,
@@ -580,26 +580,25 @@ mod tests {
             out_ref1: out_ref1_sender,
             out_ref2: out_ref2_sender,
         };
-        let mut intersect = Intersect::new(data);
-        let mut gen1 = GeneratorContext::new(in_crd1, in_crd1_sender);
-        let mut gen2 = GeneratorContext::new(in_ref1, in_ref1_sender);
-        let mut gen3 = GeneratorContext::new(in_crd2, in_crd2_sender);
-        let mut gen4 = GeneratorContext::new(in_ref2, in_ref2_sender);
-        let mut crd_checker = CheckerContext::new(out_crd, out_crd_receiver);
-        let mut ref1_checker = CheckerContext::new(out_ref1, out_ref1_receiver);
-        let mut ref2_checker = CheckerContext::new(out_ref2, out_ref2_receiver);
-        let mut parent = BasicParentContext::default();
-        parent.add_child(&mut gen1);
-        parent.add_child(&mut gen2);
-        parent.add_child(&mut gen3);
-        parent.add_child(&mut gen4);
-        parent.add_child(&mut crd_checker);
-        parent.add_child(&mut ref1_checker);
-        parent.add_child(&mut ref2_checker);
-        parent.add_child(&mut intersect);
+        let intersect = Intersect::new(data);
+        let gen1 = GeneratorContext::new(in_crd1, in_crd1_sender);
+        let gen2 = GeneratorContext::new(in_ref1, in_ref1_sender);
+        let gen3 = GeneratorContext::new(in_crd2, in_crd2_sender);
+        let gen4 = GeneratorContext::new(in_ref2, in_ref2_sender);
+        let crd_checker = CheckerContext::new(out_crd, out_crd_receiver);
+        let ref1_checker = CheckerContext::new(out_ref1, out_ref1_receiver);
+        let ref2_checker = CheckerContext::new(out_ref2, out_ref2_receiver);
+
+        parent.add_child(gen1);
+        parent.add_child(gen2);
+        parent.add_child(gen3);
+        parent.add_child(gen4);
+        parent.add_child(crd_checker);
+        parent.add_child(ref1_checker);
+        parent.add_child(ref2_checker);
+        parent.add_child(intersect);
         parent.init();
         parent.run();
-        parent.cleanup();
     }
 
     fn union_test<IRT1, IRT2, IRT3, IRT4, ORT1, ORT2, ORT3>(
@@ -619,13 +618,14 @@ mod tests {
         ORT2: Iterator<Item = Token<u32, u32>> + 'static,
         ORT3: Iterator<Item = Token<u32, u32>> + 'static,
     {
-        let (in_crd1_sender, in_crd1_receiver) = unbounded::<Token<u32, u32>>();
-        let (in_crd2_sender, in_crd2_receiver) = unbounded::<Token<u32, u32>>();
-        let (in_ref1_sender, in_ref1_receiver) = unbounded::<Token<u32, u32>>();
-        let (in_ref2_sender, in_ref2_receiver) = unbounded::<Token<u32, u32>>();
-        let (out_crd_sender, out_crd_receiver) = unbounded::<Token<u32, u32>>();
-        let (out_ref1_sender, out_ref1_receiver) = unbounded::<Token<u32, u32>>();
-        let (out_ref2_sender, out_ref2_receiver) = unbounded::<Token<u32, u32>>();
+        let mut parent = Program::default();
+        let (in_crd1_sender, in_crd1_receiver) = parent.unbounded::<Token<u32, u32>>();
+        let (in_crd2_sender, in_crd2_receiver) = parent.unbounded::<Token<u32, u32>>();
+        let (in_ref1_sender, in_ref1_receiver) = parent.unbounded::<Token<u32, u32>>();
+        let (in_ref2_sender, in_ref2_receiver) = parent.unbounded::<Token<u32, u32>>();
+        let (out_crd_sender, out_crd_receiver) = parent.unbounded::<Token<u32, u32>>();
+        let (out_ref1_sender, out_ref1_receiver) = parent.unbounded::<Token<u32, u32>>();
+        let (out_ref2_sender, out_ref2_receiver) = parent.unbounded::<Token<u32, u32>>();
 
         let data = CrdJoinerData::<u32, u32> {
             in_crd1: in_crd1_receiver,
@@ -636,25 +636,24 @@ mod tests {
             out_ref1: out_ref1_sender,
             out_ref2: out_ref2_sender,
         };
-        let mut intersect = Union::new(data);
-        let mut gen1 = GeneratorContext::new(in_crd1, in_crd1_sender);
-        let mut gen2 = GeneratorContext::new(in_ref1, in_ref1_sender);
-        let mut gen3 = GeneratorContext::new(in_crd2, in_crd2_sender);
-        let mut gen4 = GeneratorContext::new(in_ref2, in_ref2_sender);
-        let mut crd_checker = CheckerContext::new(out_crd, out_crd_receiver);
-        let mut ref1_checker = CheckerContext::new(out_ref1, out_ref1_receiver);
-        let mut ref2_checker = CheckerContext::new(out_ref2, out_ref2_receiver);
-        let mut parent = BasicParentContext::default();
-        parent.add_child(&mut gen1);
-        parent.add_child(&mut gen2);
-        parent.add_child(&mut gen3);
-        parent.add_child(&mut gen4);
-        parent.add_child(&mut crd_checker);
-        parent.add_child(&mut ref1_checker);
-        parent.add_child(&mut ref2_checker);
-        parent.add_child(&mut intersect);
+        let intersect = Union::new(data);
+        let gen1 = GeneratorContext::new(in_crd1, in_crd1_sender);
+        let gen2 = GeneratorContext::new(in_ref1, in_ref1_sender);
+        let gen3 = GeneratorContext::new(in_crd2, in_crd2_sender);
+        let gen4 = GeneratorContext::new(in_ref2, in_ref2_sender);
+        let crd_checker = CheckerContext::new(out_crd, out_crd_receiver);
+        let ref1_checker = CheckerContext::new(out_ref1, out_ref1_receiver);
+        let ref2_checker = CheckerContext::new(out_ref2, out_ref2_receiver);
+
+        parent.add_child(gen1);
+        parent.add_child(gen2);
+        parent.add_child(gen3);
+        parent.add_child(gen4);
+        parent.add_child(crd_checker);
+        parent.add_child(ref1_checker);
+        parent.add_child(ref2_checker);
+        parent.add_child(intersect);
         parent.init();
         parent.run();
-        parent.cleanup();
     }
 }

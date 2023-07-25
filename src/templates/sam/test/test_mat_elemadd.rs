@@ -1,12 +1,12 @@
 #[cfg(test)]
 mod tests {
 
+    use std::time::Instant;
     use std::{fs, path::Path};
 
-    use crate::channel::{bounded, bounded_with_flavor, unbounded};
     use crate::context::generator_context::GeneratorContext;
-    use crate::context::parent::BasicParentContext;
-    use crate::context::Context;
+
+    use crate::simulation::Program;
     use crate::templates::ops::ALUAddOp;
     use crate::templates::sam::alu::make_alu;
     use crate::templates::sam::array::{Array, ArrayData};
@@ -50,48 +50,43 @@ mod tests {
 
         let chan_size = 4096;
 
-        let mk_bounded = || {
-            bounded_with_flavor::<Token<u32, u32>>(
-                chan_size,
-                crate::channel::ChannelFlavor::Acyclic,
-            )
-        };
+        let mut parent = Program::default();
 
         // fiberlookup_bi
-        let (bi_out_ref_sender, bi_out_ref_receiver) = mk_bounded();
-        let (bi_out_crd_sender, bi_out_crd_receiver) = mk_bounded();
-        let (bi_in_ref_sender, bi_in_ref_receiver) = mk_bounded();
+        let (bi_out_ref_sender, bi_out_ref_receiver) = parent.bounded(chan_size);
+        let (bi_out_crd_sender, bi_out_crd_receiver) = parent.bounded(chan_size);
+        let (bi_in_ref_sender, bi_in_ref_receiver) = parent.bounded(chan_size);
         let bi_data = RdScanData::<u32, u32> {
             in_ref: bi_in_ref_receiver,
             out_ref: bi_out_ref_sender,
             out_crd: bi_out_crd_sender,
         };
 
-        let mut b_gen = GeneratorContext::new(
+        let b_gen = GeneratorContext::new(
             || token_vec!(u32; u32; 0, "D").into_iter(),
             bi_in_ref_sender,
         );
-        let mut bi_rdscanner = CompressedCrdRdScan::new(bi_data, b0_seg, b0_crd);
+        let bi_rdscanner = CompressedCrdRdScan::new(bi_data, b0_seg, b0_crd);
 
         // fiberlookup_ci
-        let (ci_out_crd_sender, ci_out_crd_receiver) = mk_bounded();
-        let (ci_out_ref_sender, ci_out_ref_receiver) = mk_bounded();
-        let (ci_in_ref_sender, ci_in_ref_receiver) = mk_bounded();
+        let (ci_out_crd_sender, ci_out_crd_receiver) = parent.bounded(chan_size);
+        let (ci_out_ref_sender, ci_out_ref_receiver) = parent.bounded(chan_size);
+        let (ci_in_ref_sender, ci_in_ref_receiver) = parent.bounded(chan_size);
         let ci_data = RdScanData::<u32, u32> {
             in_ref: ci_in_ref_receiver,
             out_ref: ci_out_ref_sender,
             out_crd: ci_out_crd_sender,
         };
-        let mut c_gen = GeneratorContext::new(
+        let c_gen = GeneratorContext::new(
             || token_vec!(u32; u32; 0, "D").into_iter(),
             ci_in_ref_sender,
         );
-        let mut ci_rdscanner = CompressedCrdRdScan::new(ci_data, c0_seg, c0_crd);
+        let ci_rdscanner = CompressedCrdRdScan::new(ci_data, c0_seg, c0_crd);
 
         // union_i
-        let (unioni_out_crd_sender, unioni_out_crd_receiver) = mk_bounded();
-        let (unioni_out_ref1_sender, unioni_out_ref1_receiver) = mk_bounded();
-        let (unioni_out_ref2_sender, unioni_out_ref2_receiver) = mk_bounded();
+        let (unioni_out_crd_sender, unioni_out_crd_receiver) = parent.bounded(chan_size);
+        let (unioni_out_ref1_sender, unioni_out_ref1_receiver) = parent.bounded(chan_size);
+        let (unioni_out_ref2_sender, unioni_out_ref2_receiver) = parent.bounded(chan_size);
         let unioni_data = CrdJoinerData::<u32, u32> {
             in_crd1: bi_out_crd_receiver,
             in_ref1: bi_out_ref_receiver,
@@ -101,7 +96,7 @@ mod tests {
             out_ref1: unioni_out_ref1_sender,
             out_ref2: unioni_out_ref2_sender,
         };
-        let mut union_i = Union::new(unioni_data);
+        let union_i = Union::new(unioni_data);
 
         // fiberwrite_X0
         let x0_seg: Vec<u32> = Vec::new();
@@ -109,32 +104,32 @@ mod tests {
         let x0_wrscanner_data = WrScanData::<u32, u32> {
             input: unioni_out_crd_receiver,
         };
-        let mut x0_wrscanner = CompressedWrScan::new(x0_wrscanner_data, x0_seg, x0_crd);
+        let x0_wrscanner = CompressedWrScan::new(x0_wrscanner_data, x0_seg, x0_crd);
 
         // fiberlookup_bj
-        let (bj_out_crd_sender, bj_out_crd_receiver) = mk_bounded();
-        let (bj_out_ref_sender, bj_out_ref_receiver) = mk_bounded();
+        let (bj_out_crd_sender, bj_out_crd_receiver) = parent.bounded(chan_size);
+        let (bj_out_ref_sender, bj_out_ref_receiver) = parent.bounded(chan_size);
         let bj_data = RdScanData::<u32, u32> {
             in_ref: unioni_out_ref1_receiver,
             out_ref: bj_out_ref_sender,
             out_crd: bj_out_crd_sender,
         };
-        let mut bj_rdscanner = CompressedCrdRdScan::new(bj_data, b1_seg, b1_crd);
+        let bj_rdscanner = CompressedCrdRdScan::new(bj_data, b1_seg, b1_crd);
 
         // fiberlookup_cj
-        let (cj_out_crd_sender, cj_out_crd_receiver) = mk_bounded();
-        let (cj_out_ref_sender, cj_out_ref_receiver) = mk_bounded();
+        let (cj_out_crd_sender, cj_out_crd_receiver) = parent.bounded(chan_size);
+        let (cj_out_ref_sender, cj_out_ref_receiver) = parent.bounded(chan_size);
         let cj_data = RdScanData::<u32, u32> {
             in_ref: unioni_out_ref2_receiver,
             out_ref: cj_out_ref_sender,
             out_crd: cj_out_crd_sender,
         };
-        let mut cj_rdscanner = CompressedCrdRdScan::new(cj_data, c1_seg, c1_crd);
+        let cj_rdscanner = CompressedCrdRdScan::new(cj_data, c1_seg, c1_crd);
 
         // union_j
-        let (unionj_out_crd_sender, unionj_out_crd_receiver) = mk_bounded();
-        let (unionj_out_ref1_sender, unionj_out_ref1_receiver) = mk_bounded();
-        let (unionj_out_ref2_sender, unionj_out_ref2_receiver) = mk_bounded();
+        let (unionj_out_crd_sender, unionj_out_crd_receiver) = parent.bounded(chan_size);
+        let (unionj_out_ref1_sender, unionj_out_ref1_receiver) = parent.bounded(chan_size);
+        let (unionj_out_ref2_sender, unionj_out_ref2_receiver) = parent.bounded(chan_size);
         let unionj_data = CrdJoinerData::<u32, u32> {
             in_crd1: bj_out_crd_receiver,
             in_ref1: bj_out_ref_receiver,
@@ -144,7 +139,7 @@ mod tests {
             out_ref1: unionj_out_ref1_sender,
             out_ref2: unionj_out_ref2_sender,
         };
-        let mut union_j = Union::new(unionj_data);
+        let union_j = Union::new(unionj_data);
 
         // fiberwrite_x1
         let x1_seg: Vec<u32> = Vec::new();
@@ -152,27 +147,27 @@ mod tests {
         let x1_wrscanner_data = WrScanData::<u32, u32> {
             input: unionj_out_crd_receiver,
         };
-        let mut x1_wrscanner = CompressedWrScan::new(x1_wrscanner_data, x1_seg, x1_crd);
+        let x1_wrscanner = CompressedWrScan::new(x1_wrscanner_data, x1_seg, x1_crd);
 
         // arrayvals_b
-        let (b_out_val_sender, b_out_val_receiver) = bounded::<Token<f32, u32>>(chan_size);
+        let (b_out_val_sender, b_out_val_receiver) = parent.bounded::<Token<f32, u32>>(chan_size);
         let arrayvals_b_data = ArrayData::<u32, f32, u32> {
             in_ref: unionj_out_ref1_receiver,
             out_val: b_out_val_sender,
         };
-        let mut arrayvals_b = Array::<u32, f32, u32>::new(arrayvals_b_data, b_vals);
+        let arrayvals_b = Array::<u32, f32, u32>::new(arrayvals_b_data, b_vals);
 
         // arrayvals_c
-        let (c_out_val_sender, c_out_val_receiver) = bounded::<Token<f32, u32>>(chan_size);
+        let (c_out_val_sender, c_out_val_receiver) = parent.bounded::<Token<f32, u32>>(chan_size);
         let arrayvals_c_data = ArrayData::<u32, f32, u32> {
             in_ref: unionj_out_ref2_receiver,
             out_val: c_out_val_sender,
         };
-        let mut arrayvals_c = Array::<u32, f32, u32>::new(arrayvals_c_data, c_vals);
+        let arrayvals_c = Array::<u32, f32, u32>::new(arrayvals_c_data, c_vals);
 
         // Add ALU
-        let (add_out_sender, add_out_receiver) = bounded::<Token<f32, u32>>(chan_size);
-        let mut add = make_alu(
+        let (add_out_sender, add_out_receiver) = parent.bounded::<Token<f32, u32>>(chan_size);
+        let add = make_alu(
             b_out_val_receiver,
             c_out_val_receiver,
             add_out_sender,
@@ -184,27 +179,29 @@ mod tests {
         let xvals_data = WrScanData::<f32, u32> {
             input: add_out_receiver,
         };
-        let mut xvals = ValsWrScan::<f32, u32>::new(xvals_data, out_vals);
+        let xvals = ValsWrScan::<f32, u32>::new(xvals_data, out_vals);
 
-        let mut parent = BasicParentContext::default();
-        parent.add_child(&mut b_gen);
-        parent.add_child(&mut c_gen);
-        parent.add_child(&mut bi_rdscanner);
-        parent.add_child(&mut bj_rdscanner);
-        parent.add_child(&mut union_i);
-        parent.add_child(&mut x0_wrscanner);
-        parent.add_child(&mut ci_rdscanner);
-        parent.add_child(&mut cj_rdscanner);
-        parent.add_child(&mut union_j);
-        parent.add_child(&mut x1_wrscanner);
-        parent.add_child(&mut arrayvals_b);
-        parent.add_child(&mut arrayvals_c);
-        parent.add_child(&mut add);
-        parent.add_child(&mut xvals);
+        parent.add_child(b_gen);
+        parent.add_child(c_gen);
+        parent.add_child(bi_rdscanner);
+        parent.add_child(bj_rdscanner);
+        parent.add_child(union_i);
+        parent.add_child(x0_wrscanner);
+        parent.add_child(ci_rdscanner);
+        parent.add_child(cj_rdscanner);
+        parent.add_child(union_j);
+        parent.add_child(x1_wrscanner);
+        parent.add_child(arrayvals_b);
+        parent.add_child(arrayvals_c);
+        parent.add_child(add);
+        parent.add_child(xvals);
 
+        let now = Instant::now();
+        parent.print_graph();
         parent.init();
+        let elapsed = now.elapsed();
+        println!("Elapsed: {:.2?}", elapsed);
         parent.run();
-        parent.cleanup();
 
         // dbg!(x0_wrscanner.crd_arr);
         // dbg!(xvals.out_val);

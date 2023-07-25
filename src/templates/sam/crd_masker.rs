@@ -209,11 +209,8 @@ where
 #[cfg(test)]
 mod tests {
     use crate::{
-        channel::unbounded,
-        context::{
-            checker_context::CheckerContext, generator_context::GeneratorContext,
-            parent::BasicParentContext, Context,
-        },
+        context::{checker_context::CheckerContext, generator_context::GeneratorContext},
+        simulation::Program,
         templates::sam::primitive::Token,
         token_vec,
     };
@@ -279,20 +276,21 @@ mod tests {
         ORT2: Iterator<Item = Token<u32, u32>> + 'static,
         ORT3: Iterator<Item = Token<u32, u32>> + 'static,
     {
-        let (mask_in_crd_sender, mask_in_crd_receiver) = unbounded::<Token<u32, u32>>();
-        let (mask_in_ocrd_sender, mask_in_ocrd_receiver) = unbounded::<Token<u32, u32>>();
-        let (mask_in_ref_sender, mask_in_ref_receiver) = unbounded::<Token<u32, u32>>();
+        let mut parent = Program::default();
+        let (mask_in_crd_sender, mask_in_crd_receiver) = parent.unbounded::<Token<u32, u32>>();
+        let (mask_in_ocrd_sender, mask_in_ocrd_receiver) = parent.unbounded::<Token<u32, u32>>();
+        let (mask_in_ref_sender, mask_in_ref_receiver) = parent.unbounded::<Token<u32, u32>>();
 
-        let (mask_out_crd_sender, mask_out_crd_receiver) = unbounded::<Token<u32, u32>>();
-        let (mask_out_ocrd_sender, mask_out_ocrd_receiver) = unbounded::<Token<u32, u32>>();
-        let (mask_out_ref_sender, mask_out_ref_receiver) = unbounded::<Token<u32, u32>>();
+        let (mask_out_crd_sender, mask_out_crd_receiver) = parent.unbounded::<Token<u32, u32>>();
+        let (mask_out_ocrd_sender, mask_out_ocrd_receiver) = parent.unbounded::<Token<u32, u32>>();
+        let (mask_out_ref_sender, mask_out_ref_receiver) = parent.unbounded::<Token<u32, u32>>();
 
-        let mut gen1 = GeneratorContext::new(in_crd_outer, mask_in_ocrd_sender);
-        let mut gen2 = GeneratorContext::new(in_crd_inner, mask_in_crd_sender);
-        let mut gen3 = GeneratorContext::new(in_ref_inner, mask_in_ref_sender);
-        let mut ocrd_checker = CheckerContext::new(out_crd_outer, mask_out_ocrd_receiver);
-        let mut icrd_checker = CheckerContext::new(out_crd_inner, mask_out_crd_receiver);
-        let mut iref_checker = CheckerContext::new(out_ref_inner, mask_out_ref_receiver);
+        let gen1 = GeneratorContext::new(in_crd_outer, mask_in_ocrd_sender);
+        let gen2 = GeneratorContext::new(in_crd_inner, mask_in_crd_sender);
+        let gen3 = GeneratorContext::new(in_ref_inner, mask_in_ref_sender);
+        let ocrd_checker = CheckerContext::new(out_crd_outer, mask_out_ocrd_receiver);
+        let icrd_checker = CheckerContext::new(out_crd_inner, mask_out_crd_receiver);
+        let iref_checker = CheckerContext::new(out_ref_inner, mask_out_ref_receiver);
 
         let mask_data = CrdMaskData::<u32, u32> {
             in_crd_inner: mask_in_crd_receiver,
@@ -302,17 +300,15 @@ mod tests {
             out_crd_outer: mask_out_ocrd_sender,
             out_ref_inner: mask_out_ref_sender,
         };
-        let mut mask = CrdMask::new(mask_data, |x, y| x > y);
-        let mut parent = BasicParentContext::default();
-        parent.add_child(&mut gen1);
-        parent.add_child(&mut gen2);
-        parent.add_child(&mut gen3);
-        parent.add_child(&mut ocrd_checker);
-        parent.add_child(&mut icrd_checker);
-        parent.add_child(&mut iref_checker);
-        parent.add_child(&mut mask);
+        let mask = CrdMask::new(mask_data, |x, y| x > y);
+        parent.add_child(gen1);
+        parent.add_child(gen2);
+        parent.add_child(gen3);
+        parent.add_child(ocrd_checker);
+        parent.add_child(icrd_checker);
+        parent.add_child(iref_checker);
+        parent.add_child(mask);
         parent.init();
         parent.run();
-        parent.cleanup();
     }
 }

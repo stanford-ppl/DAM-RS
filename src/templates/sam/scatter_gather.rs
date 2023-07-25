@@ -166,11 +166,10 @@ where
 #[cfg(test)]
 mod tests {
     use crate::{
-        channel::bounded,
         context::{
-            checker_context::CheckerContext, generator_context::GeneratorContext,
-            parent::BasicParentContext, Context,
+            checker_context::CheckerContext, generator_context::GeneratorContext, Context,
         },
+        simulation::Program,
         templates::sam::primitive::Token,
         token_vec,
     };
@@ -223,26 +222,25 @@ mod tests {
         ORT1: Iterator<Item = Token<u32, u32>> + 'static,
         ORT2: Iterator<Item = Token<u32, u32>> + 'static,
     {
+        let mut parent = Program::default();
         let chan_size = 128;
 
-        let (in_ref2_sender, in_ref2_receiver) = bounded::<Token<u32, u32>>(chan_size);
-        let (out_crd_sender, out_crd_receiver) = bounded::<Token<u32, u32>>(chan_size);
-        let (out_ref2_sender, out_ref2_receiver) = bounded::<Token<u32, u32>>(chan_size);
+        let (in_ref2_sender, in_ref2_receiver) = parent.bounded::<Token<u32, u32>>(chan_size);
+        let (out_crd_sender, out_crd_receiver) = parent.bounded::<Token<u32, u32>>(chan_size);
+        let (out_ref2_sender, out_ref2_receiver) = parent.bounded::<Token<u32, u32>>(chan_size);
 
         let mut scat = Scatter::new(in_ref2_receiver);
         scat.add_target(out_crd_sender);
         scat.add_target(out_ref2_sender);
-        let mut gen4 = GeneratorContext::new(in_ref2, in_ref2_sender);
-        let mut crd_checker = CheckerContext::new(out_crd2, out_crd_receiver);
-        let mut ref2_checker = CheckerContext::new(out_ref2, out_ref2_receiver);
-        let mut parent = BasicParentContext::default();
-        parent.add_child(&mut gen4);
-        parent.add_child(&mut crd_checker);
-        parent.add_child(&mut ref2_checker);
-        parent.add_child(&mut scat);
+        let gen4 = GeneratorContext::new(in_ref2, in_ref2_sender);
+        let crd_checker = CheckerContext::new(out_crd2, out_crd_receiver);
+        let ref2_checker = CheckerContext::new(out_ref2, out_ref2_receiver);
+        parent.add_child(gen4);
+        parent.add_child(crd_checker);
+        parent.add_child(ref2_checker);
+        parent.add_child(scat);
         parent.init();
         parent.run();
-        parent.cleanup();
     }
 
     fn gather_test<IRT2, ORT1, ORT2>(
@@ -254,26 +252,25 @@ mod tests {
         ORT1: Iterator<Item = Token<u32, u32>> + 'static,
         ORT2: Iterator<Item = Token<u32, u32>> + 'static,
     {
+        let mut parent = Program::default();
         let chan_size = 128;
 
-        let (out_ref2_sender, out_ref2_receiver) = bounded::<Token<u32, u32>>(chan_size);
-        let (in_crd_sender, in_crd_receiver) = bounded::<Token<u32, u32>>(chan_size);
-        let (in_ref2_sender, in_ref2_receiver) = bounded::<Token<u32, u32>>(chan_size);
+        let (out_ref2_sender, out_ref2_receiver) = parent.bounded::<Token<u32, u32>>(chan_size);
+        let (in_crd_sender, in_crd_receiver) = parent.bounded::<Token<u32, u32>>(chan_size);
+        let (in_ref2_sender, in_ref2_receiver) = parent.bounded::<Token<u32, u32>>(chan_size);
 
         let mut gat = Gather::new(out_ref2_sender);
         gat.add_target(in_crd_receiver);
         gat.add_target(in_ref2_receiver);
 
-        let mut gen3 = GeneratorContext::new(in_crd2, in_crd_sender);
-        let mut gen4 = GeneratorContext::new(in_ref2, in_ref2_sender);
-        let mut crd_checker = CheckerContext::new(out_ref2, out_ref2_receiver);
-        let mut parent = BasicParentContext::default();
-        parent.add_child(&mut gen3);
-        parent.add_child(&mut gen4);
-        parent.add_child(&mut crd_checker);
-        parent.add_child(&mut gat);
+        let gen3 = GeneratorContext::new(in_crd2, in_crd_sender);
+        let gen4 = GeneratorContext::new(in_ref2, in_ref2_sender);
+        let crd_checker = CheckerContext::new(out_ref2, out_ref2_receiver);
+        parent.add_child(gen3);
+        parent.add_child(gen4);
+        parent.add_child(crd_checker);
+        parent.add_child(gat);
         parent.init();
         parent.run();
-        parent.cleanup();
     }
 }

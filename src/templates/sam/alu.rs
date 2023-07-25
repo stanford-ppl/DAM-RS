@@ -129,11 +129,10 @@ pub fn make_unary_alu<ValType: DAMType, StopType: DAMType>(
 #[cfg(test)]
 mod tests {
     use crate::{
-        channel::unbounded,
         context::{
-            checker_context::CheckerContext, generator_context::GeneratorContext,
-            parent::BasicParentContext, Context,
+            checker_context::CheckerContext, generator_context::GeneratorContext, Context,
         },
+        simulation::Program,
         templates::{
             ops::ALUAddOp,
             sam::{
@@ -156,12 +155,13 @@ mod tests {
 
     #[test]
     fn alu_test() {
-        let (arg1_send, arg1_recv) = unbounded::<Token<u32, u32>>();
-        let (arg2_send, arg2_recv) = unbounded::<Token<u32, u32>>();
-        let (pcu_out_send, pcu_out_recv) = unbounded::<Token<u32, u32>>();
+        let mut parent = Program::default();
+        let (arg1_send, arg1_recv) = parent.unbounded::<Token<u32, u32>>();
+        let (arg2_send, arg2_recv) = parent.unbounded::<Token<u32, u32>>();
+        let (pcu_out_send, pcu_out_recv) = parent.unbounded::<Token<u32, u32>>();
         // let mut alu = make_alu(arg1_recv, arg2_recv, pcu_out_send, ALUAddOp());
-        let mut alu = make_alu(arg1_recv, arg2_recv, pcu_out_send, ALUAddOp());
-        let mut gen1 = GeneratorContext::new(
+        let alu = make_alu(arg1_recv, arg2_recv, pcu_out_send, ALUAddOp());
+        let gen1 = GeneratorContext::new(
             || {
                 (0u32..1000)
                     .map(Token::Val)
@@ -169,7 +169,7 @@ mod tests {
             },
             arg1_send,
         );
-        let mut gen2 = GeneratorContext::new(
+        let gen2 = GeneratorContext::new(
             || {
                 [Token::Empty]
                     .into_iter()
@@ -178,7 +178,7 @@ mod tests {
             },
             arg2_send,
         );
-        let mut checker = CheckerContext::new(
+        let checker = CheckerContext::new(
             || {
                 [Token::Val(0u32)]
                     .into_iter()
@@ -187,27 +187,26 @@ mod tests {
             },
             pcu_out_recv,
         );
-        let mut parent = BasicParentContext::default();
-        parent.add_child(&mut gen1);
-        parent.add_child(&mut gen2);
-        parent.add_child(&mut alu);
-        parent.add_child(&mut checker);
+        parent.add_child(gen1);
+        parent.add_child(gen2);
+        parent.add_child(alu);
+        parent.add_child(checker);
         parent.init();
         parent.run();
-        parent.cleanup();
         // dbg!(alu.view().tick_lower_bound());
     }
 
     #[test]
     fn exp_test() {
-        let (arg1_send, arg1_recv) = unbounded::<Token<f32, u32>>();
-        let (pcu_out_send, pcu_out_recv) = unbounded::<Token<f32, u32>>();
-        let mut unary_alu = make_unary_alu(arg1_recv, pcu_out_send, ALUExpOp());
-        let mut gen1 = GeneratorContext::new(
+        let mut parent = Program::default();
+        let (arg1_send, arg1_recv) = parent.unbounded::<Token<f32, u32>>();
+        let (pcu_out_send, pcu_out_recv) = parent.unbounded::<Token<f32, u32>>();
+        let unary_alu = make_unary_alu(arg1_recv, pcu_out_send, ALUExpOp());
+        let gen1 = GeneratorContext::new(
             || token_vec!(f32; u32; 0.0, 2.0, 3.0, 4.0, 5.0, 3.0, "S0", "D0").into_iter(),
             arg1_send,
         );
-        let mut checker = CheckerContext::new(
+        let checker = CheckerContext::new(
             || {
                 token_vec!(f32; u32; 0.0, 2.0, 3.0, 4.0, 5.0, 3.0, "S0", "D0")
                     .into_iter()
@@ -215,13 +214,11 @@ mod tests {
             },
             pcu_out_recv,
         );
-        let mut parent = BasicParentContext::default();
-        parent.add_child(&mut gen1);
-        parent.add_child(&mut unary_alu);
-        parent.add_child(&mut checker);
+        parent.add_child(gen1);
+        parent.add_child(unary_alu);
+        parent.add_child(checker);
         parent.init();
         parent.run();
-        parent.cleanup();
         // dbg!(unary_alu.view().tick_lower_bound());
     }
 }

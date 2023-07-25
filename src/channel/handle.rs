@@ -70,7 +70,7 @@ impl<T: Clone> ChannelHandle for ChannelData<T> {
                 }
             }
 
-            // Unbounded channel
+            //parent.unbounded channel
             None => {
                 //
                 match flavor {

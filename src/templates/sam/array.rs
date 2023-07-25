@@ -116,11 +116,10 @@ where
 #[cfg(test)]
 mod tests {
     use crate::{
-        channel::unbounded,
         context::{
-            checker_context::CheckerContext, generator_context::GeneratorContext,
-            parent::BasicParentContext, Context,
+            checker_context::CheckerContext, generator_context::GeneratorContext, Context,
         },
+        simulation::Program,
         templates::sam::primitive::Token,
         token_vec,
     };
@@ -146,21 +145,20 @@ mod tests {
         IRT: Iterator<Item = Token<u32, u32>> + 'static,
         ORT: Iterator<Item = Token<u32, u32>> + 'static,
     {
-        let (in_ref_sender, in_ref_receiver) = unbounded::<Token<u32, u32>>();
-        let (out_val_sender, out_val_receiver) = unbounded::<Token<u32, u32>>();
+        let mut parent = Program::default();
+        let (in_ref_sender, in_ref_receiver) = parent.unbounded::<Token<u32, u32>>();
+        let (out_val_sender, out_val_receiver) = parent.unbounded::<Token<u32, u32>>();
         let data = ArrayData::<u32, u32, u32> {
             in_ref: in_ref_receiver,
             out_val: out_val_sender,
         };
-        let mut arr = Array::new(data, val_arr);
-        let mut gen1 = GeneratorContext::new(in_ref, in_ref_sender);
-        let mut out_val_checker = CheckerContext::new(out_val, out_val_receiver);
-        let mut parent = BasicParentContext::default();
-        parent.add_child(&mut gen1);
-        parent.add_child(&mut out_val_checker);
-        parent.add_child(&mut arr);
+        let arr = Array::new(data, val_arr);
+        let gen1 = GeneratorContext::new(in_ref, in_ref_sender);
+        let out_val_checker = CheckerContext::new(out_val, out_val_receiver);
+        parent.add_child(gen1);
+        parent.add_child(out_val_checker);
+        parent.add_child(arr);
         parent.init();
         parent.run();
-        parent.cleanup();
     }
 }

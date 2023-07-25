@@ -12,7 +12,6 @@ pub mod checker_context;
 pub mod function_context;
 pub mod generator_context;
 pub mod parent;
-pub mod print_context;
 
 pub type ExplicitConnections = HashMap<Identifier, Vec<(HashSet<ChannelID>, HashSet<ChannelID>)>>;
 
