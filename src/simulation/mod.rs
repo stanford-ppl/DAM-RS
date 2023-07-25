@@ -3,7 +3,7 @@ use std::{
     sync::Arc,
 };
 
-use dam_core::{identifier::Identifier, log_graph::with_log_scope};
+use dam_core::{identifier::Identifier, log_graph::with_log_scope, time::Time, ContextView};
 use petgraph::{dot::Dot, prelude::DiGraph};
 
 use crate::{
@@ -245,5 +245,13 @@ impl<'a> Program<'a> {
         }
 
         println!("{:?}", Dot::with_config(&graph, &[]));
+    }
+
+    pub fn elapsed_cycles(&self) -> Time {
+        let ticks = self
+            .nodes
+            .iter()
+            .map(|child| child.view().tick_lower_bound());
+        ticks.max().unwrap_or(Time::new(0))
     }
 }
