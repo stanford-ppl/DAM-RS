@@ -42,3 +42,12 @@ where
         self.run_fn = Some(run_fn);
     }
 }
+
+impl<RT> Default for FunctionContext<RT>
+where
+    RT: FnOnce(&mut TimeManager) + Send + Sync,
+{
+    fn default() -> Self {
+        Self::new()
+    }
+}

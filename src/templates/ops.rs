@@ -21,11 +21,7 @@ macro_rules! RegisterALUOp {
                     next_reg_ind += 1;
                     )*
 
-                    let mut pipe_regs = Vec::<PipelineRegister<T>>::new();
-                    $(
-                    pipe_regs.push(PipelineRegister { data: $new_next_regs } );
-                    )*
-                    pipe_regs
+                    vec![$(PipelineRegister{data: $new_next_regs}),*]
                 }
             }
         }
@@ -35,6 +31,7 @@ macro_rules! RegisterALUOp {
 #[derive(Debug)]
 pub struct ALUOp<T> {
     // Func is (prev_regs, next_regs) -> new next_regs
+    #[allow(clippy::type_complexity)]
     pub func: fn(&[PipelineRegister<T>], &[PipelineRegister<T>]) -> Vec<PipelineRegister<T>>,
     pub name: &'static str,
 }

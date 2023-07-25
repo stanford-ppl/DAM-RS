@@ -1,4 +1,6 @@
-use dam_core::identifier::Identifiable;
+use std::collections::{HashMap, HashSet};
+
+use dam_core::identifier::{Identifiable, Identifier};
 use dam_core::log_graph::with_log_scope;
 use dam_core::{
     log_graph::{get_log, RegistryEvent},
@@ -10,17 +12,15 @@ use dam_macros::identifiable;
 
 use super::Context;
 
-type ChildType = dyn Context;
-
 #[identifiable]
 #[derive(Default)]
 pub struct BasicParentContext<'a> {
-    children: Vec<&'a mut ChildType>,
+    children: Vec<Box<dyn Context + 'a>>,
 }
 
 impl<'a> BasicParentContext<'a> {
-    pub fn add_child(&mut self, child: &'a mut ChildType) {
-        self.children.push(child);
+    pub fn add_child<T: Context + 'a>(&mut self, child: T) {
+        self.children.push(Box::new(child));
     }
 }
 
@@ -51,7 +51,7 @@ impl<'a> Context for BasicParentContext<'a> {
                                 child.cleanup();
                             });
                         })
-                        .expect(format!("Failed to spawn child {name:?} {id:?}").as_str());
+                        .unwrap_or_else(|_| panic!("Failed to spawn child {name:?} {id:?}"));
                 });
             });
         });
@@ -66,6 +66,16 @@ impl<'a> Context for BasicParentContext<'a> {
         with_log_scope(self.id(), self.name(), || {
             get_log(NODE).log(RegistryEvent::Cleaned(finish_time.unwrap_or(Time::new(0))));
         });
+    }
+
+    fn child_ids(&self) -> HashMap<Identifier, HashSet<Identifier>> {
+        let mut base_map = HashMap::from([(
+            self.id(),
+            HashSet::from_iter(self.children.iter().map(|child| child.id())),
+        )]);
+        let sub_maps = self.children.iter().map(|child| child.child_ids());
+        sub_maps.for_each(|sub| base_map.extend(sub));
+        base_map
     }
 }
 

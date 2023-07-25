@@ -7,10 +7,7 @@ use enum_dispatch::enum_dispatch;
 
 use crate::context::Context;
 
-use super::{
-    view_struct::{self, ViewStruct},
-    ChannelElement, DequeueError, EnqueueError,
-};
+use super::{channel_spec::ChannelSpec, ChannelElement, EnqueueError};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum SendOptions {
@@ -36,11 +33,12 @@ pub trait SenderFlavor<T> {
 }
 
 #[enum_dispatch]
-pub(super) enum SenderImpl<T: Clone> {
-    VoidSender(VoidSender<T>),
-    CyclicSender(CyclicSender<T>),
-    AcyclicSender(AcyclicSender<T>),
-    InfiniteSender(InfiniteSender<T>),
+pub(crate) enum SenderImpl<T: Clone> {
+    Void(VoidSender<T>),
+    Cyclic(CyclicSender<T>),
+    Acyclic(AcyclicSender<T>),
+    Infinite(InfiniteSender<T>),
+    Undefined(UndefinedSender<T>),
 }
 
 #[derive(Debug)]
@@ -76,19 +74,54 @@ impl<T> SenderFlavor<T> for VoidSender<T> {
     fn cleanup(&mut self) {} // Nothing to clean up either.
 }
 
-pub(super) enum SenderState<T> {
+pub struct UndefinedSender<T> {
+    _marker: PhantomData<T>,
+    spec: Arc<ChannelSpec>,
+}
+impl<T> SenderFlavor<T> for UndefinedSender<T> {
+    fn attach_sender(&self, sender: &dyn Context) {
+        self.spec.attach_sender(sender)
+    }
+
+    fn try_send(&mut self, _data: ChannelElement<T>) -> Result<(), SendOptions> {
+        panic!();
+    }
+
+    fn enqueue(
+        &mut self,
+        _manager: &mut TimeManager,
+        _data: ChannelElement<T>,
+    ) -> Result<(), EnqueueError> {
+        panic!();
+    }
+
+    fn cleanup(&mut self) {
+        panic!();
+    }
+}
+
+impl<T> UndefinedSender<T> {
+    pub fn new(spec: Arc<ChannelSpec>) -> Self {
+        Self {
+            _marker: PhantomData,
+            spec,
+        }
+    }
+}
+
+pub(crate) enum SenderState<T> {
     Open(channel::Sender<T>),
     Closed,
 }
 
 #[log_producer]
-pub(super) struct CyclicSender<T> {
+pub(crate) struct CyclicSender<T> {
     underlying: SenderState<ChannelElement<T>>,
     resp: channel::Receiver<Time>,
     send_receive_delta: usize,
     capacity: usize,
 
-    view_struct: Arc<ViewStruct>,
+    view_struct: Arc<ChannelSpec>,
     next_available: SendOptions,
 }
 impl<T: Clone> SenderFlavor<T> for CyclicSender<T> {
@@ -116,7 +149,7 @@ impl<T: Clone> SenderFlavor<T> for CyclicSender<T> {
         manager: &mut TimeManager,
         data: ChannelElement<T>,
     ) -> Result<(), EnqueueError> {
-        let mut data_copy = data.clone();
+        let mut data_copy = data;
         loop {
             data_copy.update_time(manager.tick() + 1);
             let v = self.try_send(data_copy.clone());
@@ -192,7 +225,7 @@ impl<T> CyclicSender<T> {
                 }
             }
         }
-        return retval;
+        retval
     }
 
     fn update_len(&mut self) {
@@ -239,7 +272,7 @@ impl<T> CyclicSender<T> {
         sender: channel::Sender<ChannelElement<T>>,
         resp: channel::Receiver<Time>,
         capacity: usize,
-        view_struct: Arc<ViewStruct>,
+        view_struct: Arc<ChannelSpec>,
     ) -> Self {
         Self {
             underlying: SenderState::Open(sender),
@@ -252,13 +285,13 @@ impl<T> CyclicSender<T> {
     }
 }
 
-pub(super) struct AcyclicSender<T> {
+pub(crate) struct AcyclicSender<T> {
     underlying: SenderState<ChannelElement<T>>,
     resp: channel::Receiver<Time>,
     send_receive_delta: usize,
     capacity: usize,
 
-    view_struct: Arc<ViewStruct>,
+    view_struct: Arc<ChannelSpec>,
     next_available: SendOptions,
 }
 
@@ -326,7 +359,7 @@ impl<T: Clone> SenderFlavor<T> for AcyclicSender<T> {
         manager: &mut TimeManager,
         data: ChannelElement<T>,
     ) -> Result<(), EnqueueError> {
-        let mut data_clone = data.clone();
+        let mut data_clone = data;
         data_clone.update_time(manager.tick() + 1);
         match self.try_send(data_clone.clone()) {
             Ok(_) => Ok(()),
@@ -352,7 +385,7 @@ impl<T> AcyclicSender<T> {
         sender: channel::Sender<ChannelElement<T>>,
         resp: channel::Receiver<Time>,
         capacity: usize,
-        view_struct: Arc<ViewStruct>,
+        view_struct: Arc<ChannelSpec>,
     ) -> Self {
         Self {
             underlying: SenderState::Open(sender),
@@ -365,15 +398,15 @@ impl<T> AcyclicSender<T> {
     }
 }
 
-pub(super) struct InfiniteSender<T> {
+pub(crate) struct InfiniteSender<T> {
     underlying: SenderState<ChannelElement<T>>,
-    view_struct: Arc<ViewStruct>,
+    view_struct: Arc<ChannelSpec>,
 }
 
 impl<T> InfiniteSender<T> {
-    pub(super) fn new(
+    pub(crate) fn new(
         underlying: SenderState<ChannelElement<T>>,
-        view_struct: Arc<ViewStruct>,
+        view_struct: Arc<ChannelSpec>,
     ) -> Self {
         Self {
             underlying,
@@ -404,7 +437,7 @@ impl<T: Clone> SenderFlavor<T> for InfiniteSender<T> {
         manager: &mut TimeManager,
         data: ChannelElement<T>,
     ) -> Result<(), EnqueueError> {
-        let mut data_copy = data.clone();
+        let mut data_copy = data;
         data_copy.update_time(manager.tick() + 1);
         self.try_send(data_copy).map_err(|_| EnqueueError {})
     }

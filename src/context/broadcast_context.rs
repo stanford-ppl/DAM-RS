@@ -65,47 +65,41 @@ impl<T: DAMType> BroadcastContext<T> {
 
 #[cfg(test)]
 mod tests {
-    use dam_core::{ContextView, TimeViewable};
 
     use super::BroadcastContext;
 
     use crate::{
-        channel::bounded,
-        context::{
-            checker_context::CheckerContext, generator_context::GeneratorContext,
-            parent::BasicParentContext, Context,
-        },
+        context::{checker_context::CheckerContext, generator_context::GeneratorContext},
+        simulation::Program,
     };
 
     #[test]
     fn test_broadcast() {
         let test_size = 32;
         let num_checkers = 256;
-        let (init_send, init_recv) = bounded(8);
+        let mut parent = Program::default();
+        let (init_send, init_recv) = parent.bounded(8);
 
-        let mut parent = BasicParentContext::default();
-        let mut generator = GeneratorContext::new(move || (0..test_size), init_send);
-        parent.add_child(&mut generator);
+        let generator = GeneratorContext::new(move || (0..test_size), init_send);
+        parent.add_child(generator);
 
         let mut broadcast = BroadcastContext::new(init_recv);
 
-        let mut checkers: Vec<_> = (0..num_checkers)
+        let checkers: Vec<_> = (0..num_checkers)
             .map(|_| {
-                let (send, recv) = bounded(8);
+                let (send, recv) = parent.bounded(8);
                 broadcast.add_target(send);
-                let checker = CheckerContext::new(move || 0..test_size, recv);
-                checker
+                
+                CheckerContext::new(move || 0..test_size, recv)
             })
             .collect();
 
         checkers
-            .iter_mut()
+            .into_iter()
             .for_each(|checker| parent.add_child(checker));
-        parent.add_child(&mut broadcast);
+        parent.add_child(broadcast);
 
         parent.init();
         parent.run();
-        parent.cleanup();
-        dbg!(parent.view().tick_lower_bound());
     }
 }
