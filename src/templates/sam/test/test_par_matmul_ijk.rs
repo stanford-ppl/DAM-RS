@@ -25,7 +25,7 @@ mod tests {
     #[test]
     fn test_par_matmul_ijk() {
         // let test_name = "matmul_ijk";
-        let test_name = "mat_elemadd4";
+        let test_name = "mat_elemadd";
         let filename = home::home_dir().unwrap().join("sam_config.toml");
         let contents = fs::read_to_string(filename).unwrap();
         let data: Data = toml::from_str(&contents).unwrap();
@@ -53,7 +53,7 @@ mod tests {
         let c1_crd = read_inputs::<u32>(&c1_crd_filename);
         let c_vals = read_inputs::<f32>(&c_vals_filename);
 
-        let chan_size = 32784;
+        let chan_size = 4096;
 
         let mk_bounded = || {
             bounded_with_flavor::<Token<u32, u32>>(

@@ -24,7 +24,7 @@ mod tests {
     #[test]
     fn test_matmul_ijk() {
         // let test_name = "matmul_ijk";
-        let test_name = "mat_elemadd1";
+        let test_name = "mat_elemadd";
         let filename = home::home_dir().unwrap().join("sam_config.toml");
         let contents = fs::read_to_string(filename).unwrap();
         let data: Data = toml::from_str(&contents).unwrap();
