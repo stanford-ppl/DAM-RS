@@ -53,7 +53,7 @@ impl<'a> Context for BasicParentContext<'a> {
                                 child.cleanup();
                             });
                         })
-                        .expect(format!("Failed to spawn child {name:?} {id:?}").as_str());
+                        .unwrap_or_else(|_| panic!("Failed to spawn child {name:?} {id:?}"));
                 });
             });
         });

@@ -133,13 +133,13 @@ impl<ElementType: DAMType> PCU<ElementType> {
         let mut reads: Vec<_> = ics.iter_mut().map(|recv| dequeue(time, recv)).collect();
 
         for (ind, read) in reads.iter_mut().enumerate() {
-            if let Err(_) = read {
+            if read.is_err() {
                 return false;
             }
             regs[ind].data = read.as_ref().unwrap().data.clone();
         }
 
-        return true;
+        true
     };
 
     pub const WRITE_ALL_RESULTS: EgressOpType<ElementType> = |ocs, regs, out_time, manager| {
@@ -191,7 +191,7 @@ impl<ElementType: DAMType> Context for PCU<ElementType> {
                     Some(cur_stage) => {
                         let prev_regs = &self.registers[stage_index];
                         let next_regs = &self.registers[stage_index + 1];
-                        let new_regs = cur_stage.run(&prev_regs, &next_regs);
+                        let new_regs = cur_stage.run(prev_regs, next_regs);
                         self.registers[stage_index + 1] = new_regs;
                     }
                     None => self.registers[stage_index + 1] = self.registers[stage_index].clone(),

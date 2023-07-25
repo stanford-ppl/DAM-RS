@@ -11,7 +11,7 @@ mod tests {
         let test_size = 5;
         let mut parent = Program::default();
         let (snd, mut rcv) = parent.bounded(2);
-        let sender = GeneratorContext::new(move || (0..test_size).into_iter(), snd);
+        let sender = GeneratorContext::new(move || (0..test_size), snd);
         let mut recv_ctx = FunctionContext::new();
         rcv.attach_receiver(&recv_ctx);
         recv_ctx.set_run(move |time| {

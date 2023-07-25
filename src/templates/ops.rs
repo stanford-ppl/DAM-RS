@@ -20,11 +20,7 @@ macro_rules! RegisterALUOp {
                     next_reg_ind += 1;
                     )*
 
-                    let mut pipe_regs = Vec::<PipelineRegister<T>>::new();
-                    $(
-                    pipe_regs.push(PipelineRegister { data: $new_next_regs } );
-                    )*
-                    pipe_regs
+                    vec![$(PipelineRegister{data: $new_next_regs}),*]
                 }
             }
         }

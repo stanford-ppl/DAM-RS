@@ -364,7 +364,7 @@ pub mod tests {
         let mut parent = Program::default();
         let mut ack_channels = Vec::<Receiver<bool>>::with_capacity(NUM_WRITERS);
 
-        (0..NUM_WRITERS).into_iter().for_each(|split_ind| {
+        (0..NUM_WRITERS).for_each(|split_ind| {
             let low = WORK_PER_WRITER * split_ind;
             let high = low + WORK_PER_WRITER;
             let (addr_send, addr_recv) = parent.bounded(128);

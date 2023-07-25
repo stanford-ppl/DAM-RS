@@ -89,8 +89,8 @@ mod tests {
             .map(|_| {
                 let (send, recv) = parent.bounded(8);
                 broadcast.add_target(send);
-                let checker = CheckerContext::new(move || 0..test_size, recv);
-                checker
+                
+                CheckerContext::new(move || 0..test_size, recv)
             })
             .collect();
 

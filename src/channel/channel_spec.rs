@@ -42,11 +42,11 @@ impl ChannelSpec {
     }
 
     pub fn sender_id(&self) -> Option<Identifier> {
-        self.sender_id.lock().unwrap().clone()
+        *self.sender_id.lock().unwrap()
     }
 
     pub fn receiver_id(&self) -> Option<Identifier> {
-        self.receiver_id.lock().unwrap().clone()
+        *self.receiver_id.lock().unwrap()
     }
 
     pub fn attach_sender(&self, sender: &dyn Context) {

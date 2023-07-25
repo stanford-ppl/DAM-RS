@@ -149,7 +149,7 @@ impl<T: Clone> SenderFlavor<T> for CyclicSender<T> {
         manager: &mut TimeManager,
         data: ChannelElement<T>,
     ) -> Result<(), EnqueueError> {
-        let mut data_copy = data.clone();
+        let mut data_copy = data;
         loop {
             data_copy.update_time(manager.tick() + 1);
             let v = self.try_send(data_copy.clone());
@@ -225,7 +225,7 @@ impl<T> CyclicSender<T> {
                 }
             }
         }
-        return retval;
+        retval
     }
 
     fn update_len(&mut self) {
@@ -359,7 +359,7 @@ impl<T: Clone> SenderFlavor<T> for AcyclicSender<T> {
         manager: &mut TimeManager,
         data: ChannelElement<T>,
     ) -> Result<(), EnqueueError> {
-        let mut data_clone = data.clone();
+        let mut data_clone = data;
         data_clone.update_time(manager.tick() + 1);
         match self.try_send(data_clone.clone()) {
             Ok(_) => Ok(()),
@@ -437,7 +437,7 @@ impl<T: Clone> SenderFlavor<T> for InfiniteSender<T> {
         manager: &mut TimeManager,
         data: ChannelElement<T>,
     ) -> Result<(), EnqueueError> {
-        let mut data_copy = data.clone();
+        let mut data_copy = data;
         data_copy.update_time(manager.tick() + 1);
         self.try_send(data_copy).map_err(|_| EnqueueError {})
     }

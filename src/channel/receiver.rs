@@ -102,7 +102,7 @@ impl<T: Clone> ReceiverFlavor<T> for CyclicReceiver<T> {
         let sig_time = self.view_struct.wait_until_sender(recv_time);
         assert!(sig_time >= recv_time);
         self.try_update_head(sig_time);
-        return self.head.clone();
+        self.head.clone()
     }
 
     fn peek_next(&mut self, manager: &mut TimeManager) -> Recv<T> {
@@ -190,7 +190,7 @@ impl<T: Clone> CyclicReceiver<T> {
             }
             Err(channel::TryRecvError::Empty) => Recv::Nothing(nothing_time),
         };
-        return retflag;
+        retflag
     }
 
     fn register_recv(&mut self, time: Time) {
@@ -234,7 +234,7 @@ impl<T: Clone> ReceiverFlavor<T> for AcyclicReceiver<T> {
         let sig_time = self.view_struct.wait_until_sender(recv_time);
         assert!(sig_time >= recv_time);
         self.try_update_head(sig_time);
-        return self.head.clone();
+        self.head.clone()
     }
     fn peek_next(&mut self, manager: &mut TimeManager) -> Recv<T> {
         match &self.head {
@@ -321,7 +321,7 @@ impl<T: Clone> AcyclicReceiver<T> {
             }
             Err(channel::TryRecvError::Empty) => Recv::Nothing(nothing_time),
         };
-        return retflag;
+        retflag
     }
 
     fn try_recv(&mut self) -> Result<ChannelElement<T>, TryRecvError> {
@@ -378,7 +378,7 @@ impl<T: Clone> ReceiverFlavor<T> for AcyclicInfiniteReceiver<T> {
         let sig_time = self.view_struct.wait_until_sender(recv_time);
         assert!(sig_time >= recv_time);
         self.try_update_head(sig_time);
-        return self.head.clone();
+        self.head.clone()
     }
     fn peek_next(&mut self, manager: &mut TimeManager) -> Recv<T> {
         match &self.head {
@@ -463,7 +463,7 @@ impl<T: Clone> AcyclicInfiniteReceiver<T> {
             }
             Err(channel::TryRecvError::Empty) => Recv::Nothing(nothing_time),
         };
-        return retflag;
+        retflag
     }
 
     fn try_recv(&mut self) -> Result<ChannelElement<T>, TryRecvError> {
@@ -513,7 +513,7 @@ impl<T: Clone> ReceiverFlavor<T> for CyclicInfiniteReceiver<T> {
         let sig_time = self.view_struct.wait_until_sender(recv_time);
         assert!(sig_time >= recv_time);
         self.try_update_head(sig_time);
-        return self.head.clone();
+        self.head.clone()
     }
     fn peek_next(&mut self, manager: &mut TimeManager) -> Recv<T> {
         match &self.head {
@@ -598,7 +598,7 @@ impl<T: Clone> CyclicInfiniteReceiver<T> {
             }
             Err(channel::TryRecvError::Empty) => Recv::Nothing(nothing_time),
         };
-        return retflag;
+        retflag
     }
 
     fn try_recv(&mut self) -> Result<ChannelElement<T>, TryRecvError> {

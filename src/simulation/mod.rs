@@ -5,7 +5,7 @@ use std::{
 
 use dam_core::{identifier::Identifier, log_graph::with_log_scope};
 use petgraph::{
-    dot::{Config, Dot},
+    dot::{Dot},
     prelude::DiGraph,
 };
 
@@ -49,7 +49,7 @@ impl<'a> Program<'a> {
                 underlying: underlying.clone(),
             },
             Receiver {
-                underlying: underlying.clone(),
+                underlying,
             },
         )
     }
@@ -80,7 +80,7 @@ impl<'a> Program<'a> {
         let tree = self.nodes.iter().map(|x| x.child_ids());
         HashSet::from_iter(
             tree.into_iter()
-                .flat_map(|x| x.keys().map(|v| v.clone()).collect::<Vec<_>>()),
+                .flat_map(|x| x.keys().copied().collect::<Vec<_>>()),
         )
     }
 
@@ -197,7 +197,7 @@ impl<'a> Program<'a> {
 
         let sccs = petgraph::algo::tarjan_scc(&edge_graph);
         let actual_sccs: HashSet<_> =
-            HashSet::from_iter(sccs.into_iter().filter(|x| x.len() > 1).flat_map(|x| x));
+            HashSet::from_iter(sccs.into_iter().filter(|x| x.len() > 1).flatten());
 
         // One of the major things to do here is to optimize all of the edges.
         self.edges.iter().for_each(|edge| {
@@ -227,7 +227,7 @@ impl<'a> Program<'a> {
                             child.cleanup();
                         });
                     })
-                    .expect(format!("Failed to spawn child {name:?} {id:?}").as_str());
+                    .unwrap_or_else(|_| panic!("Failed to spawn child {name:?} {id:?}"));
             });
         });
     }

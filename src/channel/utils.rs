@@ -73,7 +73,7 @@ pub fn dequeue_bundle<T: DAMType>(
             }
             Ok((result, ind))
         }
-        None => return Err(DequeueError {}),
+        None => Err(DequeueError {}),
     }
 }
 
@@ -120,7 +120,7 @@ pub trait Peekable {
 
 impl Peekable for EventTime {
     fn next_event(&mut self) -> EventTime {
-        return *self;
+        *self
     }
 }
 
