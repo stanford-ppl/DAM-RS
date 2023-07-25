@@ -5,6 +5,7 @@ use std::{
 
 use dam_core::{identifier::Identifier, log_graph::with_log_scope, time::Time, ContextView};
 use petgraph::{dot::Dot, prelude::DiGraph};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
     channel::{
@@ -23,6 +24,8 @@ pub struct Program<'a> {
     // In order to perform optimizations such as flavor inference, the program also needs to hold onto all of its edges.
     edges: Vec<Arc<dyn ChannelHandle + 'a>>,
     void_edges: Vec<Arc<dyn ChannelHandle + 'a>>,
+
+    infer_flavors: bool,
 }
 
 #[derive(Copy, Clone, Eq, Debug, PartialEq, Hash)]
@@ -71,6 +74,10 @@ impl<'a> Program<'a> {
         self.nodes.push(Box::new(child));
     }
 
+    pub fn set_inference(&mut self, infer: bool) {
+        self.infer_flavors = infer;
+    }
+
     fn all_node_ids(&self) -> HashSet<Identifier> {
         let tree = self.nodes.iter().map(|x| x.child_ids());
         HashSet::from_iter(
@@ -111,100 +118,106 @@ impl<'a> Program<'a> {
             .iter()
             .for_each(|edge| edge.set_flavor(crate::channel::ChannelFlavor::Void));
 
-        let all_channel_ids: Vec<_> = self
-            .edges
-            .iter()
-            .chain(self.void_edges.iter())
-            .map(|handle| handle.id())
-            .collect();
+        if true {
+            let all_channel_ids: Vec<_> = self
+                .edges
+                .iter()
+                .chain(self.void_edges.iter())
+                .map(|handle| handle.id())
+                .collect();
 
-        let mut edge_graph = DiGraph::<ChannelOrContext, ()>::new();
-        // All edges are nodes on the graph
-        // all contexts map to one or more nodes
-        let mut graph_node_map = HashMap::new();
-        all_channel_ids.iter().for_each(|chan_id| {
-            let handle = ChannelOrContext::ChannelID(*chan_id);
-            let node = edge_graph.add_node(handle);
-            graph_node_map.insert(handle, node);
-        });
+            let mut edge_graph = DiGraph::<ChannelOrContext, ()>::new();
+            // All edges are nodes on the graph
+            // all contexts map to one or more nodes
+            let mut graph_node_map = FxHashMap::default();
+            all_channel_ids.iter().for_each(|chan_id| {
+                let handle = ChannelOrContext::ChannelID(*chan_id);
+                let node = edge_graph.add_node(handle);
+                graph_node_map.insert(handle, node);
+            });
 
-        let mut manually_managed_nodes = HashSet::new();
+            let mut manually_managed_nodes = FxHashSet::default();
 
-        for explicit_conn in self.nodes.iter().flat_map(|node| node.edge_connections()) {
-            for (node, mapping) in explicit_conn {
-                manually_managed_nodes.insert(node);
-                for (srcs, dsts) in mapping {
-                    let temp_node = edge_graph.add_node(ChannelOrContext::Context(node));
-                    for src in srcs {
-                        edge_graph.add_edge(
-                            *graph_node_map
-                                .get(&ChannelOrContext::ChannelID(src))
-                                .unwrap(),
-                            temp_node,
-                            (),
-                        );
-                    }
+            for explicit_conn in self.nodes.iter().flat_map(|node| node.edge_connections()) {
+                for (node, mapping) in explicit_conn {
+                    manually_managed_nodes.insert(node);
+                    for (srcs, dsts) in mapping {
+                        let temp_node = edge_graph.add_node(ChannelOrContext::Context(node));
+                        for src in srcs {
+                            edge_graph.add_edge(
+                                *graph_node_map
+                                    .get(&ChannelOrContext::ChannelID(src))
+                                    .unwrap(),
+                                temp_node,
+                                (),
+                            );
+                        }
 
-                    for dst in dsts {
-                        edge_graph.add_edge(
-                            temp_node,
-                            *graph_node_map
-                                .get(&ChannelOrContext::ChannelID(dst))
-                                .unwrap(),
-                            (),
-                        );
+                        for dst in dsts {
+                            edge_graph.add_edge(
+                                temp_node,
+                                *graph_node_map
+                                    .get(&ChannelOrContext::ChannelID(dst))
+                                    .unwrap(),
+                                (),
+                            );
+                        }
                     }
                 }
             }
+
+            for node in all_node_ids {
+                if !manually_managed_nodes.contains(&node) {
+                    let handle = ChannelOrContext::Context(node);
+                    graph_node_map.insert(handle, edge_graph.add_node(handle));
+                }
+            }
+
+            // Now iterate over all the edges, populating the remaining stuff.
+            for edge in self.edges.iter() {
+                let own_node = graph_node_map
+                    .get(&ChannelOrContext::ChannelID(edge.id()))
+                    .unwrap();
+                let src = edge.sender().unwrap();
+                if !manually_managed_nodes.contains(&src) {
+                    // connect the source onto ourselves
+                    edge_graph.add_edge(
+                        *graph_node_map.get(&ChannelOrContext::Context(src)).unwrap(),
+                        *own_node,
+                        (),
+                    );
+                }
+
+                let dst = edge.receiver().unwrap();
+                if !manually_managed_nodes.contains(&dst) {
+                    edge_graph.add_edge(
+                        *own_node,
+                        *graph_node_map.get(&ChannelOrContext::Context(dst)).unwrap(),
+                        (),
+                    );
+                }
+            }
+
+            let sccs = petgraph::algo::tarjan_scc(&edge_graph);
+            let actual_sccs: HashSet<_> =
+                HashSet::from_iter(sccs.into_iter().filter(|x| x.len() > 1).flatten());
+
+            // One of the major things to do here is to optimize all of the edges.
+            self.edges.iter().for_each(|edge| {
+                let handle = graph_node_map
+                    .get(&ChannelOrContext::ChannelID(edge.id()))
+                    .unwrap();
+                if actual_sccs.contains(handle) {
+                    edge.set_flavor(crate::channel::ChannelFlavor::Cyclic);
+                } else {
+                    edge.set_flavor(crate::channel::ChannelFlavor::Acyclic);
+                }
+            });
+        } else {
+            self.edges
+                .iter()
+                .for_each(|edge| edge.set_flavor(crate::channel::ChannelFlavor::Cyclic));
         }
-
-        for node in all_node_ids {
-            if !manually_managed_nodes.contains(&node) {
-                let handle = ChannelOrContext::Context(node);
-                graph_node_map.insert(handle, edge_graph.add_node(handle));
-            }
-        }
-
-        // Now iterate over all the edges, populating the remaining stuff.
-        for edge in self.edges.iter() {
-            let own_node = graph_node_map
-                .get(&ChannelOrContext::ChannelID(edge.id()))
-                .unwrap();
-            let src = edge.sender().unwrap();
-            if !manually_managed_nodes.contains(&src) {
-                // connect the source onto ourselves
-                edge_graph.add_edge(
-                    *graph_node_map.get(&ChannelOrContext::Context(src)).unwrap(),
-                    *own_node,
-                    (),
-                );
-            }
-
-            let dst = edge.receiver().unwrap();
-            if !manually_managed_nodes.contains(&dst) {
-                edge_graph.add_edge(
-                    *own_node,
-                    *graph_node_map.get(&ChannelOrContext::Context(dst)).unwrap(),
-                    (),
-                );
-            }
-        }
-
-        let sccs = petgraph::algo::tarjan_scc(&edge_graph);
-        let actual_sccs: HashSet<_> =
-            HashSet::from_iter(sccs.into_iter().filter(|x| x.len() > 1).flatten());
-
-        // One of the major things to do here is to optimize all of the edges.
-        self.edges.iter().for_each(|edge| {
-            let handle = graph_node_map
-                .get(&ChannelOrContext::ChannelID(edge.id()))
-                .unwrap();
-            if actual_sccs.contains(handle) {
-                edge.set_flavor(crate::channel::ChannelFlavor::Cyclic);
-            } else {
-                edge.set_flavor(crate::channel::ChannelFlavor::Acyclic);
-            }
-        });
 
         self.nodes.iter_mut().for_each(|child| child.init());
     }
