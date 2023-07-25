@@ -4,10 +4,7 @@ use std::{
 };
 
 use dam_core::{identifier::Identifier, log_graph::with_log_scope};
-use petgraph::{
-    dot::{Dot},
-    prelude::DiGraph,
-};
+use petgraph::{dot::Dot, prelude::DiGraph};
 
 use crate::{
     channel::{
@@ -48,9 +45,7 @@ impl<'a> Program<'a> {
             Sender {
                 underlying: underlying.clone(),
             },
-            Receiver {
-                underlying,
-            },
+            Receiver { underlying },
         )
     }
 

@@ -19,3 +19,9 @@ impl ChannelID {
         }
     }
 }
+
+impl Default for ChannelID {
+    fn default() -> Self {
+        Self::new()
+    }
+}

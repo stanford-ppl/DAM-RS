@@ -57,7 +57,7 @@ pub fn peek_next<T: DAMType>(
 
 pub fn dequeue_bundle<T: DAMType>(
     manager: &mut TimeManager,
-    bundles: &mut Vec<RecvBundle<T>>,
+    bundles: &mut [RecvBundle<T>],
 ) -> Result<(Vec<ChannelElement<T>>, usize), DequeueError> {
     let next_events = bundles.iter_mut().map(|bundle| bundle.next_event());
     let earliest_event = next_events.enumerate().min_by_key(|(_, evt)| *evt);

@@ -9,7 +9,7 @@ use crate::{
         utils::{dequeue, enqueue, EventTime, Peekable},
         ChannelElement, ChannelID, Receiver, Sender,
     },
-    context::{self, Context},
+    context::{self, Context, ExplicitConnections},
     types::{DAMType, IndexLike},
 };
 
@@ -63,17 +63,7 @@ impl<T: DAMType, IT: IndexLike, AT: DAMType> Context for PMU<T, IT, AT> {
         base
     }
 
-    fn edge_connections(
-        &self,
-    ) -> Option<
-        HashMap<
-            Identifier,
-            Vec<(
-                HashSet<crate::channel::ChannelID>,
-                HashSet<crate::channel::ChannelID>,
-            )>,
-        >,
-    > {
+    fn edge_connections(&self) -> Option<ExplicitConnections> {
         let mut result =
             HashMap::<Identifier, Vec<(HashSet<ChannelID>, HashSet<ChannelID>)>>::new();
         for bundle in &self.reader.readers {
