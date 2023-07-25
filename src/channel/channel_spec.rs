@@ -51,10 +51,12 @@ impl ChannelSpec {
 
     pub fn attach_sender(&self, sender: &dyn Context) {
         self.views.write().unwrap().sender = Some(sender.view());
+        *self.sender_id.lock().unwrap() = Some(sender.id());
     }
 
     pub fn attach_receiver(&self, receiver: &dyn Context) {
         self.views.write().unwrap().receiver = Some(receiver.view());
+        *self.receiver_id.lock().unwrap() = Some(receiver.id());
     }
 
     pub fn register_send(&self) -> usize {

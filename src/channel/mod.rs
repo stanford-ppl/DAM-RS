@@ -7,9 +7,9 @@ mod events;
 mod flavors;
 pub use flavors::*;
 
+pub mod channel_spec;
 mod receiver;
 mod sender;
-pub mod view_struct;
 
 pub(crate) mod handle;
 
@@ -21,17 +21,11 @@ use crate::types::Cleanable;
 use crate::types::DAMType;
 use dam_core::*;
 
-
 use dam_core::time::Time;
 use dam_macros::log_producer;
 
-
-
 use self::handle::ChannelData;
 use self::receiver::{ReceiverFlavor, ReceiverImpl};
-
-
-
 
 use self::sender::{SendOptions, SenderFlavor, SenderImpl};
 

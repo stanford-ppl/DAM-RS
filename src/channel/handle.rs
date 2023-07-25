@@ -8,9 +8,14 @@ use crossbeam::channel;
 use dam_core::{identifier::Identifier, time::Time};
 
 use super::{
-    receiver::{AcyclicReceiver, CyclicReceiver, ReceiverImpl, UndefinedReceiver},
-    sender::{AcyclicSender, CyclicSender, SenderImpl, UndefinedSender, VoidSender},
-    view_struct::ChannelSpec,
+    channel_spec::ChannelSpec,
+    receiver::{
+        AcyclicInfiniteReceiver, AcyclicReceiver, CyclicInfiniteReceiver, CyclicReceiver,
+        ReceiverImpl, UndefinedReceiver,
+    },
+    sender::{
+        AcyclicSender, CyclicSender, InfiniteSender, SenderImpl, UndefinedSender, VoidSender,
+    },
     ChannelElement, ChannelFlavor,
 };
 
@@ -63,7 +68,47 @@ impl<T: Clone> ChannelHandle for ChannelData<T> {
                     }
                 }
             }
-            None => todo!(),
+
+            // Unbounded channel
+            None => {
+                //
+                match flavor {
+                    ChannelFlavor::Unknown => panic!("Cannot set flavor to unknown!"),
+                    ChannelFlavor::Acyclic => {
+                        let (snd, rcv) = channel::unbounded();
+
+                        *self.sender.lock().unwrap() = InfiniteSender::new(
+                            super::sender::SenderState::Open(snd),
+                            self.view_struct.clone(),
+                        )
+                        .into();
+
+                        *self.receiver.lock().unwrap() = AcyclicInfiniteReceiver::new(
+                            super::receiver::ReceiverState::Open(rcv),
+                            self.view_struct.clone(),
+                        )
+                        .into();
+                    }
+                    ChannelFlavor::Cyclic => {
+                        let (snd, rcv) = channel::unbounded();
+
+                        *self.sender.lock().unwrap() = InfiniteSender::new(
+                            super::sender::SenderState::Open(snd),
+                            self.view_struct.clone(),
+                        )
+                        .into();
+
+                        *self.receiver.lock().unwrap() = CyclicInfiniteReceiver::new(
+                            super::receiver::ReceiverState::Open(rcv),
+                            self.view_struct.clone(),
+                        )
+                        .into();
+                    }
+                    ChannelFlavor::Void => {
+                        *self.sender.lock().unwrap() = VoidSender::default().into()
+                    }
+                }
+            }
         }
     }
 

@@ -67,6 +67,18 @@ impl<'a> Context for BasicParentContext<'a> {
             get_log(NODE).log(RegistryEvent::Cleaned(finish_time.unwrap_or(Time::new(0))));
         });
     }
+
+    fn child_ids(&self) -> Vec<dam_core::identifier::Identifier> {
+        self.children
+            .iter()
+            .map(|child| child.id())
+            .chain(
+                self.children
+                    .iter()
+                    .flat_map(|child| child.child_ids().into_iter()),
+            )
+            .collect()
+    }
 }
 
 impl<'a> TimeViewable for BasicParentContext<'a> {

@@ -4,8 +4,8 @@ use dam_core::{identifier::Identifier, log_graph::with_log_scope};
 
 use crate::{
     channel::{
+        channel_spec::ChannelSpec,
         handle::{ChannelData, ChannelHandle},
-        view_struct::ChannelSpec,
         Receiver, Sender,
     },
     context::Context,
@@ -23,11 +23,11 @@ pub struct Program<'a> {
 
 impl<'a> Program<'a> {
     // Methods to add channels
-    pub fn bounded<T>(&mut self, capacity: usize) -> (Sender<T>, Receiver<T>)
+    fn make_channel<T>(&mut self, capacity: Option<usize>) -> (Sender<T>, Receiver<T>)
     where
         T: Clone + 'a,
     {
-        let spec = Arc::new(ChannelSpec::new(Some(capacity)));
+        let spec = Arc::new(ChannelSpec::new(capacity));
         let underlying = Arc::new(ChannelData::new(spec));
         self.edges.push(underlying.clone());
 
@@ -39,6 +39,14 @@ impl<'a> Program<'a> {
                 underlying: underlying.clone(),
             },
         )
+    }
+
+    pub fn bounded<T: Clone + 'a>(&mut self, capacity: usize) -> (Sender<T>, Receiver<T>) {
+        self.make_channel(Some(capacity))
+    }
+
+    pub fn unbounded<T: Clone + 'a>(&mut self) -> (Sender<T>, Receiver<T>) {
+        self.make_channel(None)
     }
 
     pub fn void<T: Clone + 'a>(&mut self) -> Sender<T> {
@@ -56,17 +64,24 @@ impl<'a> Program<'a> {
     }
 
     pub fn init(&mut self) {
-        // One of the major things to do here is to optimize all of the edges.
-        self.edges
-            .iter()
-            .for_each(|edge| edge.set_flavor(crate::channel::ChannelFlavor::Cyclic));
+        let all_node_ids: HashSet<Identifier> = HashSet::from_iter(
+            self.nodes.iter().map(|node| node.id()).chain(
+                self.nodes
+                    .iter()
+                    .flat_map(|node| node.child_ids().into_iter()),
+            ),
+        );
 
-        self.void_edges
-            .iter()
-            .for_each(|edge| edge.set_flavor(crate::channel::ChannelFlavor::Void));
+        // Make sure that all edges have registered endpoints.
+        self.edges.iter().for_each(|edge| {
+            assert!(edge.sender().is_some());
+            assert!(edge.receiver().is_some());
+        });
 
-        let all_node_ids: HashSet<Identifier> =
-            HashSet::from_iter(self.nodes.iter().map(|node| node.id()));
+        self.void_edges.iter().for_each(|edge| {
+            assert!(edge.sender().is_some());
+            assert!(edge.receiver().is_none());
+        });
 
         // check that all of our edge targets are in the nodes
         self.edges.iter().chain(self.void_edges.iter()).for_each(|edge| {
@@ -79,6 +94,18 @@ impl<'a> Program<'a> {
                     }
                 })
         });
+
+        // One of the major things to do here is to optimize all of the edges.
+        self.edges
+            .iter()
+            .for_each(|edge| edge.set_flavor(crate::channel::ChannelFlavor::Cyclic));
+
+        self.void_edges
+            .iter()
+            .for_each(|edge| edge.set_flavor(crate::channel::ChannelFlavor::Void));
+
+        // construct the edge reachability graph.
+        // an edge is reachable from another edge
     }
 
     pub fn run(&mut self) {

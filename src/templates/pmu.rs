@@ -50,6 +50,10 @@ impl<T: DAMType, IT: IndexLike, AT: DAMType> Context for PMU<T, IT, AT> {
     }
 
     fn cleanup(&mut self) {} // No-op
+
+    fn child_ids(&self) -> Vec<Identifier> {
+        vec![self.reader.id(), self.writer.id()]
+    }
 }
 
 impl<T: DAMType, IT: IndexLike, AT: DAMType> TimeViewable for PMU<T, IT, AT> {

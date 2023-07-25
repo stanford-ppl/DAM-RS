@@ -7,7 +7,7 @@ use enum_dispatch::enum_dispatch;
 
 use crate::context::Context;
 
-use super::{view_struct::ChannelSpec, ChannelElement, EnqueueError};
+use super::{channel_spec::ChannelSpec, ChannelElement, EnqueueError};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum SendOptions {
