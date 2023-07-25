@@ -65,7 +65,7 @@ impl<T> ReceiverFlavor<T> for UndefinedReceiver<T> {
     }
 
     fn cleanup(&mut self) {
-        panic!();
+        // No-op since it's part of drop
     }
 }
 
