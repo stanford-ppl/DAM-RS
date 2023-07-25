@@ -40,7 +40,7 @@ pub fn dequeue<T: DAMType>(
     match recv.dequeue(manager) {
         Recv::Something(ce) => Ok(ce),
         Recv::Closed => Err(DequeueError {}),
-        _ => unreachable!(),
+        _ => panic!("Should only ever get something or closed on dequeue"),
     }
 }
 
@@ -57,7 +57,7 @@ pub fn peek_next<T: DAMType>(
 
 pub fn dequeue_bundle<T: DAMType>(
     manager: &mut TimeManager,
-    bundles: &mut Vec<RecvBundle<T>>,
+    bundles: &mut [RecvBundle<T>],
 ) -> Result<(Vec<ChannelElement<T>>, usize), DequeueError> {
     let next_events = bundles.iter_mut().map(|bundle| bundle.next_event());
     let earliest_event = next_events.enumerate().min_by_key(|(_, evt)| *evt);
@@ -73,7 +73,7 @@ pub fn dequeue_bundle<T: DAMType>(
             }
             Ok((result, ind))
         }
-        None => return Err(DequeueError {}),
+        None => Err(DequeueError {}),
     }
 }
 
@@ -120,7 +120,7 @@ pub trait Peekable {
 
 impl Peekable for EventTime {
     fn next_event(&mut self) -> EventTime {
-        return *self;
+        *self
     }
 }
 

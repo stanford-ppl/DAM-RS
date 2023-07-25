@@ -326,14 +326,14 @@ pub mod tests {
 
     use crate::{
         channel::{
-            unbounded,
             utils::{dequeue, enqueue},
             ChannelElement, Receiver,
         },
         context::{
             checker_context::CheckerContext, function_context::FunctionContext,
-            generator_context::GeneratorContext, parent::BasicParentContext, Context,
+            generator_context::GeneratorContext,
         },
+        simulation::Program,
         templates::{
             datastore::Behavior,
             dram::{DRAMConfig, DRAMReadBundle, DRAMWriteBundle, DRAM},
@@ -361,54 +361,43 @@ pub mod tests {
             },
         );
 
-        let mut parent = BasicParentContext::default();
+        let mut parent = Program::default();
         let mut ack_channels = Vec::<Receiver<bool>>::with_capacity(NUM_WRITERS);
 
-        let mut writers: Vec<_> = (0..NUM_WRITERS)
-            .into_iter()
-            .map(|split_ind| {
-                let low = WORK_PER_WRITER * split_ind;
-                let high = low + WORK_PER_WRITER;
-                let (addr_send, addr_recv) = unbounded::<u16>();
-                let (data_send, data_recv) = unbounded::<u16>();
-                let (ack_send, ack_recv) = unbounded::<bool>();
-                let (size_send, size_recv) = unbounded::<u16>();
-                // Address Generator
-                let addr_gen = GeneratorContext::new(
-                    move || [u16::try_from(low).unwrap()].into_iter(),
-                    addr_send,
-                );
-                let data_gen = GeneratorContext::new(
-                    move || (low..high).map(|x| u16::try_from(x).unwrap()),
-                    data_send,
-                );
-                let size_gen = GeneratorContext::new(
-                    || [u16::try_from(WORK_PER_WRITER).unwrap()].into_iter(),
-                    size_send,
-                );
-                dram.add_writer(DRAMWriteBundle {
-                    addr: addr_recv,
-                    data: data_recv,
-                    request_size: size_recv,
-                    ack: ack_send,
-                });
-                ack_channels.push(ack_recv);
-
-                (Box::new(addr_gen), Box::new(data_gen), Box::new(size_gen))
-            })
-            .collect();
-        writers
-            .iter_mut()
-            .for_each(|(addr_gen, data_gen, size_gen)| {
-                parent.add_child(addr_gen.as_mut());
-                parent.add_child(data_gen.as_mut());
-                parent.add_child(size_gen.as_mut());
+        (0..NUM_WRITERS).for_each(|split_ind| {
+            let low = WORK_PER_WRITER * split_ind;
+            let high = low + WORK_PER_WRITER;
+            let (addr_send, addr_recv) = parent.bounded(128);
+            let (data_send, data_recv) = parent.bounded(128);
+            let (ack_send, ack_recv) = parent.bounded(128);
+            let (size_send, size_recv) = parent.bounded(128);
+            // Address Generator
+            let addr_gen =
+                GeneratorContext::new(move || [u16::try_from(low).unwrap()].into_iter(), addr_send);
+            let data_gen = GeneratorContext::new(
+                move || (low..high).map(|x| u16::try_from(x).unwrap()),
+                data_send,
+            );
+            let size_gen = GeneratorContext::new(
+                || [u16::try_from(WORK_PER_WRITER).unwrap()].into_iter(),
+                size_send,
+            );
+            dram.add_writer(DRAMWriteBundle {
+                addr: addr_recv,
+                data: data_recv,
+                request_size: size_recv,
+                ack: ack_send,
             });
+            ack_channels.push(ack_recv);
+            parent.add_child(addr_gen);
+            parent.add_child(data_gen);
+            parent.add_child(size_gen);
+        });
 
         // Create a node that waits for all of the acks to come back, and then issues reads
-        let (mut rd_addr_send, rd_addr_recv) = unbounded::<u16>();
-        let (rd_data_send, rd_data_recv) = unbounded::<u16>();
-        let (req_size_send, req_size_recv) = unbounded::<u16>();
+        let (mut rd_addr_send, rd_addr_recv) = parent.bounded(128);
+        let (rd_data_send, rd_data_recv) = parent.bounded(128);
+        let (req_size_send, req_size_recv) = parent.bounded(128);
         let mut read_issue = FunctionContext::new();
         ack_channels.iter_mut().for_each(|chn| {
             chn.attach_receiver(&read_issue);
@@ -429,14 +418,14 @@ pub mod tests {
             )
             .unwrap();
         });
-        parent.add_child(&mut read_issue);
+        parent.add_child(read_issue);
 
-        let mut size_issue = GeneratorContext::new(
+        let size_issue = GeneratorContext::new(
             || [u16::try_from(TEST_SIZE).unwrap()].into_iter(),
             req_size_send,
         );
 
-        parent.add_child(&mut size_issue);
+        parent.add_child(size_issue);
 
         dram.add_reader(DRAMReadBundle {
             addr: rd_addr_recv,
@@ -444,18 +433,17 @@ pub mod tests {
             data: rd_data_send,
         });
 
-        let mut checker = CheckerContext::new(
+        let checker = CheckerContext::new(
             || (0..TEST_SIZE).map(|x| u16::try_from(x).unwrap()),
             rd_data_recv,
         );
-        parent.add_child(&mut checker);
-        parent.add_child(&mut dram);
+        parent.add_child(checker);
+        parent.add_child(dram);
 
         dbg!("Finished Setup!");
 
         parent.init();
         dbg!("Finished Init!");
         parent.run();
-        parent.cleanup();
     }
 }

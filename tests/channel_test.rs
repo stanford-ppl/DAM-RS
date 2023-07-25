@@ -1,19 +1,17 @@
 #[cfg(test)]
 mod tests {
-    use dam_core::{ContextView, TimeViewable};
+
     use dam_rs::{
-        channel::{bounded_with_flavor, ChannelFlavor},
-        context::{
-            function_context::FunctionContext, generator_context::GeneratorContext,
-            parent::BasicParentContext, Context,
-        },
+        context::{function_context::FunctionContext, generator_context::GeneratorContext},
+        simulation::Program,
     };
 
-    fn test_channel(flavor: ChannelFlavor) {
+    #[test]
+    fn test_channel() {
         let test_size = 5;
-        let mut parent = BasicParentContext::default();
-        let (snd, mut rcv) = bounded_with_flavor(2, flavor);
-        let mut sender = GeneratorContext::new(move || (0..test_size).into_iter(), snd);
+        let mut parent = Program::default();
+        let (snd, mut rcv) = parent.bounded(2);
+        let sender = GeneratorContext::new(move || (0..test_size), snd);
         let mut recv_ctx = FunctionContext::new();
         rcv.attach_receiver(&recv_ctx);
         recv_ctx.set_run(move |time| {
@@ -30,24 +28,10 @@ mod tests {
                 assert_eq!(res, iter);
             }
         });
-        parent.add_child(&mut sender);
-        parent.add_child(&mut recv_ctx);
+        parent.add_child(sender);
+        parent.add_child(recv_ctx);
         parent.init();
         parent.run();
-        parent.cleanup();
-        println!(
-            "Flavor: {flavor:?}, ticks: {:?}",
-            recv_ctx.view().tick_lower_bound()
-        );
-    }
-
-    #[test]
-    fn test_channel_cyclic() {
-        test_channel(ChannelFlavor::Cyclic);
-    }
-
-    #[test]
-    fn test_channel_acyclic() {
-        test_channel(ChannelFlavor::Acyclic);
+        parent.print_graph();
     }
 }

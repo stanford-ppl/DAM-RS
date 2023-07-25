@@ -7,7 +7,7 @@ use enum_dispatch::enum_dispatch;
 
 use crate::context::Context;
 
-use super::{view_struct::ViewStruct, ChannelElement, EnqueueError};
+use super::{channel_spec::ChannelSpec, ChannelElement, EnqueueError};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum SendOptions {
@@ -33,10 +33,12 @@ pub trait SenderFlavor<T> {
 }
 
 #[enum_dispatch]
-pub(super) enum SenderImpl<T: Clone> {
-    VoidSender(VoidSender<T>),
-    CyclicSender(CyclicSender<T>),
-    AcyclicSender(AcyclicSender<T>),
+pub(crate) enum SenderImpl<T: Clone> {
+    Void(VoidSender<T>),
+    Cyclic(CyclicSender<T>),
+    Acyclic(AcyclicSender<T>),
+    Infinite(InfiniteSender<T>),
+    Undefined(UndefinedSender<T>),
 }
 
 #[derive(Debug)]
@@ -72,19 +74,54 @@ impl<T> SenderFlavor<T> for VoidSender<T> {
     fn cleanup(&mut self) {} // Nothing to clean up either.
 }
 
-pub(super) enum SenderState<T> {
+pub struct UndefinedSender<T> {
+    _marker: PhantomData<T>,
+    spec: Arc<ChannelSpec>,
+}
+impl<T> SenderFlavor<T> for UndefinedSender<T> {
+    fn attach_sender(&self, sender: &dyn Context) {
+        self.spec.attach_sender(sender)
+    }
+
+    fn try_send(&mut self, _data: ChannelElement<T>) -> Result<(), SendOptions> {
+        panic!();
+    }
+
+    fn enqueue(
+        &mut self,
+        _manager: &mut TimeManager,
+        _data: ChannelElement<T>,
+    ) -> Result<(), EnqueueError> {
+        panic!();
+    }
+
+    fn cleanup(&mut self) {
+        panic!();
+    }
+}
+
+impl<T> UndefinedSender<T> {
+    pub fn new(spec: Arc<ChannelSpec>) -> Self {
+        Self {
+            _marker: PhantomData,
+            spec,
+        }
+    }
+}
+
+pub(crate) enum SenderState<T> {
     Open(channel::Sender<T>),
     Closed,
 }
 
 #[log_producer]
-pub(super) struct CyclicSender<T> {
+pub(crate) struct CyclicSender<T> {
     underlying: SenderState<ChannelElement<T>>,
     resp: channel::Receiver<Time>,
     send_receive_delta: usize,
     capacity: usize,
 
-    view_struct: Arc<ViewStruct>,
+    view_struct: Arc<ChannelSpec>,
     next_available: SendOptions,
 }
 impl<T: Clone> SenderFlavor<T> for CyclicSender<T> {
@@ -112,7 +149,7 @@ impl<T: Clone> SenderFlavor<T> for CyclicSender<T> {
         manager: &mut TimeManager,
         data: ChannelElement<T>,
     ) -> Result<(), EnqueueError> {
-        let mut data_copy = data.clone();
+        let mut data_copy = data;
         loop {
             data_copy.update_time(manager.tick() + 1);
             let v = self.try_send(data_copy.clone());
@@ -127,7 +164,7 @@ impl<T: Clone> SenderFlavor<T> for CyclicSender<T> {
                     manager.advance(time);
                 }
                 Err(SendOptions::Unknown) => {
-                    unreachable!("We should always know when to try again!")
+                    panic!("We should always know when to try again!")
                 }
             }
         }
@@ -188,7 +225,7 @@ impl<T> CyclicSender<T> {
                 }
             }
         }
-        return retval;
+        retval
     }
 
     fn update_len(&mut self) {
@@ -235,7 +272,7 @@ impl<T> CyclicSender<T> {
         sender: channel::Sender<ChannelElement<T>>,
         resp: channel::Receiver<Time>,
         capacity: usize,
-        view_struct: Arc<ViewStruct>,
+        view_struct: Arc<ChannelSpec>,
     ) -> Self {
         Self {
             underlying: SenderState::Open(sender),
@@ -248,13 +285,13 @@ impl<T> CyclicSender<T> {
     }
 }
 
-pub(super) struct AcyclicSender<T> {
+pub(crate) struct AcyclicSender<T> {
     underlying: SenderState<ChannelElement<T>>,
     resp: channel::Receiver<Time>,
     send_receive_delta: usize,
     capacity: usize,
 
-    view_struct: Arc<ViewStruct>,
+    view_struct: Arc<ChannelSpec>,
     next_available: SendOptions,
 }
 
@@ -290,7 +327,7 @@ impl<T: Clone> SenderFlavor<T> for AcyclicSender<T> {
                 }
 
                 SendOptions::CheckBackAt(_) => {
-                    unreachable!("We should never have to check back in an acyclic sender");
+                    panic!("We should never have to check back in an acyclic sender");
                 }
             }
         }
@@ -322,7 +359,7 @@ impl<T: Clone> SenderFlavor<T> for AcyclicSender<T> {
         manager: &mut TimeManager,
         data: ChannelElement<T>,
     ) -> Result<(), EnqueueError> {
-        let mut data_clone = data.clone();
+        let mut data_clone = data;
         data_clone.update_time(manager.tick() + 1);
         match self.try_send(data_clone.clone()) {
             Ok(_) => Ok(()),
@@ -334,7 +371,7 @@ impl<T: Clone> SenderFlavor<T> for AcyclicSender<T> {
                 Ok(())
             }
             Err(SendOptions::Never) => Err(EnqueueError {}),
-            Err(_) => unreachable!("Not possible to get an Unknown or CheckBackAt"),
+            Err(_) => panic!("Not possible to get an Unknown or CheckBackAt"),
         }
     }
 
@@ -348,7 +385,7 @@ impl<T> AcyclicSender<T> {
         sender: channel::Sender<ChannelElement<T>>,
         resp: channel::Receiver<Time>,
         capacity: usize,
-        view_struct: Arc<ViewStruct>,
+        view_struct: Arc<ChannelSpec>,
     ) -> Self {
         Self {
             underlying: SenderState::Open(sender),
@@ -358,5 +395,54 @@ impl<T> AcyclicSender<T> {
             view_struct,
             next_available: SendOptions::Unknown,
         }
+    }
+}
+
+pub(crate) struct InfiniteSender<T> {
+    underlying: SenderState<ChannelElement<T>>,
+    view_struct: Arc<ChannelSpec>,
+}
+
+impl<T> InfiniteSender<T> {
+    pub(crate) fn new(
+        underlying: SenderState<ChannelElement<T>>,
+        view_struct: Arc<ChannelSpec>,
+    ) -> Self {
+        Self {
+            underlying,
+            view_struct,
+        }
+    }
+}
+
+impl<T: Clone> SenderFlavor<T> for InfiniteSender<T> {
+    fn attach_sender(&self, sender: &dyn Context) {
+        self.view_struct.attach_sender(sender);
+    }
+
+    fn try_send(&mut self, elem: ChannelElement<T>) -> Result<(), SendOptions> {
+        assert!(elem.time >= self.view_struct.sender_tlb());
+        let _ = self.view_struct.register_send();
+        match &self.underlying {
+            SenderState::Open(chan) => match chan.send(elem) {
+                Ok(_) => Ok(()),
+                Err(_) => Err(SendOptions::Never),
+            },
+            SenderState::Closed => Err(SendOptions::Never),
+        }
+    }
+
+    fn enqueue(
+        &mut self,
+        manager: &mut TimeManager,
+        data: ChannelElement<T>,
+    ) -> Result<(), EnqueueError> {
+        let mut data_copy = data;
+        data_copy.update_time(manager.tick() + 1);
+        self.try_send(data_copy).map_err(|_| EnqueueError {})
+    }
+
+    fn cleanup(&mut self) {
+        self.underlying = SenderState::Closed;
     }
 }
