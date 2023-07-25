@@ -248,9 +248,7 @@ mod tests {
     use crate::simulation::Program;
     use crate::templates::sam::repeat::Repsiggen;
     use crate::{
-        context::{
-            checker_context::CheckerContext, generator_context::GeneratorContext, Context,
-        },
+        context::{checker_context::CheckerContext, generator_context::GeneratorContext},
         repsig_vec,
         templates::sam::primitive::Token,
         token_vec,

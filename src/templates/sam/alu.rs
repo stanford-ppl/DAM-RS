@@ -129,9 +129,7 @@ pub fn make_unary_alu<ValType: DAMType, StopType: DAMType>(
 #[cfg(test)]
 mod tests {
     use crate::{
-        context::{
-            checker_context::CheckerContext, generator_context::GeneratorContext, Context,
-        },
+        context::{checker_context::CheckerContext, generator_context::GeneratorContext},
         simulation::Program,
         templates::{
             ops::ALUAddOp,

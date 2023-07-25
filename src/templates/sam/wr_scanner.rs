@@ -168,8 +168,7 @@ where
 #[cfg(test)]
 mod tests {
     use crate::{
-        context::{generator_context::GeneratorContext, Context},
-        simulation::Program,
+        context::generator_context::GeneratorContext, simulation::Program,
         templates::sam::primitive::Token,
     };
 

@@ -492,7 +492,7 @@ where
 mod tests {
     use crate::{
         context::{
-            checker_context::CheckerContext, generator_context::GeneratorContext, Context,
+            checker_context::CheckerContext, generator_context::GeneratorContext, 
         },
         simulation::Program,
         templates::sam::primitive::Token,

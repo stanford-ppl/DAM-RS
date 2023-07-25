@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
 
-    use std::process::exit;
+    use std::time::Instant;
     use std::{fs, path::Path};
 
     use crate::context::broadcast_context::BroadcastContext;
@@ -2019,14 +2019,16 @@ mod tests {
         parent.add_child(gat1);
         // parent.add_child(printc);
 
+        let now = Instant::now();
         parent.print_graph();
-        exit(0);
         parent.init();
+        let elapsed = now.elapsed();
+        println!("Elapsed: {:.2?}", elapsed);
         parent.run();
 
         // let fil = formatted_dir.to_str().unwrap();
         // dbg!(xvals.out_val);
-        // dbg!(xvals.view().tick_lower_bound());
+        dbg!(parent.elapsed_cycles());
 
         // assert_eq!(x0_wrscanner.crd_arr, a0_crd);
         // assert_eq!(x1_wrscanner.crd_arr, a1_crd);
