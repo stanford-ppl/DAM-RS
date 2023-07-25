@@ -1,9 +1,13 @@
-use std::{cmp::max, sync::Arc};
+use std::{
+    cmp::max,
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use crate::{
     channel::{
         utils::{dequeue, enqueue, EventTime, Peekable},
-        ChannelElement, Receiver, Sender,
+        ChannelElement, ChannelID, Receiver, Sender,
     },
     context::{self, Context},
     types::{DAMType, IndexLike},
@@ -51,8 +55,38 @@ impl<T: DAMType, IT: IndexLike, AT: DAMType> Context for PMU<T, IT, AT> {
 
     fn cleanup(&mut self) {} // No-op
 
-    fn child_ids(&self) -> Vec<Identifier> {
-        vec![self.reader.id(), self.writer.id()]
+    fn child_ids(&self) -> HashMap<Identifier, HashSet<Identifier>> {
+        let mut base: HashMap<Identifier, HashSet<Identifier>> =
+            [(self.id(), [self.reader.id(), self.writer.id()].into())].into();
+        base.extend(self.reader.child_ids());
+        base.extend(self.writer.child_ids());
+        base
+    }
+
+    fn edge_connections(
+        &self,
+    ) -> Option<
+        HashMap<
+            Identifier,
+            Vec<(
+                HashSet<crate::channel::ChannelID>,
+                HashSet<crate::channel::ChannelID>,
+            )>,
+        >,
+    > {
+        let mut result =
+            HashMap::<Identifier, Vec<(HashSet<ChannelID>, HashSet<ChannelID>)>>::new();
+        for bundle in &self.reader.readers {
+            let srcs = [bundle.addr.id()];
+            let dsts = [bundle.resp.id()];
+            result.insert(self.reader.id(), vec![(srcs.into(), dsts.into())]);
+        }
+        for bundle in &self.writer.writers {
+            let srcs = [bundle.addr.id(), bundle.data.id()];
+            let dsts = [bundle.ack.id()];
+            result.insert(self.writer.id(), vec![(srcs.into(), dsts.into())]);
+        }
+        Some(result)
     }
 }
 
@@ -383,6 +417,7 @@ mod tests {
         parent.add_child(pmu);
         parent.init();
         parent.run();
+        parent.print_graph();
         // let finish_time = pmu.view().tick_lower_bound();
         // dbg!(finish_time);
         // assert!(finish_time.is_infinite());

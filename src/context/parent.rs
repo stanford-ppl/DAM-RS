@@ -1,4 +1,6 @@
-use dam_core::identifier::Identifiable;
+use std::collections::{HashMap, HashSet};
+
+use dam_core::identifier::{Identifiable, Identifier};
 use dam_core::log_graph::with_log_scope;
 use dam_core::{
     log_graph::{get_log, RegistryEvent},
@@ -68,16 +70,14 @@ impl<'a> Context for BasicParentContext<'a> {
         });
     }
 
-    fn child_ids(&self) -> Vec<dam_core::identifier::Identifier> {
-        self.children
-            .iter()
-            .map(|child| child.id())
-            .chain(
-                self.children
-                    .iter()
-                    .flat_map(|child| child.child_ids().into_iter()),
-            )
-            .collect()
+    fn child_ids(&self) -> HashMap<Identifier, HashSet<Identifier>> {
+        let mut base_map = HashMap::from([(
+            self.id(),
+            HashSet::from_iter(self.children.iter().map(|child| child.id())),
+        )]);
+        let sub_maps = self.children.iter().map(|child| child.child_ids());
+        sub_maps.for_each(|sub| base_map.extend(sub));
+        base_map
     }
 }
 

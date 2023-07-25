@@ -16,19 +16,20 @@ use super::{
     sender::{
         AcyclicSender, CyclicSender, InfiniteSender, SenderImpl, UndefinedSender, VoidSender,
     },
-    ChannelElement, ChannelFlavor,
+    ChannelElement, ChannelFlavor, ChannelID,
 };
 
 pub(crate) trait ChannelHandle {
     fn set_flavor(&self, flavor: ChannelFlavor);
     fn sender(&self) -> Option<Identifier>;
     fn receiver(&self) -> Option<Identifier>;
+    fn id(&self) -> ChannelID;
 }
 
 pub(crate) struct ChannelData<T: Clone> {
     pub(crate) sender: Mutex<SenderImpl<T>>,
     pub(crate) receiver: Mutex<ReceiverImpl<T>>,
-    pub(crate) view_struct: Arc<ChannelSpec>,
+    pub(crate) channel_spec: Arc<ChannelSpec>,
 }
 
 impl<T: Clone> ChannelData<T> {
@@ -36,14 +37,14 @@ impl<T: Clone> ChannelData<T> {
         Self {
             sender: Mutex::new(UndefinedSender::new(spec.clone()).into()),
             receiver: Mutex::new(UndefinedReceiver::new(spec.clone()).into()),
-            view_struct: spec,
+            channel_spec: spec,
         }
     }
 }
 
 impl<T: Clone> ChannelHandle for ChannelData<T> {
     fn set_flavor(&self, flavor: ChannelFlavor) {
-        match self.view_struct.capacity() {
+        match self.channel_spec.capacity() {
             Some(capacity) => {
                 let (tx, rx) = channel::bounded::<ChannelElement<T>>(capacity);
                 let (resp_t, resp_r) = channel::bounded::<Time>(capacity);
@@ -51,17 +52,17 @@ impl<T: Clone> ChannelHandle for ChannelData<T> {
                     ChannelFlavor::Unknown => panic!("Cannot set flavor to unknown!"),
                     ChannelFlavor::Acyclic => {
                         *self.sender.lock().unwrap() =
-                            AcyclicSender::new(tx, resp_r, capacity, self.view_struct.clone())
+                            AcyclicSender::new(tx, resp_r, capacity, self.channel_spec.clone())
                                 .into();
                         *self.receiver.lock().unwrap() =
-                            AcyclicReceiver::new(rx, resp_t, self.view_struct.clone()).into();
+                            AcyclicReceiver::new(rx, resp_t, self.channel_spec.clone()).into();
                     }
                     ChannelFlavor::Cyclic => {
                         *self.sender.lock().unwrap() =
-                            CyclicSender::new(tx, resp_r, capacity, self.view_struct.clone())
+                            CyclicSender::new(tx, resp_r, capacity, self.channel_spec.clone())
                                 .into();
                         *self.receiver.lock().unwrap() =
-                            CyclicReceiver::new(rx, resp_t, self.view_struct.clone()).into();
+                            CyclicReceiver::new(rx, resp_t, self.channel_spec.clone()).into();
                     }
                     ChannelFlavor::Void => {
                         *self.sender.lock().unwrap() = VoidSender::default().into()
@@ -79,13 +80,13 @@ impl<T: Clone> ChannelHandle for ChannelData<T> {
 
                         *self.sender.lock().unwrap() = InfiniteSender::new(
                             super::sender::SenderState::Open(snd),
-                            self.view_struct.clone(),
+                            self.channel_spec.clone(),
                         )
                         .into();
 
                         *self.receiver.lock().unwrap() = AcyclicInfiniteReceiver::new(
                             super::receiver::ReceiverState::Open(rcv),
-                            self.view_struct.clone(),
+                            self.channel_spec.clone(),
                         )
                         .into();
                     }
@@ -94,13 +95,13 @@ impl<T: Clone> ChannelHandle for ChannelData<T> {
 
                         *self.sender.lock().unwrap() = InfiniteSender::new(
                             super::sender::SenderState::Open(snd),
-                            self.view_struct.clone(),
+                            self.channel_spec.clone(),
                         )
                         .into();
 
                         *self.receiver.lock().unwrap() = CyclicInfiniteReceiver::new(
                             super::receiver::ReceiverState::Open(rcv),
-                            self.view_struct.clone(),
+                            self.channel_spec.clone(),
                         )
                         .into();
                     }
@@ -113,10 +114,14 @@ impl<T: Clone> ChannelHandle for ChannelData<T> {
     }
 
     fn sender(&self) -> Option<Identifier> {
-        self.view_struct.sender_id()
+        self.channel_spec.sender_id()
     }
 
     fn receiver(&self) -> Option<Identifier> {
-        self.view_struct.receiver_id()
+        self.channel_spec.receiver_id()
+    }
+
+    fn id(&self) -> ChannelID {
+        self.channel_spec.id()
     }
 }

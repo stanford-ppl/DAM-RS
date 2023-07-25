@@ -121,4 +121,8 @@ impl ChannelSpec {
     pub fn capacity(&self) -> Option<usize> {
         self.capacity
     }
+
+    pub fn id(&self) -> ChannelID {
+        self.channel_id
+    }
 }

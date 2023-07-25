@@ -2,12 +2,12 @@
 mod tests {
 
     use dam_rs::{
-        channel::ChannelFlavor,
         context::{function_context::FunctionContext, generator_context::GeneratorContext},
         simulation::Program,
     };
 
-    fn test_channel(_flavor: ChannelFlavor) {
+    #[test]
+    fn test_channel() {
         let test_size = 5;
         let mut parent = Program::default();
         let (snd, mut rcv) = parent.bounded(2);
@@ -32,19 +32,6 @@ mod tests {
         parent.add_child(recv_ctx);
         parent.init();
         parent.run();
-        // println!(
-        //     "Flavor: {flavor:?}, ticks: {:?}",
-        //     recv_ctx.view().tick_lower_bound()
-        // );
-    }
-
-    #[test]
-    fn test_channel_cyclic() {
-        test_channel(ChannelFlavor::Cyclic);
-    }
-
-    #[test]
-    fn test_channel_acyclic() {
-        test_channel(ChannelFlavor::Acyclic);
+        parent.print_graph();
     }
 }

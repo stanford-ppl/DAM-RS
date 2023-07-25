@@ -25,6 +25,7 @@ use dam_core::time::Time;
 use dam_macros::log_producer;
 
 use self::handle::ChannelData;
+use self::handle::ChannelHandle;
 use self::receiver::{ReceiverFlavor, ReceiverImpl};
 
 use self::sender::{SendOptions, SenderFlavor, SenderImpl};
@@ -59,6 +60,10 @@ pub struct Sender<T: Clone> {
 }
 
 impl<T: DAMType> Sender<T> {
+    pub fn id(&self) -> ChannelID {
+        self.underlying.id()
+    }
+
     pub fn attach_sender(&self, sender: &dyn Context) {
         // Self::log(SendEvent::AttachSender(self.id, sender.id()));
         self.under().attach_sender(sender);
@@ -105,6 +110,10 @@ pub struct Receiver<T: Clone> {
 }
 
 impl<T: DAMType> Receiver<T> {
+    pub fn id(&self) -> ChannelID {
+        self.underlying.id()
+    }
+
     pub fn attach_receiver(&self, receiver: &dyn Context) {
         // Self::log(ReceiverEvent::AttachReceiver(self.id, receiver.id()));
         self.under().attach_receiver(receiver)
