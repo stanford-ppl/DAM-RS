@@ -129,7 +129,7 @@ impl<'a> Program<'a> {
             .iter()
             .for_each(|edge| edge.set_flavor(crate::channel::ChannelFlavor::Void));
 
-        if true {
+        if self.infer_flavors {
             let all_channel_ids: Vec<_> = self
                 .edges
                 .iter()
