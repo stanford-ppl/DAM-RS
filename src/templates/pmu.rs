@@ -408,7 +408,8 @@ mod tests {
         parent.init();
         parent.run();
         parent.print_graph();
-        // let finish_time = pmu.view().tick_lower_bound();
+        let finish_time = parent.elapsed_cycles();
+        dbg!(finish_time);
         // dbg!(finish_time);
         // assert!(finish_time.is_infinite());
         // assert_eq!(finish_time.time(), u64::try_from(TEST_SIZE).unwrap() + 1);
