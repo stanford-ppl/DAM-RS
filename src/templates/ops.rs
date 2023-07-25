@@ -30,6 +30,7 @@ macro_rules! RegisterALUOp {
 #[derive(Debug)]
 pub struct ALUOp<T> {
     // Func is (prev_regs, next_regs) -> new next_regs
+    #[allow(clippy::type_complexity)]
     pub func: fn(&[PipelineRegister<T>], &[PipelineRegister<T>]) -> Vec<PipelineRegister<T>>,
     pub name: &'static str,
 }

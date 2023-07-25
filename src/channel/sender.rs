@@ -34,11 +34,11 @@ pub trait SenderFlavor<T> {
 
 #[enum_dispatch]
 pub(crate) enum SenderImpl<T: Clone> {
-    VoidSender(VoidSender<T>),
-    CyclicSender(CyclicSender<T>),
-    AcyclicSender(AcyclicSender<T>),
-    InfiniteSender(InfiniteSender<T>),
-    UndefinedSender(UndefinedSender<T>),
+    Void(VoidSender<T>),
+    Cyclic(CyclicSender<T>),
+    Acyclic(AcyclicSender<T>),
+    Infinite(InfiniteSender<T>),
+    Undefined(UndefinedSender<T>),
 }
 
 #[derive(Debug)]

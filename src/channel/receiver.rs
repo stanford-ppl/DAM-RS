@@ -26,11 +26,11 @@ pub(crate) trait ReceiverFlavor<T> {
 
 #[enum_dispatch]
 pub(crate) enum ReceiverImpl<T: Clone> {
-    CyclicReceiver(CyclicReceiver<T>),
-    AcyclicReceiver(AcyclicReceiver<T>),
-    AcyclicInfiniteReceiver(AcyclicInfiniteReceiver<T>),
-    CyclicInfiniteReceiver(CyclicInfiniteReceiver<T>),
-    UndefinedReceiver(UndefinedReceiver<T>),
+    Cyclic(CyclicReceiver<T>),
+    Acyclic(AcyclicReceiver<T>),
+    AcyclicInfinite(AcyclicInfiniteReceiver<T>),
+    CyclicInfinite(CyclicInfiniteReceiver<T>),
+    Undefined(UndefinedReceiver<T>),
 }
 
 pub struct UndefinedReceiver<T> {
