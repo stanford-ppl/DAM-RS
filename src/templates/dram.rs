@@ -28,7 +28,7 @@ pub struct DRAMReadBundle<IT: Clone, DT: Clone> {
     data: Sender<DT>,
 }
 
-impl<IT: Clone, DT: Clone> Cleanable for DRAMReadBundle<IT, DT> {
+impl<IT: DAMType, DT: DAMType> Cleanable for DRAMReadBundle<IT, DT> {
     fn cleanup(&mut self) {
         self.addr.cleanup();
         self.req_size.cleanup();
