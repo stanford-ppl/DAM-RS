@@ -5,6 +5,7 @@ pub use channel_id::*;
 mod events;
 
 mod flavors;
+
 pub use flavors::*;
 
 pub mod channel_spec;
@@ -14,7 +15,7 @@ mod sender;
 pub(crate) mod handle;
 
 use std::sync::Arc;
-use std::sync::MutexGuard;
+
 
 use crate::context::Context;
 use crate::types::Cleanable;
@@ -90,8 +91,8 @@ impl<T: DAMType> Sender<T> {
 }
 
 impl<T: Clone> Sender<T> {
-    fn under(&self) -> MutexGuard<SenderImpl<T>> {
-        self.underlying.sender.lock().unwrap()
+    fn under(&self) -> &mut SenderImpl<T> {
+        self.underlying.sender()
     }
 }
 
@@ -149,8 +150,8 @@ impl<T: DAMType> Cleanable for Receiver<T> {
 }
 
 impl<T: DAMType> Receiver<T> {
-    fn under(&self) -> MutexGuard<ReceiverImpl<T>> {
-        self.underlying.receiver.lock().unwrap()
+    fn under(&self) -> &mut ReceiverImpl<T> {
+        self.underlying.receiver()
     }
 }
 

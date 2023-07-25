@@ -1,6 +1,6 @@
 use std::{
     cell::RefCell,
-    collections::{hash_map::DefaultHasher, HashMap},
+    collections::hash_map::DefaultHasher,
     fs::{create_dir_all, File},
     hash::{Hash, Hasher},
     io::{BufWriter, Write},
@@ -11,6 +11,7 @@ use std::{
 };
 
 use dashmap::DashMap;
+use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 
 use crate::{log_config::get_log_info, metric::NODE, time::Time};
@@ -110,7 +111,7 @@ fn thread_id_to_u64(tid: ThreadId) -> u64 {
 // Each thread tracks its own logs.
 #[derive(Debug)]
 pub struct ThreadLocalLog {
-    logs: HashMap<(&'static str, Option<Identifier>), EventLogger>,
+    logs: FxHashMap<(&'static str, Option<Identifier>), EventLogger>,
     current_context: Option<Identifier>,
 }
 

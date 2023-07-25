@@ -2,10 +2,10 @@
 // The key feature we need here is to be able to set up a graph (i.e. pass ownership around)
 // And later swap the underlying implementation of the sender/receivers.
 
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use crossbeam::channel;
-use dam_core::{identifier::Identifier, time::Time};
+use dam_core::{identifier::Identifier, sync_unsafe::SyncUnsafeCell, time::Time};
 
 use super::{
     channel_spec::ChannelSpec,
@@ -27,18 +27,28 @@ pub(crate) trait ChannelHandle {
 }
 
 pub(crate) struct ChannelData<T: Clone> {
-    pub(crate) sender: Mutex<SenderImpl<T>>,
-    pub(crate) receiver: Mutex<ReceiverImpl<T>>,
+    pub(crate) sender: SyncUnsafeCell<SenderImpl<T>>,
+    pub(crate) receiver: SyncUnsafeCell<ReceiverImpl<T>>,
     pub(crate) channel_spec: Arc<ChannelSpec>,
 }
 
 impl<T: Clone> ChannelData<T> {
     pub fn new(spec: Arc<ChannelSpec>) -> Self {
         Self {
-            sender: Mutex::new(UndefinedSender::new(spec.clone()).into()),
-            receiver: Mutex::new(UndefinedReceiver::new(spec.clone()).into()),
+            sender: SyncUnsafeCell::new(UndefinedSender::new(spec.clone()).into()),
+            receiver: SyncUnsafeCell::new(UndefinedReceiver::new(spec.clone()).into()),
             channel_spec: spec,
         }
+    }
+
+    #[allow(clippy::mut_from_ref)]
+    pub(super) fn sender(&self) -> &mut SenderImpl<T> {
+        unsafe { self.sender.get().as_mut().unwrap() }
+    }
+
+    #[allow(clippy::mut_from_ref)]
+    pub(super) fn receiver(&self) -> &mut ReceiverImpl<T> {
+        unsafe { self.receiver.get().as_mut().unwrap() }
     }
 }
 
@@ -51,22 +61,20 @@ impl<T: Clone> ChannelHandle for ChannelData<T> {
                 match flavor {
                     ChannelFlavor::Unknown => panic!("Cannot set flavor to unknown!"),
                     ChannelFlavor::Acyclic => {
-                        *self.sender.lock().unwrap() =
+                        *self.sender() =
                             AcyclicSender::new(tx, resp_r, capacity, self.channel_spec.clone())
                                 .into();
-                        *self.receiver.lock().unwrap() =
+                        *self.receiver() =
                             AcyclicReceiver::new(rx, resp_t, self.channel_spec.clone()).into();
                     }
                     ChannelFlavor::Cyclic => {
-                        *self.sender.lock().unwrap() =
+                        *self.sender() =
                             CyclicSender::new(tx, resp_r, capacity, self.channel_spec.clone())
                                 .into();
-                        *self.receiver.lock().unwrap() =
+                        *self.receiver() =
                             CyclicReceiver::new(rx, resp_t, self.channel_spec.clone()).into();
                     }
-                    ChannelFlavor::Void => {
-                        *self.sender.lock().unwrap() = VoidSender::default().into()
-                    }
+                    ChannelFlavor::Void => *self.sender() = VoidSender::default().into(),
                 }
             }
 
@@ -78,13 +86,13 @@ impl<T: Clone> ChannelHandle for ChannelData<T> {
                     ChannelFlavor::Acyclic => {
                         let (snd, rcv) = channel::unbounded();
 
-                        *self.sender.lock().unwrap() = InfiniteSender::new(
+                        *self.sender() = InfiniteSender::new(
                             super::sender::SenderState::Open(snd),
                             self.channel_spec.clone(),
                         )
                         .into();
 
-                        *self.receiver.lock().unwrap() = AcyclicInfiniteReceiver::new(
+                        *self.receiver() = AcyclicInfiniteReceiver::new(
                             super::receiver::ReceiverState::Open(rcv),
                             self.channel_spec.clone(),
                         )
@@ -93,21 +101,19 @@ impl<T: Clone> ChannelHandle for ChannelData<T> {
                     ChannelFlavor::Cyclic => {
                         let (snd, rcv) = channel::unbounded();
 
-                        *self.sender.lock().unwrap() = InfiniteSender::new(
+                        *self.sender() = InfiniteSender::new(
                             super::sender::SenderState::Open(snd),
                             self.channel_spec.clone(),
                         )
                         .into();
 
-                        *self.receiver.lock().unwrap() = CyclicInfiniteReceiver::new(
+                        *self.receiver() = CyclicInfiniteReceiver::new(
                             super::receiver::ReceiverState::Open(rcv),
                             self.channel_spec.clone(),
                         )
                         .into();
                     }
-                    ChannelFlavor::Void => {
-                        *self.sender.lock().unwrap() = VoidSender::default().into()
-                    }
+                    ChannelFlavor::Void => *self.sender() = VoidSender::default().into(),
                 }
             }
         }
