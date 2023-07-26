@@ -20,7 +20,7 @@ mod tests {
     use crate::templates::sam::test::config::Data;
     use crate::templates::sam::utils::read_inputs;
 
-    use crate::templates::sam::wr_scanner::{CompressedWrScan, ValsWrScan, WrScanData};
+    use crate::templates::sam::wr_scanner::{CompressedWrScan, ValsWrScan};
     use crate::token_vec;
 
     #[test]
@@ -1796,43 +1796,19 @@ mod tests {
         gat1.add_target(out_spacc_icrd_receiver4);
 
         // fiberwrite_X0
-        let x0_seg: Vec<u32> = Vec::new();
-        let x0_crd: Vec<u32> = Vec::new();
-        let x0_wrscanner_data = WrScanData::<u32, u32> {
-            input: intersecti2_out_crd_receiver,
-        };
-        let x0_wrscanner = CompressedWrScan::new(x0_wrscanner_data, x0_seg, x0_crd);
+        let x0_wrscanner = CompressedWrScan::new(intersecti2_out_crd_receiver);
 
         // fiberwrite_X1
-        let x1_seg: Vec<u32> = Vec::new();
-        let x1_crd: Vec<u32> = Vec::new();
-        let x1_wrscanner_data = WrScanData::<u32, u32> {
-            input: bc1_qk_out_crd_receiver,
-        };
-        let x1_wrscanner = CompressedWrScan::new(x1_wrscanner_data, x1_seg, x1_crd);
+        let x1_wrscanner = CompressedWrScan::new(bc1_qk_out_crd_receiver);
 
         // fiberwrite_X2
-        let x2_seg: Vec<u32> = Vec::new();
-        let x2_crd: Vec<u32> = Vec::new();
-        let x2_wrscanner_data = WrScanData::<u32, u32> {
-            input: intersectj3_out_crd_receiver,
-        };
-        let x2_wrscanner = CompressedWrScan::new(x2_wrscanner_data, x2_seg, x2_crd);
+        let x2_wrscanner = CompressedWrScan::new(intersectj3_out_crd_receiver);
 
         // fiberwrite_X3
-        let x3_seg: Vec<u32> = Vec::new();
-        let x3_crd: Vec<u32> = Vec::new();
-        let x3_wrscanner_data = WrScanData::<u32, u32> {
-            input: out_final_icrd_receiver,
-        };
-        let x3_wrscanner = CompressedWrScan::new(x3_wrscanner_data, x3_seg, x3_crd);
+        let x3_wrscanner = CompressedWrScan::new(out_final_icrd_receiver);
 
         // fiberwrite_Xvals
-        let out_vals: Vec<f32> = Vec::new();
-        let xvals_data = WrScanData::<f32, u32> {
-            input: out_final_val_receiver,
-        };
-        let xvals = ValsWrScan::<f32, u32>::new(xvals_data, out_vals);
+        let xvals = ValsWrScan::<f32, u32>::new(out_final_val_receiver);
 
         parent.add_child(q_gen);
         parent.add_child(k_gen);

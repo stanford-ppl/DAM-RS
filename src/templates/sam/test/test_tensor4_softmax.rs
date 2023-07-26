@@ -16,7 +16,7 @@ mod tests {
     use crate::templates::sam::test::config::Data;
     use crate::templates::sam::utils::read_inputs;
     use crate::templates::sam::val_dropper::{ValDrop, ValDropData};
-    use crate::templates::sam::wr_scanner::{CompressedWrScan, ValsWrScan, WrScanData};
+    use crate::templates::sam::wr_scanner::{CompressedWrScan, ValsWrScan};
     use crate::token_vec;
 
     #[test]
@@ -71,12 +71,7 @@ mod tests {
         let bi_rdscanner = CompressedCrdRdScan::new(bi_data, b0_seg, b0_crd);
 
         // fiberwrite_X0
-        let x0_seg: Vec<u32> = Vec::new();
-        let x0_crd: Vec<u32> = Vec::new();
-        let x0_wrscanner_data = WrScanData::<u32, u32> {
-            input: bi_out_crd_receiver,
-        };
-        let x0_wrscanner = CompressedWrScan::new(x0_wrscanner_data, x0_seg, x0_crd);
+        let x0_wrscanner = CompressedWrScan::new(bi_out_crd_receiver);
 
         // fiberlookup_bj
         let (bj_out_crd_sender, bj_out_crd_receiver) = parent.unbounded::<Token<u32, u32>>();
@@ -109,20 +104,10 @@ mod tests {
         let bl_rdscanner = CompressedCrdRdScan::new(bl_data, b3_seg, b3_crd);
 
         // fiberwrite_x1
-        let x1_seg: Vec<u32> = Vec::new();
-        let x1_crd: Vec<u32> = Vec::new();
-        let x1_wrscanner_data = WrScanData::<u32, u32> {
-            input: bj_out_crd_receiver,
-        };
-        let x1_wrscanner = CompressedWrScan::new(x1_wrscanner_data, x1_seg, x1_crd);
+        let x1_wrscanner = CompressedWrScan::new(bj_out_crd_receiver);
 
         // fiberwrite_x2
-        let x2_seg: Vec<u32> = Vec::new();
-        let x2_crd: Vec<u32> = Vec::new();
-        let x2_wrscanner_data = WrScanData::<u32, u32> {
-            input: bk_out_crd_receiver,
-        };
-        let x2_wrscanner = CompressedWrScan::new(x2_wrscanner_data, x2_seg, x2_crd);
+        let x2_wrscanner = CompressedWrScan::new(bk_out_crd_receiver);
 
         let (bc_bl_out_ref_sender, bc_bl_out_ref_receiver) = parent.unbounded::<Token<u32, u32>>();
         let (bc1_bl_out_ref_sender, bc1_bl_out_ref_receiver) =
@@ -234,19 +219,10 @@ mod tests {
         let val_drop = ValDrop::new(val_drop_data);
 
         // fiberwrite_x3
-        let x3_seg: Vec<u32> = Vec::new();
-        let x3_crd: Vec<u32> = Vec::new();
-        let x3_wrscanner_data = WrScanData::<u32, u32> {
-            input: out_drop_crd_receiver,
-        };
-        let x3_wrscanner = CompressedWrScan::new(x3_wrscanner_data, x3_seg, x3_crd);
+        let x3_wrscanner = CompressedWrScan::new(out_drop_crd_receiver);
 
         // fiberwrite_Xvals
-        let out_vals: Vec<f32> = Vec::new();
-        let xvals_data = WrScanData::<f32, u32> {
-            input: out_drop_val_receiver,
-        };
-        let xvals = ValsWrScan::<f32, u32>::new(xvals_data, out_vals);
+        let xvals = ValsWrScan::<f32, u32>::new(out_drop_val_receiver);
 
         parent.add_child(b_gen);
         parent.add_child(bi_rdscanner);

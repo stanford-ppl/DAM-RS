@@ -9,20 +9,21 @@ use crate::{
 
 use super::primitive::Token;
 
-pub struct WrScanData<ValType: Clone, StopType: Clone> {
-    pub input: Receiver<Token<ValType, StopType>>,
-}
+// pub struct WrScanData<ValType: Clone, StopType: Clone> {
+//     pub input: Receiver<Token<ValType, StopType>>,
+// }
 
-impl<ValType: DAMType, StopType: DAMType> Cleanable for WrScanData<ValType, StopType> {
-    fn cleanup(&mut self) {
-        self.input.cleanup();
-    }
-}
+// impl<ValType: DAMType, StopType: DAMType> Cleanable for WrScanData<ValType, StopType> {
+//     fn cleanup(&mut self) {
+//         self.input.cleanup();
+//     }
+// }
 
 #[time_managed]
 #[identifiable]
 pub struct CompressedWrScan<ValType: Clone, StopType: Clone> {
-    wr_scan_data: WrScanData<ValType, StopType>,
+    // wr_scan_data: WrScanData<ValType, StopType>,
+    pub input: Receiver<Token<ValType, StopType>>,
     pub seg_arr: Vec<ValType>,
     pub crd_arr: Vec<ValType>,
 }
@@ -31,19 +32,15 @@ impl<ValType: DAMType, StopType: DAMType> CompressedWrScan<ValType, StopType>
 where
     CompressedWrScan<ValType, StopType>: Context,
 {
-    pub fn new(
-        wr_scan_data: WrScanData<ValType, StopType>,
-        seg_arr: Vec<ValType>,
-        crd_arr: Vec<ValType>,
-    ) -> Self {
+    pub fn new(input: Receiver<Token<ValType, StopType>>) -> Self {
         let cwr = CompressedWrScan {
-            wr_scan_data,
-            seg_arr,
-            crd_arr,
+            input,
+            seg_arr: vec![],
+            crd_arr: vec![],
             time: TimeManager::default(),
             identifier: Identifier::new(),
         };
-        (cwr.wr_scan_data.input).attach_receiver(&cwr);
+        (cwr).input.attach_receiver(&cwr);
 
         cwr
     }
@@ -69,7 +66,7 @@ where
         let mut curr_crd_cnt: ValType = ValType::default();
         let mut end_fiber = false;
         loop {
-            match dequeue(&mut self.time, &mut self.wr_scan_data.input) {
+            match dequeue(&mut self.time, &mut self.input) {
                 Ok(curr_in) => match curr_in.data {
                     Token::Val(val) => {
                         self.crd_arr.push(val);
@@ -99,7 +96,7 @@ where
 
     #[cleanup(time_managed)]
     fn cleanup(&mut self) {
-        self.wr_scan_data.cleanup();
+        self.input.cleanup();
         self.time.cleanup();
     }
 }
@@ -107,7 +104,7 @@ where
 #[time_managed]
 #[identifiable]
 pub struct ValsWrScan<ValType: Clone, StopType: Clone> {
-    vals_data: WrScanData<ValType, StopType>,
+    pub input: Receiver<Token<ValType, StopType>>,
     pub out_val: Vec<ValType>,
 }
 
@@ -115,14 +112,14 @@ impl<ValType: DAMType, StopType: DAMType> ValsWrScan<ValType, StopType>
 where
     ValsWrScan<ValType, StopType>: Context,
 {
-    pub fn new(vals_data: WrScanData<ValType, StopType>, out_val: Vec<ValType>) -> Self {
+    pub fn new(input: Receiver<Token<ValType, StopType>>) -> Self {
         let vals = ValsWrScan {
-            vals_data,
-            out_val,
+            input,
+            out_val: vec![],
             time: TimeManager::default(),
             identifier: Identifier::new(),
         };
-        (vals.vals_data.input).attach_receiver(&vals);
+        (vals.input).attach_receiver(&vals);
 
         vals
     }
@@ -140,7 +137,7 @@ where
 
     fn run(&mut self) {
         loop {
-            match dequeue(&mut self.time, &mut self.vals_data.input) {
+            match dequeue(&mut self.time, &mut self.input) {
                 Ok(curr_in) => match curr_in.data {
                     Token::Val(val) => {
                         self.out_val.push(val);
@@ -160,7 +157,7 @@ where
 
     #[cleanup(time_managed)]
     fn cleanup(&mut self) {
-        self.vals_data.cleanup();
+        self.input.cleanup();
         self.time.cleanup();
     }
 }
@@ -173,7 +170,6 @@ mod tests {
     };
 
     use super::CompressedWrScan;
-    use super::WrScanData;
 
     fn vec_compare(va: &[u32], vb: &[u32]) -> bool {
         (va.len() == vb.len()) &&  // zip stops at the shortest
@@ -206,12 +202,7 @@ mod tests {
     {
         let mut parent = Program::default();
         let (input_sender, input_receiver) = parent.unbounded::<Token<u32, u32>>();
-        let data = WrScanData::<u32, u32> {
-            input: input_receiver,
-        };
-        let seg_arr: Vec<u32> = Vec::new();
-        let crd_arr: Vec<u32> = Vec::new();
-        let cr = CompressedWrScan::new(data, seg_arr, crd_arr);
+        let cr = CompressedWrScan::new(input_receiver);
         let gen1 = GeneratorContext::new(input, input_sender);
         parent.add_child(gen1);
         parent.add_child(cr);

@@ -17,7 +17,7 @@ mod tests {
     use crate::templates::sam::repeat::{RepSigGenData, Repeat, RepeatData, RepeatSigGen};
     use crate::templates::sam::test::config::Data;
     use crate::templates::sam::utils::read_inputs;
-    use crate::templates::sam::wr_scanner::{CompressedWrScan, ValsWrScan, WrScanData};
+    use crate::templates::sam::wr_scanner::{CompressedWrScan, ValsWrScan};
     use crate::token_vec;
 
     #[test]
@@ -81,12 +81,7 @@ mod tests {
         let bi_rdscanner = CompressedCrdRdScan::new(bi_data, b0_seg, b0_crd);
 
         // fiberwrite_X0
-        let x0_seg: Vec<u32> = Vec::new();
-        let x0_crd: Vec<u32> = Vec::new();
-        let x0_wrscanner_data = WrScanData::<u32, u32> {
-            input: bi_out_crd_receiver,
-        };
-        let x0_wrscanner = CompressedWrScan::new(x0_wrscanner_data, x0_seg, x0_crd);
+        let x0_wrscanner = CompressedWrScan::new(bi_out_crd_receiver);
 
         // repeatsiggen
         let (bc_bi_out_ref_sender, bc_bi_out_ref_receiver) = parent.bounded(chan_size);
@@ -186,12 +181,7 @@ mod tests {
         let intersect_k = Intersect::new(intersectk_data);
 
         // fiberwrite_x1
-        let x1_seg: Vec<u32> = Vec::new();
-        let x1_crd: Vec<u32> = Vec::new();
-        let x1_wrscanner_data = WrScanData::<u32, u32> {
-            input: cj_out_crd_receiver,
-        };
-        let x1_wrscanner = CompressedWrScan::new(x1_wrscanner_data, x1_seg, x1_crd);
+        let x1_wrscanner = CompressedWrScan::new(cj_out_crd_receiver);
 
         // arrayvals_b
         let (b_out_val_sender, b_out_val_receiver) = parent.bounded(chan_size);
@@ -226,11 +216,7 @@ mod tests {
         let red = Reduce::new(reduce_data);
 
         // fiberwrite_Xvals
-        let out_vals: Vec<f32> = Vec::new();
-        let xvals_data = WrScanData::<f32, u32> {
-            input: out_val_receiver,
-        };
-        let xvals = ValsWrScan::<f32, u32>::new(xvals_data, out_vals);
+        let xvals = ValsWrScan::<f32, u32>::new(out_val_receiver);
 
         parent.add_child(b_gen);
         parent.add_child(broadcast);

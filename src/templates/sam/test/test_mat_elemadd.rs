@@ -15,7 +15,7 @@ mod tests {
     use crate::templates::sam::rd_scanner::{CompressedCrdRdScan, RdScanData};
     use crate::templates::sam::test::config::Data;
     use crate::templates::sam::utils::read_inputs;
-    use crate::templates::sam::wr_scanner::{CompressedWrScan, ValsWrScan, WrScanData};
+    use crate::templates::sam::wr_scanner::{CompressedWrScan, ValsWrScan};
     use crate::token_vec;
 
     #[test]
@@ -99,12 +99,7 @@ mod tests {
         let union_i = Union::new(unioni_data);
 
         // fiberwrite_X0
-        let x0_seg: Vec<u32> = Vec::new();
-        let x0_crd: Vec<u32> = Vec::new();
-        let x0_wrscanner_data = WrScanData::<u32, u32> {
-            input: unioni_out_crd_receiver,
-        };
-        let x0_wrscanner = CompressedWrScan::new(x0_wrscanner_data, x0_seg, x0_crd);
+        let x0_wrscanner = CompressedWrScan::new(unioni_out_crd_receiver);
 
         // fiberlookup_bj
         let (bj_out_crd_sender, bj_out_crd_receiver) = parent.bounded(chan_size);
@@ -142,12 +137,7 @@ mod tests {
         let union_j = Union::new(unionj_data);
 
         // fiberwrite_x1
-        let x1_seg: Vec<u32> = Vec::new();
-        let x1_crd: Vec<u32> = Vec::new();
-        let x1_wrscanner_data = WrScanData::<u32, u32> {
-            input: unionj_out_crd_receiver,
-        };
-        let x1_wrscanner = CompressedWrScan::new(x1_wrscanner_data, x1_seg, x1_crd);
+        let x1_wrscanner = CompressedWrScan::new(unionj_out_crd_receiver);
 
         // arrayvals_b
         let (b_out_val_sender, b_out_val_receiver) = parent.bounded::<Token<f32, u32>>(chan_size);
@@ -175,11 +165,7 @@ mod tests {
         );
 
         // fiberwrite_Xvals
-        let out_vals: Vec<f32> = Vec::new();
-        let xvals_data = WrScanData::<f32, u32> {
-            input: add_out_receiver,
-        };
-        let xvals = ValsWrScan::<f32, u32>::new(xvals_data, out_vals);
+        let xvals = ValsWrScan::<f32, u32>::new(add_out_receiver);
 
         parent.add_child(b_gen);
         parent.add_child(c_gen);
