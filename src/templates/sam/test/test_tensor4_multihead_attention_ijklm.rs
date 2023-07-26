@@ -27,7 +27,7 @@ mod tests {
     #[test]
     fn test_multihead_attention() {
         // let test_name = "tensor4_mha";
-        let test_name = "tensor4_mha2";
+        let test_name = "tensor4_mha";
         let filename = home::home_dir().unwrap().join("sam_config.toml");
         let contents = fs::read_to_string(filename).unwrap();
         let data: Data = toml::from_str(&contents).unwrap();
@@ -114,9 +114,9 @@ mod tests {
         // let a_vals = read_inputs::<f32>(&a_vals_filename);
 
         let mut parent = Program::default();
-        let chan_size = 4096;
+        let chan_size = 65536;
 
-        let par_factor = 16;
+        let par_factor = 4;
 
         // fiberlookup_bi
         let (qi_in_ref_sender, qi_in_ref_receiver) = parent.bounded(chan_size);
