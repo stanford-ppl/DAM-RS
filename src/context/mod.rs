@@ -25,6 +25,10 @@ pub trait Context: Send + Sync + TimeViewable + Identifiable {
         HashMap::from([(self.id(), HashSet::new())])
     }
 
+    fn child_names(&self) -> HashMap<Identifier, String> {
+        HashMap::from([(self.id(), self.name())])
+    }
+
     // By default all edges are connected.
     // In the case of something like a PMU, however, we wish to be finer-grained than that.
     // In that case, we can report channel A -> {B, C, D} means that A sends data that can be observed on B, C, and/or D.

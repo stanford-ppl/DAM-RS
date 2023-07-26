@@ -116,7 +116,7 @@ mod tests {
         let mut parent = Program::default();
         let chan_size = 65536;
 
-        let par_factor = 4;
+        let par_factor = 1;
 
         // fiberlookup_bi
         let (qi_in_ref_sender, qi_in_ref_receiver) = parent.bounded(chan_size);
@@ -386,7 +386,7 @@ mod tests {
         let (out_final_icrd_sender, out_final_icrd_receiver) = parent.bounded(chan_size);
         let mut gat1 = Gather::new(out_final_val_sender);
         let mut gat2 = Gather::new(out_final_icrd_sender);
-        for i in 0..par_factor {
+        for _ in 0..par_factor {
             let (chunk_qk_ref_sender, chunk_qk_ref_receiver) = parent.bounded(chan_size);
             let (chunk_vk_ref_sender, chunk_vk_ref_receiver) = parent.bounded(chan_size);
             let (chunk_kk_ref_sender, chunk_kk_ref_receiver) = parent.bounded(chan_size);
@@ -829,7 +829,7 @@ mod tests {
         let xvals = ValsWrScan::<f32, u32>::new(out_final_val_receiver);
         parent.add_child(xvals);
 
-        parent.print_graph();
+        parent.print_graph_with_names();
         parent.init();
         parent.run();
 

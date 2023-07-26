@@ -1,5 +1,6 @@
 use std::{
     collections::{HashMap, HashSet},
+    hash::Hash,
     sync::Arc,
 };
 
@@ -84,6 +85,14 @@ impl<'a> Program<'a> {
             tree.into_iter()
                 .flat_map(|x| x.keys().copied().collect::<Vec<_>>()),
         )
+    }
+
+    fn all_node_names(&self) -> HashMap<Identifier, String> {
+        let mut hashmap = HashMap::new();
+        for node in self.nodes.iter() {
+            hashmap.insert(node.id(), node.name());
+        }
+        hashmap
     }
 
     pub fn check(&self) {
@@ -262,7 +271,32 @@ impl<'a> Program<'a> {
         }
 
         for edge in &self.edges {
-            dbg!(edge.id());
+            graph.add_edge(
+                *id_node_map
+                    .get(&edge.sender().expect("Edge didn't have a sender!"))
+                    .expect("Edge sender was not registered in id_node_map!"),
+                *id_node_map
+                    .get(&edge.receiver().expect("Edge didn't have a receiver!"))
+                    .expect("Edge receiver was not registered in id_node_map!"),
+                edge.id(),
+            );
+        }
+
+        println!("{:?}", Dot::with_config(&graph, &[]));
+    }
+
+    pub fn print_graph_with_names(&self) {
+        self.check();
+        let mut graph = DiGraph::<&str, ChannelID>::new();
+        let ids = self.all_node_ids();
+        let node_names = self.all_node_names();
+        let mut id_node_map: HashMap<Identifier, petgraph::stable_graph::NodeIndex> =
+            HashMap::new();
+        for id in ids {
+            id_node_map.insert(id, graph.add_node(node_names[&id].as_str().clone()));
+        }
+
+        for edge in &self.edges {
             graph.add_edge(
                 *id_node_map
                     .get(&edge.sender().expect("Edge didn't have a sender!"))
