@@ -25,9 +25,9 @@ mod tests {
     use crate::token_vec;
 
     #[test]
-    fn test_multihead_attention() {
+    fn test_fixed_multihead_attention() {
         // let test_name = "tensor4_mha";
-        let test_name = "tensor4_mha3";
+        let test_name = "tensor4_mha1";
         let filename = home::home_dir().unwrap().join("sam_config.toml");
         let contents = fs::read_to_string(filename).unwrap();
         let data: Data = toml::from_str(&contents).unwrap();
@@ -378,14 +378,16 @@ mod tests {
         // let (qk_out_ref_sender4, qk_out_ref_receiver4) = parent.bounded(chan_size);
 
         let mut scat1 = Scatter::new(qk_out_ref_receiver);
-        let mut scat2 = Scatter::new(out_repeat_vk_receiver);
-        let mut scat3 = Scatter::new(out_repeat_kk_receiver);
+        // let mut scat2 = Scatter::new(out_repeat_vk_receiver);
+        // let mut scat3 = Scatter::new(out_repeat_kk_receiver);
         let mut scat4 = Scatter::new(bc2_qk_out_crd_receiver);
 
         let (out_final_val_sender, out_final_val_receiver) = parent.bounded(chan_size);
         let (out_final_icrd_sender, out_final_icrd_receiver) = parent.bounded(chan_size);
         let mut gat1 = Gather::new(out_final_val_sender);
         let mut gat2 = Gather::new(out_final_icrd_sender);
+        let mut scat2 = BroadcastContext::new(out_repeat_vk_receiver);
+        let mut scat3 = BroadcastContext::new(out_repeat_kk_receiver);
         for _ in 0..par_factor {
             let (chunk_qk_ref_sender, chunk_qk_ref_receiver) = parent.bounded(chan_size);
             let (chunk_vk_ref_sender, chunk_vk_ref_receiver) = parent.bounded(chan_size);
@@ -400,6 +402,7 @@ mod tests {
             let (kl_out_crd_sender, kl_out_crd_receiver) = parent.bounded(chan_size);
             let kl_data = RdScanData::<u32, u32> {
                 in_ref: chunk_kk_ref_receiver,
+                // in_ref: out_repeat_kk_receiver,
                 out_ref: kl_out_ref_sender,
                 out_crd: kl_out_crd_sender,
             };
@@ -419,6 +422,7 @@ mod tests {
             let (vl_out_crd_sender, vl_out_crd_receiver) = parent.bounded(chan_size);
             let vl_data = RdScanData::<u32, u32> {
                 in_ref: chunk_vk_ref_receiver,
+                // in_ref: out_repeat_vk_receiver,
                 out_ref: vl_out_ref_sender,
                 out_crd: vl_out_crd_sender,
             };
