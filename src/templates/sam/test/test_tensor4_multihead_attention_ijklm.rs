@@ -27,7 +27,7 @@ mod tests {
     #[test]
     fn test_multihead_attention() {
         // let test_name = "tensor4_mha";
-        let test_name = "tensor4_mha";
+        let test_name = "tensor4_mha1";
         let filename = home::home_dir().unwrap().join("sam_config.toml");
         let contents = fs::read_to_string(filename).unwrap();
         let data: Data = toml::from_str(&contents).unwrap();
@@ -116,7 +116,7 @@ mod tests {
         let mut parent = Program::default();
         let chan_size = 65536;
 
-        let par_factor = 1;
+        let par_factor = 8;
 
         // fiberlookup_bi
         let (qi_in_ref_sender, qi_in_ref_receiver) = parent.bounded(chan_size);
@@ -777,13 +777,13 @@ mod tests {
             // parent.add_child(broadcast14);
 
             // if i == par_factor - 1 {
-            //     // let (send, rcv) = parent.bounded(chan_size);
-            //     let mut pc1 = PrintContext::new(bc_exp_out_receiver);
-            //     pc1.add_target(parent.void());
-            //     parent.add_child(pc1);
+            // let (send, rcv) = parent.bounded(chan_size);
+            // let mut pc1 = PrintContext::new(bc_exp_out_receiver);
+            // pc1.add_target(parent.void());
+            // parent.add_child(pc1);
             // } else {
-            //     let broadcast = BroadcastContext::new(bc_exp_out_receiver);
-            //     parent.add_child(broadcast);
+            // let broadcast = BroadcastContext::new(bc_exp_out_receiver);
+            // parent.add_child(broadcast);
             // }
 
             let (out_spacc_val_sender, out_spacc_val_receiver) = parent.bounded(chan_size);
@@ -829,9 +829,11 @@ mod tests {
         let xvals = ValsWrScan::<f32, u32>::new(out_final_val_receiver);
         parent.add_child(xvals);
 
-        parent.print_graph_with_names();
+        // parent.print_graph_with_names();
         parent.init();
         parent.run();
+
+        dbg!(parent.elapsed_cycles());
 
         // let fil = formatted_dir.to_str().unwrap();
         // dbg!(xvals.out_val);

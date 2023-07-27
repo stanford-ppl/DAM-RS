@@ -26,7 +26,7 @@ mod tests {
     #[test]
     fn test_par_multihead_attention() {
         // let test_name = "tensor4_mha";
-        let test_name = "tensor4_mha";
+        let test_name = "tensor4_mha2";
         let filename = home::home_dir().unwrap().join("sam_config.toml");
         let contents = fs::read_to_string(filename).unwrap();
         let data: Data = toml::from_str(&contents).unwrap();
@@ -1996,7 +1996,7 @@ mod tests {
         // parent.add_child(printc);
 
         let now = Instant::now();
-        parent.print_graph();
+        parent.print_graph_with_names();
         parent.init();
         let elapsed = now.elapsed();
         println!("Elapsed: {:.2?}", elapsed);

@@ -3,8 +3,9 @@ use std::collections::BTreeMap;
 
 use crate::{channel::utils::peek_next, context::Context};
 use dam_core::identifier::Identifier;
+use dam_core::metric::LogProducer;
 use dam_core::TimeManager;
-use dam_macros::{cleanup, identifiable, time_managed};
+use dam_macros::{cleanup, identifiable, log_producer, time_managed};
 
 use crate::{
     channel::{
@@ -143,6 +144,7 @@ impl<CrdType: DAMType, ValType: DAMType, StopType: DAMType> Cleanable
 
 #[time_managed]
 #[identifiable]
+#[log_producer]
 pub struct Spacc1<CrdType: Clone, ValType: Clone, StopType: Clone> {
     spacc1_data: Spacc1Data<CrdType, ValType, StopType>,
 }
@@ -240,6 +242,7 @@ where
                         );
                         enqueue(&mut self.time, &mut self.spacc1_data.out_val, val_chan_elem)
                             .unwrap();
+                        Self::log(format!("Token: {:?}", value.clone()));
                         // dbg!(key.clone());
                         // dbg!(value.clone());
                     }
@@ -261,6 +264,10 @@ where
                     .unwrap();
                     accum_storage.clear();
                     dequeue(&mut self.time, &mut self.spacc1_data.in_crd_outer).unwrap();
+                    Self::log(format!(
+                        "Token: {:?}",
+                        Token::<ValType, StopType>::Stop(stkn.clone())
+                    ));
                 }
                 Token::Done => {
                     let icrd_chan_elem = ChannelElement::new(self.time.tick() + 1, Token::Done);
@@ -272,6 +279,7 @@ where
                     .unwrap();
                     let val_chan_elem = ChannelElement::new(self.time.tick() + 1, Token::Done);
                     enqueue(&mut self.time, &mut self.spacc1_data.out_val, val_chan_elem).unwrap();
+                    Self::log(format!("Token: {:?}", Token::<ValType, StopType>::Done));
                     return;
                 }
                 _ => {

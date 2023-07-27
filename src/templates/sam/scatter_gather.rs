@@ -1,5 +1,8 @@
+use std::fmt::Formatter;
+
 use dam_core::identifier::Identifier;
-use dam_macros::{cleanup, identifiable, time_managed};
+use dam_core::metric::LogProducer;
+use dam_macros::{cleanup, identifiable, log_producer, time_managed};
 
 use crate::{
     channel::{
@@ -89,6 +92,7 @@ where
 
 #[time_managed]
 #[identifiable]
+#[log_producer]
 pub struct Gather<ValType: Clone, StopType: Clone> {
     targets: Vec<Receiver<Token<ValType, StopType>>>,
     merged: Sender<Token<ValType, StopType>>,
@@ -106,24 +110,37 @@ where
 
     fn run(&mut self) {
         let mut target_idx = 0;
+        let mut fiber_done = vec![false; self.targets.len()];
+        // let mut last_done_seen = false;
+        let mut done_cnt = 0;
         loop {
+            if done_cnt == self.targets.len() - 1 {
+                return;
+            }
+            if fiber_done[target_idx] {
+                target_idx = (target_idx + 1) % self.targets.len();
+                continue;
+            }
             let output = dequeue(&mut self.time, &mut self.targets[target_idx])
                 .unwrap()
                 .data;
-
-            let channel_elem = ChannelElement::new(self.time.tick() + 1, output.clone());
-            enqueue(&mut self.time, &mut self.merged, channel_elem).unwrap();
-
             match output.clone() {
                 tkn @ Token::Stop(_) | tkn @ Token::Done => {
-                    for (idx, chan) in self.targets.iter_mut().enumerate() {
-                        if idx == target_idx {
-                            continue;
-                        }
-                        dequeue(&mut self.time, chan).unwrap();
-                    }
+                    // for (idx, chan) in self.targets.iter_mut().enumerate() {
+                    //     if idx == target_idx {
+                    //         continue;
+                    //     }
+                    //     dequeue(&mut self.time, chan).unwrap();
+                    // }
+                    fiber_done[target_idx] = true;
                     if tkn == Token::Done {
-                        return;
+                        // return;
+                        done_cnt += 1;
+                        continue;
+                    } else if fiber_done.iter_mut().all(|x| *x == true) {
+                        for elem in fiber_done.iter_mut() {
+                            *elem = false;
+                        }
                     }
                 }
                 Token::Val(_) => {
@@ -131,6 +148,11 @@ where
                 }
                 _ => todo!(),
             }
+
+            let channel_elem = ChannelElement::new(self.time.tick() + 1, output.clone());
+            Self::log(format!("Token: {:?}", output.clone()));
+            enqueue(&mut self.time, &mut self.merged, channel_elem).unwrap();
+
             self.time.incr_cycles(1);
         }
     }
