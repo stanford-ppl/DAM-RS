@@ -3,7 +3,7 @@ use std::sync::atomic::AtomicUsize;
 use serde::{Deserialize, Serialize};
 
 static ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
-#[derive(Serialize, Deserialize, Debug, Copy, Clone)]
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 pub struct ChannelID {
     id: usize,
 }
@@ -17,5 +17,11 @@ impl ChannelID {
         Self {
             id: Self::next_id(),
         }
+    }
+}
+
+impl Default for ChannelID {
+    fn default() -> Self {
+        Self::new()
     }
 }

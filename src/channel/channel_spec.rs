@@ -1,10 +1,10 @@
-use std::sync::{atomic::AtomicUsize, RwLock};
+use std::sync::{atomic::AtomicUsize, Mutex, RwLock};
 
-use dam_core::{time::Time, ContextView, TimeView};
+use dam_core::{identifier::Identifier, time::Time, ContextView, TimeView};
 
 use crate::context::Context;
 
-use super::ChannelFlavor;
+use super::ChannelID;
 
 type ViewType = Option<TimeView>;
 
@@ -14,36 +14,61 @@ struct ViewData {
     pub receiver: ViewType,
 }
 
-pub(crate) struct ViewStruct {
+pub struct ChannelSpec {
     views: RwLock<ViewData>,
-    flavor: ChannelFlavor,
 
     current_send_receive_delta: AtomicUsize,
+    total_sent: AtomicUsize,
+    total_received: AtomicUsize,
+
+    sender_id: Mutex<Option<Identifier>>,
+    receiver_id: Mutex<Option<Identifier>>,
+    channel_id: ChannelID,
+    capacity: Option<usize>,
 }
 
-impl ViewStruct {
-    pub fn new(flavor: ChannelFlavor) -> Self {
+impl ChannelSpec {
+    pub fn new(capacity: Option<usize>) -> Self {
         Self {
             views: Default::default(),
-            flavor,
             current_send_receive_delta: AtomicUsize::new(0),
+            total_sent: AtomicUsize::new(0),
+            total_received: AtomicUsize::new(0),
+            sender_id: Mutex::new(None),
+            receiver_id: Mutex::new(None),
+            channel_id: ChannelID::new(),
+            capacity,
         }
+    }
+
+    pub fn sender_id(&self) -> Option<Identifier> {
+        *self.sender_id.lock().unwrap()
+    }
+
+    pub fn receiver_id(&self) -> Option<Identifier> {
+        *self.receiver_id.lock().unwrap()
     }
 
     pub fn attach_sender(&self, sender: &dyn Context) {
         self.views.write().unwrap().sender = Some(sender.view());
+        *self.sender_id.lock().unwrap() = Some(sender.id());
     }
 
     pub fn attach_receiver(&self, receiver: &dyn Context) {
         self.views.write().unwrap().receiver = Some(receiver.view());
+        *self.receiver_id.lock().unwrap() = Some(receiver.id());
     }
 
     pub fn register_send(&self) -> usize {
+        self.total_sent
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         self.current_send_receive_delta
             .fetch_add(1, std::sync::atomic::Ordering::AcqRel)
     }
 
     pub fn register_recv(&self) -> usize {
+        self.total_received
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         self.current_send_receive_delta
             .fetch_sub(1, std::sync::atomic::Ordering::AcqRel)
     }
@@ -91,5 +116,13 @@ impl ViewStruct {
             .as_ref()
             .unwrap()
             .wait_until(time)
+    }
+
+    pub fn capacity(&self) -> Option<usize> {
+        self.capacity
+    }
+
+    pub fn id(&self) -> ChannelID {
+        self.channel_id
     }
 }

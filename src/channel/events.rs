@@ -9,6 +9,7 @@ pub enum SendEvent {
     EnqueueStart(ChannelID),
     EnqueueFinish(ChannelID),
     AttachSender(ChannelID, Identifier),
+    Cleanup(ChannelID),
 }
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone)]
@@ -19,4 +20,5 @@ pub enum ReceiverEvent {
     DequeueStart(ChannelID),
     DequeueFinish(ChannelID),
     AttachReceiver(ChannelID, Identifier),
+    Cleanup(ChannelID),
 }

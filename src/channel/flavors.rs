@@ -3,6 +3,7 @@ pub enum ChannelFlavor {
     Unknown,
     Acyclic,
     Cyclic,
+    Void,
 }
 
 // In order to make different flavors and flavor inference work,
