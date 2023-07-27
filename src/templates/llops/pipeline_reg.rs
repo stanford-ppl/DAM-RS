@@ -1,6 +1,6 @@
 use ndarray::{ArrayBase, Dim, OwnedRepr};
 
-#[derive(Eq, PartialEq, Debug)]
+#[derive(Eq, PartialEq, Debug, Clone)]
 pub enum PipelineReg<T: num::Num + Copy> {
     VectorReg(ArrayBase<OwnedRepr<T>, Dim<[usize; 1]>>),
     ScalarReg(T),
