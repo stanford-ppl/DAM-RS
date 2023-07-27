@@ -20,7 +20,10 @@ pub struct QKTData<A: Clone> {
     pub out: Sender<ArrayBase<OwnedRepr<A>, Dim<[usize; 1]>>>,
 }
 
-impl<A: Clone> Cleanable for QKTData<A> {
+impl<A: Clone> Cleanable for QKTData<A>
+where
+    ArrayBase<OwnedRepr<A>, Dim<[usize; 1]>>: DAMType,
+{
     fn cleanup(&mut self) {
         self.in1.cleanup();
         self.in2.cleanup();
@@ -50,5 +53,20 @@ where
         (qkt.qkt_data.out).attach_sender(&qkt);
 
         qkt
+    }
+}
+
+impl<A: Clone> Context for QKT<A>
+where
+    ArrayBase<OwnedRepr<A>, Dim<[usize; 1]>>: DAMType,
+{
+    fn init(&mut self) {}
+
+    fn run(&mut self) -> () {}
+
+    #[cleanup(time_managed)]
+    fn cleanup(&mut self) {
+        self.qkt_data.cleanup();
+        self.time.cleanup();
     }
 }
