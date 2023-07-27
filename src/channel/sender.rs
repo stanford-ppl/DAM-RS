@@ -96,7 +96,7 @@ impl<T> SenderFlavor<T> for UndefinedSender<T> {
     }
 
     fn cleanup(&mut self) {
-        panic!();
+        // No-op since it's part of drop
     }
 }
 
