@@ -58,11 +58,8 @@ where
 #[cfg(test)]
 mod tests {
     use crate::{
-        channel::unbounded,
-        context::{
-            checker_context::CheckerContext, generator_context::GeneratorContext,
-            parent::BasicParentContext, Context,
-        },
+        context::{checker_context::CheckerContext, generator_context::GeneratorContext},
+        simulation::Program,
         templates::ops::ALUMulOp,
     };
 
@@ -84,20 +81,24 @@ mod tests {
            gen1 - |arg1_send ... arg1_recv| - pcu - |pcu_out_send ... pcu_out_recv|- checker
            gen1 - |arg2_send ... arg2_recv| /
         */
-        let (arg1_send, arg1_recv) = unbounded::<ArrayBase<OwnedRepr<i32>, Dim<[usize; 1]>>>();
-        let (arg2_send, arg2_recv) = unbounded::<ArrayBase<OwnedRepr<i32>, Dim<[usize; 1]>>>();
+        let mut parent = Program::default();
+
+        let (arg1_send, arg1_recv) =
+            parent.unbounded::<ArrayBase<OwnedRepr<i32>, Dim<[usize; 1]>>>();
+        let (arg2_send, arg2_recv) =
+            parent.unbounded::<ArrayBase<OwnedRepr<i32>, Dim<[usize; 1]>>>();
         let (pcu_out_send, pcu_out_recv) =
-            unbounded::<ArrayBase<OwnedRepr<i32>, Dim<[usize; 1]>>>();
-        let mut gen1 = GeneratorContext::new(
+            parent.unbounded::<ArrayBase<OwnedRepr<i32>, Dim<[usize; 1]>>>();
+        let gen1 = GeneratorContext::new(
             || (0i32..10).map(|x| array![x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x]),
             arg1_send,
         );
-        let mut gen2 = GeneratorContext::new(
+        let gen2 = GeneratorContext::new(
             || (0i32..10).map(|x| array![x, x, x, x, x, x, x, x, x, x, x, x, x, x, x, x]),
             arg2_send,
         );
-        let mut binary_pcu = make_pcu(arg1_recv, arg2_recv, pcu_out_send, ALUMulOp());
-        let mut checker = CheckerContext::new(
+        let binary_pcu = make_pcu(arg1_recv, arg2_recv, pcu_out_send, ALUMulOp());
+        let checker = CheckerContext::new(
             || {
                 (0i32..10).map(|x| {
                     array![
@@ -122,13 +123,11 @@ mod tests {
             },
             pcu_out_recv,
         );
-        let mut parent = BasicParentContext::default();
-        parent.add_child(&mut gen1);
-        parent.add_child(&mut gen2);
-        parent.add_child(&mut binary_pcu);
-        parent.add_child(&mut checker);
+        parent.add_child(gen1);
+        parent.add_child(gen2);
+        parent.add_child(binary_pcu);
+        parent.add_child(checker);
         parent.init();
         parent.run();
-        parent.cleanup();
     }
 }
