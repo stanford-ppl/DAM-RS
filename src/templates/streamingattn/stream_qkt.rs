@@ -14,15 +14,15 @@ use crate::{
     types::{Cleanable, DAMType},
 };
 
-pub struct QKTData<A: Clone> {
-    pub in1: Receiver<ArrayBase<OwnedRepr<A>, Dim<[usize; 1]>>>,
-    pub in2: Receiver<ArrayBase<OwnedRepr<A>, Dim<[usize; 1]>>>,
-    pub out: Sender<ArrayBase<OwnedRepr<A>, Dim<[usize; 1]>>>,
+pub struct QKTData<A: Clone, D: Clone> {
+    pub in1: Receiver<ArrayBase<OwnedRepr<A>, D>>,
+    pub in2: Receiver<ArrayBase<OwnedRepr<A>, D>>,
+    pub out: Sender<ArrayBase<OwnedRepr<A>, D>>,
 }
 
-impl<A: Clone> Cleanable for QKTData<A>
+impl<A: Clone, D: Clone> Cleanable for QKTData<A, D>
 where
-    ArrayBase<OwnedRepr<A>, Dim<[usize; 1]>>: DAMType,
+    ArrayBase<OwnedRepr<A>, D>: DAMType,
 {
     fn cleanup(&mut self) {
         self.in1.cleanup();
@@ -33,16 +33,16 @@ where
 
 #[time_managed]
 #[identifiable]
-pub struct QKT<A: Clone> {
-    qkt_data: QKTData<A>,
+pub struct QKT<A: Clone, D: Clone> {
+    qkt_data: QKTData<A, D>,
 }
 
-impl<A: Clone> QKT<A>
+impl<A: Clone, D: Clone> QKT<A, D>
 where
-    QKT<A>: Context,
-    ArrayBase<OwnedRepr<A>, Dim<[usize; 1]>>: DAMType,
+    QKT<A, D>: Context,
+    ArrayBase<OwnedRepr<A>, D>: DAMType,
 {
-    pub fn new(qkt_data: QKTData<A>) -> Self {
+    pub fn new(qkt_data: QKTData<A, D>) -> Self {
         let qkt = QKT {
             qkt_data,
             time: TimeManager::default(),
@@ -56,9 +56,9 @@ where
     }
 }
 
-impl<A: Clone> Context for QKT<A>
+impl<A: Clone, D: Clone> Context for QKT<A, D>
 where
-    ArrayBase<OwnedRepr<A>, Dim<[usize; 1]>>: DAMType,
+    ArrayBase<OwnedRepr<A>, D>: DAMType,
 {
     fn init(&mut self) {}
 
