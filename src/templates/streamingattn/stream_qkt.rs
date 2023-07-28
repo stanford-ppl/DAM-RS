@@ -17,6 +17,8 @@ pub struct QKTData<A: Clone> {
     pub in1: Receiver<ArrayBase<OwnedRepr<A>, Dim<[usize; 2]>>>,
     pub in2: Receiver<ArrayBase<OwnedRepr<A>, Dim<[usize; 2]>>>,
     pub out: Sender<ArrayBase<OwnedRepr<A>, Dim<[usize; 2]>>>,
+    pub latency: u64,       // pipeline depth
+    pub init_inverval: u64, // initiation interval
 }
 
 impl<A: DAMType> Cleanable for QKTData<A>
@@ -45,7 +47,6 @@ where
     pub fn new(qkt_data: QKTData<A>) -> Self {
         let qkt = QKT {
             qkt_data,
-            // latency,
             time: TimeManager::default(),
             identifier: Identifier::new(),
         };
@@ -82,8 +83,7 @@ where
                     enqueue(
                         &mut self.time,
                         &mut self.qkt_data.out,
-                        ChannelElement::new(curr_time + 5, reduce_sum),
-                        // assuming a pipeline depth = 5 (this could be later parameterized through latency)
+                        ChannelElement::new(curr_time + self.qkt_data.latency, reduce_sum),
                     )
                     .unwrap();
                     dequeue(&mut self.time, &mut self.qkt_data.in1).unwrap();
@@ -101,7 +101,7 @@ where
                     panic!("Reached unhandled case");
                 }
             }
-            self.time.incr_cycles(1); // initiation interval (could also be parameterized later)
+            self.time.incr_cycles(self.qkt_data.init_inverval); // initiation interval
         }
     }
 
@@ -118,7 +118,7 @@ mod tests {
         context::{checker_context::CheckerContext, generator_context::GeneratorContext},
         simulation::Program,
     };
-    use ndarray::{array, ArrayBase, Axis, Dim, OwnedRepr};
+    use ndarray::{array, ArrayBase, Dim, OwnedRepr};
 
     use super::{QKTData, QKT};
 
@@ -126,10 +126,12 @@ mod tests {
     fn stream_qkt_test() {
         const HEAD_DIM: usize = 16;
         const HEAD_DIM_I32: i32 = 16;
-        const SEQ_LEN: usize = 2;
+        const LATENCY: u64 = 1 + (HEAD_DIM_I32.ilog2() as u64);
+        const INIT_INTERVAL: u64 = 1;
+        const SEQ_LEN: usize = 5;
 
         // We will use seq length of 5 for now. So, conservatively keep the FIFO (Channel) size as 5.
-        let chan_size = SEQ_LEN;
+        let chan_size = 2; // FIFO Depth
 
         let mut parent = Program::default();
 
@@ -146,6 +148,8 @@ mod tests {
             in1: in1_receiver,
             in2: in2_receiver,
             out: out_sender,
+            latency: LATENCY,
+            init_inverval: INIT_INTERVAL,
         };
 
         let stream_qkt = QKT::new(data);
