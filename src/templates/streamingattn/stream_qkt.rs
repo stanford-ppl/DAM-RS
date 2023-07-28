@@ -128,7 +128,7 @@ mod tests {
         const HEAD_DIM_I32: i32 = 16;
         const LATENCY: u64 = 1 + (HEAD_DIM_I32.ilog2() as u64);
         const INIT_INTERVAL: u64 = 1;
-        const SEQ_LEN: usize = 5;
+        const SEQ_LEN: i32 = 5;
 
         // We will use seq length of 5 for now. So, conservatively keep the FIFO (Channel) size as 5.
         let chan_size = 2; // FIFO Depth
@@ -156,24 +156,16 @@ mod tests {
 
         // Create the Iterators for Generators
         let in1_iter = || {
-            [
-                array![[1; HEAD_DIM]],
-                array![[2; HEAD_DIM]],
-                array![[3; HEAD_DIM]],
-                array![[4; HEAD_DIM]],
-                array![[5; HEAD_DIM]],
-            ]
-            .into_iter()
+            (0..(SEQ_LEN))
+                .map(|i| array![[(i + 1); HEAD_DIM]])
+                .collect::<Vec<_>>()
+                .into_iter()
         };
         let in2_iter = || {
-            [
-                array![[1; HEAD_DIM]].into_shape([HEAD_DIM, 1]).unwrap(),
-                array![[1; HEAD_DIM]].into_shape([HEAD_DIM, 1]).unwrap(),
-                array![[1; HEAD_DIM]].into_shape([HEAD_DIM, 1]).unwrap(),
-                array![[1; HEAD_DIM]].into_shape([HEAD_DIM, 1]).unwrap(),
-                array![[1; HEAD_DIM]].into_shape([HEAD_DIM, 1]).unwrap(),
-            ]
-            .into_iter()
+            (0..(SEQ_LEN))
+                .map(|_i| array![[1; HEAD_DIM]].into_shape([HEAD_DIM, 1]).unwrap())
+                .collect::<Vec<_>>()
+                .into_iter()
         };
 
         // Create the Iterators for Checkers
