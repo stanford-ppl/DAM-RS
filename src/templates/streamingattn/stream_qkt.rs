@@ -19,6 +19,7 @@ pub struct QKTData<A: Clone> {
     pub out: Sender<ArrayBase<OwnedRepr<A>, Dim<[usize; 2]>>>,
     pub latency: u64,       // pipeline depth
     pub init_inverval: u64, // initiation interval
+    pub seq_len: i32,
 }
 
 impl<A: DAMType> Cleanable for QKTData<A>
@@ -150,6 +151,7 @@ mod tests {
             out: out_sender,
             latency: LATENCY,
             init_inverval: INIT_INTERVAL,
+            seq_len: SEQ_LEN,
         };
 
         let stream_qkt = QKT::new(data);
