@@ -123,56 +123,6 @@ mod tests {
     use super::{QKTData, QKT};
 
     #[test]
-    fn test_ndarrays() {
-        // Checking array shapes
-        // - array![1, 1, 1] :shape=[3]
-        // - array![[1, 1, 1]] :shape=[1,3]
-        let array0 = array![1, 1, 1];
-        println!("{:?}", array0);
-
-        let array_s = array![[1]];
-        println!("{:?}", array_s);
-
-        // Testing sum_axis
-        let array1: ArrayBase<OwnedRepr<i32>, Dim<[usize; 2]>> = array![[1, 2, 1], [3, 4, 5]];
-        let array1_sum = array1.sum_axis(Axis(0));
-        println!("{:?}", array1_sum);
-
-        // Testing map_axis
-        let array3: ArrayBase<OwnedRepr<i32>, Dim<[usize; 2]>> = array![[1, 2, 1], [3, 4, 5]];
-        let reduction_arr3 = array3.map_axis(Axis(0), |view| view.iter().sum::<i32>());
-        println!("{:?}", reduction_arr3);
-    }
-
-    #[test]
-    fn test_iterator() {
-        // let v = [
-        //     array![[1, 1, 1]],
-        //     array![[2, 2, 2]],
-        //     array![[3, 3, 3]],
-        //     array![[4, 4, 4]],
-        // ];
-        // let v_iter = v.into_iter();
-        // // The `iter` method produces an `Iterator` over an array/slice.
-        // for i in v_iter {
-        //     println!("{:?}", i);
-        // }
-
-        // let a = array![[[1, 1, 1]], [[2, 2, 2]], [[3, 3, 3]], [[4, 4, 4]]];
-        // for i in a.outer_iter() {
-        //     println!("{:?}", i) // iterate through first dimension
-        // }
-
-        let ar1: ArrayBase<OwnedRepr<i32>, _> = array![[1; 5]];
-        println!("{:?}", ar1); // [1, 1, 1, 1, 1]
-                               // for i in ar1.into_iter() {
-                               //     println!("{:?}", i) // iterate through first dimension
-                               // }
-        let c = ar1.into_shape([5, 1]).unwrap();
-        println!("{:?}", c);
-    }
-
-    #[test]
     fn stream_qkt_test() {
         const HEAD_DIM: usize = 16;
         const HEAD_DIM_I32: i32 = 16;
