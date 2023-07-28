@@ -191,6 +191,10 @@ where
             let in_icrd = peek_next(&mut self.time, &mut self.spacc1_data.in_crd_inner).unwrap();
             let in_val = peek_next(&mut self.time, &mut self.spacc1_data.in_val).unwrap();
 
+            // Self::log(format!("ocrd: {:?}", in_ocrd.data.clone()));
+            // Self::log(format!("icrd: {:?}", in_icrd.data.clone()));
+            // Self::log(format!("ival: {:?}", in_val.data.clone()));
+
             match in_ocrd.data {
                 Token::Val(_) => {
                     match in_val.data {

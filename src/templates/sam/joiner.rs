@@ -169,7 +169,8 @@ where
                             dequeue(&mut self.time, &mut self.intersect_data.in_crd2).unwrap();
                             dequeue(&mut self.time, &mut self.intersect_data.in_ref2).unwrap();
                         }
-                        (Token::Stop(stkn1), Token::Stop(_)) => {
+                        (Token::Stop(stkn1), Token::Stop(stkn2)) => {
+                            assert_eq!(stkn1, stkn2);
                             let curr_time = self.time.tick();
                             enqueue(
                                 &mut self.time,
@@ -491,9 +492,7 @@ where
 #[cfg(test)]
 mod tests {
     use crate::{
-        context::{
-            checker_context::CheckerContext, generator_context::GeneratorContext, 
-        },
+        context::{checker_context::CheckerContext, generator_context::GeneratorContext},
         simulation::Program,
         templates::sam::primitive::Token,
         token_vec,

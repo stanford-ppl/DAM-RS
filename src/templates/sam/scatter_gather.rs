@@ -1,4 +1,4 @@
-use std::fmt::Formatter;
+
 
 use dam_core::identifier::Identifier;
 use dam_core::metric::LogProducer;
@@ -15,6 +15,7 @@ use crate::{
 
 use super::primitive::Token;
 
+#[log_producer]
 #[time_managed]
 #[identifiable]
 pub struct Scatter<ValType: Clone, StopType: Clone> {
@@ -37,19 +38,37 @@ where
         loop {
             match dequeue(&mut self.time, &mut self.receiver) {
                 Ok(mut curr_in) => {
-                    match curr_in.data {
+                    match curr_in.data.clone() {
                         Token::Val(_) => {
                             curr_in.time = self.time.tick() + 1;
-                            enqueue(&mut self.time, &mut self.targets[target_idx], curr_in)
-                                .unwrap();
+                            enqueue(
+                                &mut self.time,
+                                &mut self.targets[target_idx],
+                                curr_in.clone(),
+                            )
+                            .unwrap();
+                            Self::log(format!(
+                                "tg: {:?}, tkn: {:?}",
+                                target_idx,
+                                curr_in.data.clone()
+                            ));
                             // Round robin send
                             target_idx = (target_idx + 1) % self.targets.len();
                         }
                         tkn @ Token::Stop(_) | tkn @ Token::Done => {
                             let channel_elem = ChannelElement::new(self.time.tick() + 1, tkn);
+                            let mut cnt = 0;
                             self.targets.iter_mut().for_each(|target| {
                                 enqueue(&mut self.time, target, channel_elem.clone()).unwrap();
+                                Self::log(format!(
+                                    "tg: {:?}, tkn: {:?}",
+                                    cnt,
+                                    curr_in.data.clone()
+                                ));
+                                cnt += 1;
                             });
+                            // target_idx = 0;
+                            // target_idx = (target_idx + 1) % self.targets.len();
                         }
                         _ => {
                             panic!("Undefined case found in scatter");
@@ -110,51 +129,96 @@ where
 
     fn run(&mut self) {
         let mut target_idx = 0;
-        let mut fiber_done = vec![false; self.targets.len()];
-        // let mut last_done_seen = false;
-        let mut done_cnt = 0;
+        // let mut fiber_done = vec![false; self.targets.len()];
+        // let mut done_cnt = 0;
         loop {
-            if done_cnt == self.targets.len() - 1 {
-                return;
-            }
-            if fiber_done[target_idx] {
-                target_idx = (target_idx + 1) % self.targets.len();
-                continue;
-            }
             let output = dequeue(&mut self.time, &mut self.targets[target_idx])
                 .unwrap()
                 .data;
+
             match output.clone() {
-                tkn @ Token::Stop(_) | tkn @ Token::Done => {
+                Token::Stop(stkn) => {
+                    let mut out_stkn = StopType::default();
+                    if target_idx == self.targets.len() - 1 {
+                        out_stkn = stkn.clone();
+                    }
+                    let channel_elem =
+                        ChannelElement::new(self.time.tick() + 1, Token::Stop(out_stkn.clone()));
+                    enqueue(&mut self.time, &mut self.merged, channel_elem).unwrap();
+                    target_idx = (target_idx + 1) % self.targets.len();
+                    Self::log(format!(
+                        "tg: {:?}, tkn: {:?}",
+                        target_idx,
+                        Token::<ValType, StopType>::Stop(out_stkn.clone())
+                    ));
                     // for (idx, chan) in self.targets.iter_mut().enumerate() {
                     //     if idx == target_idx {
                     //         continue;
                     //     }
                     //     dequeue(&mut self.time, chan).unwrap();
                     // }
-                    fiber_done[target_idx] = true;
-                    if tkn == Token::Done {
-                        // return;
-                        done_cnt += 1;
-                        continue;
-                    } else if fiber_done.iter_mut().all(|x| *x == true) {
-                        for elem in fiber_done.iter_mut() {
-                            *elem = false;
-                        }
-                    }
                 }
                 Token::Val(_) => {
+                    let channel_elem = ChannelElement::new(self.time.tick() + 1, output.clone());
+                    Self::log(format!("tg: {:?}, tkn: {:?}", target_idx, output.clone()));
+                    enqueue(&mut self.time, &mut self.merged, channel_elem).unwrap();
+                }
+                Token::Done => {
+                    Self::log(format!("tg: {:?}, tkn: {:?}", target_idx, output.clone()));
+                    if target_idx == self.targets.len() - 1 {
+                        let channel_elem =
+                            ChannelElement::new(self.time.tick() + 1, output.clone());
+                        enqueue(&mut self.time, &mut self.merged, channel_elem).unwrap();
+                        return;
+                    }
                     target_idx = (target_idx + 1) % self.targets.len();
                 }
                 _ => todo!(),
             }
-
-            let channel_elem = ChannelElement::new(self.time.tick() + 1, output.clone());
-            Self::log(format!("Token: {:?}", output.clone()));
-            enqueue(&mut self.time, &mut self.merged, channel_elem).unwrap();
-
             self.time.incr_cycles(1);
         }
+        // loop {
+        //     if done_cnt == self.targets.len() - 1 {
+        //         return;
+        //     }
+        //     if fiber_done[target_idx] {
+        //         target_idx = (target_idx + 1) % self.targets.len();
+        //         continue;
+        //     }
+        //     let output = dequeue(&mut self.time, &mut self.targets[target_idx])
+        //         .unwrap()
+        //         .data;
+        //     match output.clone() {
+        //         tkn @ Token::Stop(_) | tkn @ Token::Done => {
+        //             // for (idx, chan) in self.targets.iter_mut().enumerate() {
+        //             //     if idx == target_idx {
+        //             //         continue;
+        //             //     }
+        //             //     dequeue(&mut self.time, chan).unwrap();
+        //             // }
+        //             fiber_done[target_idx] = true;
+        //             if tkn == Token::Done {
+        //                 // return;
+        //                 done_cnt += 1;
+        //                 continue;
+        //             } else if fiber_done.iter_mut().all(|x| *x == true) {
+        //                 for elem in fiber_done.iter_mut() {
+        //                     *elem = false;
+        //                 }
+        //             }
+        //         }
+        //         Token::Val(_) => {
+        //             target_idx = (target_idx + 1) % self.targets.len();
+        //         }
+        //         _ => todo!(),
+        //     }
+
+        //     let channel_elem = ChannelElement::new(self.time.tick() + 1, output.clone());
+        //     Self::log(format!("Token: {:?}", output.clone()));
+        //     enqueue(&mut self.time, &mut self.merged, channel_elem).unwrap();
+
+        //     self.time.incr_cycles(1);
+        // }
     }
 
     #[cleanup(time_managed)]
