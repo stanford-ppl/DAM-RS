@@ -285,6 +285,10 @@ impl<'a> Program<'a> {
         println!("{:?}", Dot::with_config(&graph, &[]));
     }
 
+    pub fn print_node_mapping(&self) {
+        dbg!(self.all_node_names());
+    }
+
     pub fn print_graph_with_names(&self) {
         self.check();
         let mut graph = DiGraph::<&str, ChannelID>::new();

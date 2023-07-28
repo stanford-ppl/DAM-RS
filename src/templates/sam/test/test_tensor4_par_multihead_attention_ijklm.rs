@@ -113,9 +113,9 @@ mod tests {
         // let a_vals = read_inputs::<f32>(&a_vals_filename);
 
         let mut parent = Program::default();
-        let chan_size = 32000;
+        let chan_size = 32;
 
-        let par_factor = 8;
+        let par_factor = 1;
 
         // fiberlookup_bi
         let (qi_in_ref_sender, qi_in_ref_receiver) = parent.bounded(chan_size);
@@ -650,8 +650,10 @@ mod tests {
             broadcast6.add_target(bc1_out_red_sender);
             parent.add_child(broadcast6);
 
+            let softmax_chan_size = 65536;
+
             // Max Reduce
-            let (max_out_val_sender, max_out_val_receiver) = parent.bounded(chan_size);
+            let (max_out_val_sender, max_out_val_receiver) = parent.bounded(softmax_chan_size);
             let max_data = ReduceData::<f32, u32> {
                 in_val: bc_out_red_receiver,
                 out_val: max_out_val_sender,
@@ -659,7 +661,7 @@ mod tests {
             let max_red = MaxReduce::new(max_data, f32::MIN);
             parent.add_child(max_red);
 
-            let (rep_out_val_sender, rep_out_val_receiver) = parent.bounded(chan_size);
+            let (rep_out_val_sender, rep_out_val_receiver) = parent.bounded(softmax_chan_size);
             let rep_data = RepeatData::<f32, u32> {
                 in_ref: max_out_val_receiver,
                 in_repsig: bc1_out_repsig_l_receiver,
@@ -669,7 +671,7 @@ mod tests {
             parent.add_child(rep);
 
             // Sub ALU, using Add name to correspond to SAM implementation
-            let (add_out_sender, add_out_receiver) = parent.bounded(chan_size);
+            let (add_out_sender, add_out_receiver) = parent.bounded(softmax_chan_size);
             let add = make_alu(
                 bc1_out_red_receiver,
                 rep_out_val_receiver,
@@ -679,19 +681,19 @@ mod tests {
             parent.add_child(add);
 
             // Exp
-            let (exp_out_sender, exp_out_receiver) = parent.bounded(chan_size);
+            let (exp_out_sender, exp_out_receiver) = parent.bounded(softmax_chan_size);
             let exp = make_unary_alu(add_out_receiver, exp_out_sender, ALUExpOp());
             parent.add_child(exp);
 
-            let (bc_exp_out_sender, bc_exp_out_receiver) = parent.bounded(chan_size);
-            let (bc1_exp_out_sender, bc1_exp_out_receiver) = parent.bounded(chan_size);
+            let (bc_exp_out_sender, bc_exp_out_receiver) = parent.bounded(softmax_chan_size);
+            let (bc1_exp_out_sender, bc1_exp_out_receiver) = parent.bounded(softmax_chan_size);
             let mut broadcast14 = BroadcastContext::new(exp_out_receiver);
             broadcast14.add_target(bc_exp_out_sender);
             broadcast14.add_target(bc1_exp_out_sender);
             parent.add_child(broadcast14);
 
             // Reduce
-            let (red1_out_sender, red1_out_receiver) = parent.bounded(chan_size);
+            let (red1_out_sender, red1_out_receiver) = parent.bounded(softmax_chan_size);
             let red1_data = ReduceData::<f32, u32> {
                 in_val: bc_exp_out_receiver,
                 out_val: red1_out_sender,
@@ -699,7 +701,7 @@ mod tests {
             let red1 = Reduce::new(red1_data);
             parent.add_child(red1);
 
-            let (rep1_out_val_sender, rep1_out_val_receiver) = parent.bounded(chan_size);
+            let (rep1_out_val_sender, rep1_out_val_receiver) = parent.bounded(softmax_chan_size);
             let rep1_data = RepeatData::<f32, u32> {
                 in_ref: red1_out_receiver,
                 in_repsig: bc2_out_repsig_l_receiver,
@@ -709,7 +711,7 @@ mod tests {
             parent.add_child(rep1);
 
             // Div ALU
-            let (div_out_sender, div_out_receiver) = parent.bounded(chan_size);
+            let (div_out_sender, div_out_receiver) = parent.bounded(softmax_chan_size);
             let div = make_alu(
                 bc1_exp_out_receiver,
                 rep1_out_val_receiver,
@@ -730,7 +732,7 @@ mod tests {
 
             // let mut val_drop = ValDrop::new(val_drop_data);
 
-            let (out_repsig_m_sender, out_repsig_m_receiver) = parent.bounded(chan_size);
+            let (out_repsig_m_sender, out_repsig_m_receiver) = parent.bounded(softmax_chan_size);
             let repsig_m_data = RepSigGenData::<u32, u32> {
                 input: bc_intersectm3_out_crd_receiver,
                 out_repsig: out_repsig_m_sender,
@@ -738,7 +740,7 @@ mod tests {
             let repsigm = RepeatSigGen::new(repsig_m_data);
             parent.add_child(repsigm);
 
-            let (rep_m_out_val_sender, rep_m_out_val_receiver) = parent.bounded(chan_size);
+            let (rep_m_out_val_sender, rep_m_out_val_receiver) = parent.bounded(softmax_chan_size);
             let rep2_data = RepeatData::<f32, u32> {
                 // in_ref: out_drop_val_receiver,
                 in_ref: div_out_receiver,
@@ -850,6 +852,7 @@ mod tests {
         parent.add_child(xvals);
 
         // parent.print_graph_with_names();
+        parent.set_inference(true);
         parent.init();
         parent.run();
 
