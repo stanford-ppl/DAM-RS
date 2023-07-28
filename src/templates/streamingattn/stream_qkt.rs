@@ -1,10 +1,8 @@
-use core::fmt::Debug;
 use dam_core::identifier::Identifier;
 use dam_core::TimeManager;
 use dam_macros::{cleanup, identifiable, time_managed};
 
-use ndarray::prelude::*;
-use ndarray::{Array, ArrayBase, Axis, Dim, Dimension, OwnedRepr};
+use ndarray::{ArrayBase, Dim, OwnedRepr};
 
 use crate::{
     channel::{
@@ -21,7 +19,7 @@ pub struct QKTData<A: Clone> {
     pub out: Sender<ArrayBase<OwnedRepr<A>, Dim<[usize; 2]>>>,
 }
 
-impl<A: Clone> Cleanable for QKTData<A>
+impl<A: DAMType> Cleanable for QKTData<A>
 where
     ArrayBase<OwnedRepr<A>, Dim<[usize; 2]>>: DAMType,
 {
@@ -39,7 +37,7 @@ pub struct QKT<A: Clone> {
     //latency: dam_core::time::Time,
 }
 
-impl<A: Clone> QKT<A>
+impl<A: DAMType> QKT<A>
 where
     QKT<A>: Context,
     ArrayBase<OwnedRepr<A>, Dim<[usize; 2]>>: DAMType,
@@ -67,7 +65,7 @@ where
             ArrayBase<OwnedRepr<A>, Dim<[usize; 2]>>,
             Output = ArrayBase<OwnedRepr<A>, Dim<[usize; 2]>>,
         >,
-    A: Clone + num::Num + std::iter::Sum,
+    A: DAMType + num::Num + std::iter::Sum,
 {
     fn init(&mut self) {}
 
@@ -79,12 +77,6 @@ where
 
             match (in1_deq, in2_deq) {
                 (Ok(in1), Ok(in2)) => {
-                    // let mul_in12: ArrayBase<OwnedRepr<A>, D> = in1.data.clone() * in2.data;
-                    // // we clone as the multiplication consumes the first operand
-                    // let reduce_sum_small =
-                    //     mul_in12.map_axis(Axis(0), |view| view.to_owned().into_iter().sum::<A>());
-                    // let reduced_len = reduce_sum_small.len();
-                    // let reduce_sum = reduce_sum_small.into_shape((1, reduced_len)).unwrap();
                     let reduce_sum = in1.data.dot(&(in2.data));
                     let curr_time = self.time.tick();
                     enqueue(
@@ -131,32 +123,63 @@ mod tests {
     use super::{QKTData, QKT};
 
     #[test]
-    fn test_ndarray_clone() {
-        // array![1, 1, 1] :shape=[3]
-        // array![[1, 1, 1]] :shape=[1,3]
+    fn test_ndarrays() {
+        // Checking array shapes
+        // - array![1, 1, 1] :shape=[3]
+        // - array![[1, 1, 1]] :shape=[1,3]
         let array0 = array![1, 1, 1];
         println!("{:?}", array0);
 
+        let array_s = array![[1]];
+        println!("{:?}", array_s);
+
+        // Testing sum_axis
         let array1: ArrayBase<OwnedRepr<i32>, Dim<[usize; 2]>> = array![[1, 2, 1], [3, 4, 5]];
-        let array12 = array1.sum_axis(Axis(0));
-        // let array2 = array![[1, 2, 1], [3, 4, 5]];
-        // let array3 = array1.clone() * array2;
-        // //println!("{:?}", array1);
-        // println!("{:?}", array3);
-        // let reduction_arr3 = array3.map_axis(Axis(0), |view| view.iter().sum::<i32>());
-        // println!("{:?}", reduction_arr3);
+        let array1_sum = array1.sum_axis(Axis(0));
+        println!("{:?}", array1_sum);
 
-        let darray1_a = array![1, 1, 1];
-        let darray1_b = array![1, 1, 1];
+        // Testing map_axis
+        let array3: ArrayBase<OwnedRepr<i32>, Dim<[usize; 2]>> = array![[1, 2, 1], [3, 4, 5]];
+        let reduction_arr3 = array3.map_axis(Axis(0), |view| view.iter().sum::<i32>());
+        println!("{:?}", reduction_arr3);
+    }
 
-        let darray2_a = array![[1, 1, 1]];
-        let darray2_b = array![[1, 1, 1]];
+    #[test]
+    fn test_iterator() {
+        // let v = [
+        //     array![[1, 1, 1]],
+        //     array![[2, 2, 2]],
+        //     array![[3, 3, 3]],
+        //     array![[4, 4, 4]],
+        // ];
+        // let v_iter = v.into_iter();
+        // // The `iter` method produces an `Iterator` over an array/slice.
+        // for i in v_iter {
+        //     println!("{:?}", i);
+        // }
+
+        // let a = array![[[1, 1, 1]], [[2, 2, 2]], [[3, 3, 3]], [[4, 4, 4]]];
+        // for i in a.outer_iter() {
+        //     println!("{:?}", i) // iterate through first dimension
+        // }
+
+        let ar1: ArrayBase<OwnedRepr<i32>, _> = array![[1; 5]];
+        println!("{:?}", ar1); // [1, 1, 1, 1, 1]
+                               // for i in ar1.into_iter() {
+                               //     println!("{:?}", i) // iterate through first dimension
+                               // }
+        let c = ar1.into_shape([5, 1]).unwrap();
+        println!("{:?}", c);
     }
 
     #[test]
     fn stream_qkt_test() {
+        const HEAD_DIM: usize = 16;
+        const HEAD_DIM_I32: i32 = 16;
+        const SEQ_LEN: usize = 2;
+
         // We will use seq length of 5 for now. So, conservatively keep the FIFO (Channel) size as 5.
-        let chan_size = 5;
+        let chan_size = SEQ_LEN;
 
         let mut parent = Program::default();
 
@@ -168,6 +191,7 @@ mod tests {
         let (out_sender, out_receiver) =
             parent.bounded::<ArrayBase<OwnedRepr<i32>, Dim<[usize; 2]>>>(chan_size);
 
+        // Create the QKT block
         let data = QKTData::<i32> {
             in1: in1_receiver,
             in2: in2_receiver,
@@ -175,5 +199,51 @@ mod tests {
         };
 
         let stream_qkt = QKT::new(data);
+
+        // Create the Iterators for Generators
+        let in1_iter = || {
+            [
+                array![[1; HEAD_DIM]],
+                array![[2; HEAD_DIM]],
+                array![[3; HEAD_DIM]],
+                array![[4; HEAD_DIM]],
+                array![[5; HEAD_DIM]],
+            ]
+            .into_iter()
+        };
+        let in2_iter = || {
+            [
+                array![[1; HEAD_DIM]].into_shape([HEAD_DIM, 1]).unwrap(),
+                array![[1; HEAD_DIM]].into_shape([HEAD_DIM, 1]).unwrap(),
+                array![[1; HEAD_DIM]].into_shape([HEAD_DIM, 1]).unwrap(),
+                array![[1; HEAD_DIM]].into_shape([HEAD_DIM, 1]).unwrap(),
+                array![[1; HEAD_DIM]].into_shape([HEAD_DIM, 1]).unwrap(),
+            ]
+            .into_iter()
+        };
+
+        // Create the Iterators for Checkers
+        let out_iter = || {
+            [
+                array![[1 * HEAD_DIM_I32]],
+                array![[2 * HEAD_DIM_I32]],
+                array![[3 * HEAD_DIM_I32]],
+                array![[4 * HEAD_DIM_I32]],
+                array![[5 * HEAD_DIM_I32]],
+            ]
+            .into_iter()
+        };
+
+        let gen1 = GeneratorContext::new(in1_iter, in1_sender); // Q : [1,D] shaped vectors
+        let gen2 = GeneratorContext::new(in2_iter, in2_sender); // KT: [D,1] shaped vectors
+
+        let qkt_checker = CheckerContext::new(out_iter, out_receiver);
+
+        parent.add_child(gen1);
+        parent.add_child(gen2);
+        parent.add_child(qkt_checker);
+        parent.add_child(stream_qkt);
+        parent.init();
+        parent.run();
     }
 }
