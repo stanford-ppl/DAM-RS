@@ -114,6 +114,7 @@ mod tests {
 
         let mut parent = Program::default();
         let chan_size = 32;
+        let softmax_chan_size = 65536;
 
         let par_factor = 1;
 
@@ -482,9 +483,12 @@ mod tests {
             let repsig_l = RepeatSigGen::new(repsig_l_data);
             parent.add_child(repsig_l);
 
-            let (bc_out_repsig_l_sender, bc_out_repsig_l_receiver) = parent.bounded(chan_size);
-            let (bc1_out_repsig_l_sender, bc1_out_repsig_l_receiver) = parent.bounded(chan_size);
-            let (bc2_out_repsig_l_sender, bc2_out_repsig_l_receiver) = parent.bounded(chan_size);
+            let (bc_out_repsig_l_sender, bc_out_repsig_l_receiver) =
+                parent.bounded(softmax_chan_size);
+            let (bc1_out_repsig_l_sender, bc1_out_repsig_l_receiver) =
+                parent.bounded(softmax_chan_size);
+            let (bc2_out_repsig_l_sender, bc2_out_repsig_l_receiver) =
+                parent.bounded(softmax_chan_size);
             let mut broadcast10 = BroadcastContext::new(out_repsig_l_receiver);
             broadcast10.add_target(bc_out_repsig_l_sender);
             broadcast10.add_target(bc1_out_repsig_l_sender);
@@ -501,8 +505,8 @@ mod tests {
             let ql_repeat = Repeat::new(ql_repeat_data);
             parent.add_child(ql_repeat);
 
-            let (qm_out_ref_sender, qm_out_ref_receiver) = parent.bounded(chan_size);
-            let (qm_out_crd_sender, qm_out_crd_receiver) = parent.bounded(chan_size);
+            let (qm_out_ref_sender, qm_out_ref_receiver) = parent.bounded(softmax_chan_size);
+            let (qm_out_crd_sender, qm_out_crd_receiver) = parent.bounded(softmax_chan_size);
             let qm_data = RdScanData::<u32, u32> {
                 in_ref: out_repeat_ql_receiver,
                 out_ref: qm_out_ref_sender,
@@ -512,11 +516,11 @@ mod tests {
             parent.add_child(qm_rdscanner);
 
             let (intersectm_out_crd_sender, intersectm_out_crd_receiver) =
-                parent.bounded(chan_size);
+                parent.bounded(softmax_chan_size);
             let (intersectm_out_ref1_sender, intersectm_out_ref1_receiver) =
-                parent.bounded(chan_size);
+                parent.bounded(softmax_chan_size);
             let (intersectm_out_ref2_sender, intersectm_out_ref2_receiver) =
-                parent.bounded(chan_size);
+                parent.bounded(softmax_chan_size);
             let intersectm_data = CrdJoinerData::<u32, u32> {
                 in_crd1: vm_out_crd_receiver,
                 in_ref1: vm_out_ref_receiver,
@@ -545,16 +549,16 @@ mod tests {
             parent.add_child(broadcast13);
 
             let (bc_intersectm_out_crd_sender, bc_intersectm_out_crd_receiver) =
-                parent.bounded(chan_size);
+                parent.bounded(softmax_chan_size);
             let (bc1_intersectm_out_crd_sender, bc1_intersectm_out_crd_receiver) =
-                parent.bounded(chan_size);
+                parent.bounded(softmax_chan_size);
             let mut broadcast12 = BroadcastContext::new(intersectm_out_crd_receiver);
             broadcast12.add_target(bc_intersectm_out_crd_sender);
             broadcast12.add_target(bc1_intersectm_out_crd_sender);
             parent.add_child(broadcast12);
 
             let (intersectm2_out_ref2_sender, intersectm2_out_ref2_receiver) =
-                parent.bounded(chan_size);
+                parent.bounded(softmax_chan_size);
             let intersectm2_data = CrdJoinerData::<u32, u32> {
                 in_crd1: bc_km_out_crd_receiver,
                 in_ref1: bc_km_out_ref_receiver,
@@ -569,12 +573,12 @@ mod tests {
             // dbg!(intersect_m2.id());
 
             let (intersectm3_out_crd_sender, intersectm3_out_crd_receiver) =
-                parent.bounded(chan_size);
+                parent.bounded(softmax_chan_size);
             // let (intersectm3_out_ref1_sender, intersectm3_out_ref1_receiver) =
             let (intersectm3_out_ref1_sender, intersectm3_out_ref1_receiver) =
-                parent.bounded(chan_size);
+                parent.bounded(softmax_chan_size);
             let (intersectm3_out_ref2_sender, intersectm3_out_ref2_receiver) =
-                parent.bounded(chan_size);
+                parent.bounded(softmax_chan_size);
 
             let intersectm3_data = CrdJoinerData::<u32, u32> {
                 in_crd1: bc1_km_out_crd_receiver,
@@ -589,9 +593,9 @@ mod tests {
             parent.add_child(intersect_m3);
 
             let (bc_intersectm3_out_crd_sender, bc_intersectm3_out_crd_receiver) =
-                parent.bounded(chan_size);
+                parent.bounded(softmax_chan_size);
             let (bc1_intersectm3_out_crd_sender, bc1_intersectm3_out_crd_receiver) =
-                parent.bounded(chan_size);
+                parent.bounded(softmax_chan_size);
             let mut broadcast16 = BroadcastContext::new(intersectm3_out_crd_receiver);
             broadcast16.add_target(bc_intersectm3_out_crd_sender);
             broadcast16.add_target(bc1_intersectm3_out_crd_sender);
@@ -616,7 +620,7 @@ mod tests {
             parent.add_child(arrayvals_k);
 
             // arrayvals_v
-            let (v_out_val_sender, v_out_val_receiver) = parent.bounded(chan_size);
+            let (v_out_val_sender, v_out_val_receiver) = parent.bounded(softmax_chan_size);
             let arrayvals_v_data = ArrayData::<u32, f32, u32> {
                 in_ref: intersectm2_out_ref2_receiver,
                 out_val: v_out_val_sender,
@@ -635,7 +639,7 @@ mod tests {
             parent.add_child(mul);
 
             // Reduce
-            let (red_out_sender, red_out_receiver) = parent.bounded(chan_size);
+            let (red_out_sender, red_out_receiver) = parent.bounded(softmax_chan_size);
             let red_data = ReduceData::<f32, u32> {
                 in_val: mul_out_receiver,
                 out_val: red_out_sender,
@@ -643,14 +647,12 @@ mod tests {
             let red = Reduce::new(red_data);
             parent.add_child(red);
 
-            let (bc_out_red_sender, bc_out_red_receiver) = parent.bounded(chan_size);
-            let (bc1_out_red_sender, bc1_out_red_receiver) = parent.bounded(chan_size);
+            let (bc_out_red_sender, bc_out_red_receiver) = parent.bounded(softmax_chan_size);
+            let (bc1_out_red_sender, bc1_out_red_receiver) = parent.bounded(softmax_chan_size);
             let mut broadcast6 = BroadcastContext::new(red_out_receiver);
             broadcast6.add_target(bc_out_red_sender);
             broadcast6.add_target(bc1_out_red_sender);
             parent.add_child(broadcast6);
-
-            let softmax_chan_size = 65536;
 
             // Max Reduce
             let (max_out_val_sender, max_out_val_receiver) = parent.bounded(softmax_chan_size);
@@ -701,7 +703,7 @@ mod tests {
             let red1 = Reduce::new(red1_data);
             parent.add_child(red1);
 
-            let (rep1_out_val_sender, rep1_out_val_receiver) = parent.bounded(softmax_chan_size);
+            let (rep1_out_val_sender, rep1_out_val_receiver) = parent.bounded(chan_size);
             let rep1_data = RepeatData::<f32, u32> {
                 in_ref: red1_out_receiver,
                 in_repsig: bc2_out_repsig_l_receiver,
@@ -711,7 +713,7 @@ mod tests {
             parent.add_child(rep1);
 
             // Div ALU
-            let (div_out_sender, div_out_receiver) = parent.bounded(softmax_chan_size);
+            let (div_out_sender, div_out_receiver) = parent.bounded(chan_size);
             let div = make_alu(
                 bc1_exp_out_receiver,
                 rep1_out_val_receiver,
@@ -732,7 +734,7 @@ mod tests {
 
             // let mut val_drop = ValDrop::new(val_drop_data);
 
-            let (out_repsig_m_sender, out_repsig_m_receiver) = parent.bounded(softmax_chan_size);
+            let (out_repsig_m_sender, out_repsig_m_receiver) = parent.bounded(chan_size);
             let repsig_m_data = RepSigGenData::<u32, u32> {
                 input: bc_intersectm3_out_crd_receiver,
                 out_repsig: out_repsig_m_sender,
@@ -740,7 +742,7 @@ mod tests {
             let repsigm = RepeatSigGen::new(repsig_m_data);
             parent.add_child(repsigm);
 
-            let (rep_m_out_val_sender, rep_m_out_val_receiver) = parent.bounded(softmax_chan_size);
+            let (rep_m_out_val_sender, rep_m_out_val_receiver) = parent.bounded(chan_size);
             let rep2_data = RepeatData::<f32, u32> {
                 // in_ref: out_drop_val_receiver,
                 in_ref: div_out_receiver,
@@ -751,7 +753,7 @@ mod tests {
             parent.add_child(rep_m);
 
             // mul ALU
-            let (mul2_out_sender, mul2_out_receiver) = parent.bounded(chan_size);
+            let (mul2_out_sender, mul2_out_receiver) = parent.bounded(softmax_chan_size);
             let mul2 = make_alu(
                 rep_m_out_val_receiver,
                 v_out_val_receiver,
@@ -760,7 +762,7 @@ mod tests {
             );
             parent.add_child(mul2);
 
-            let (drop_out_icrd_sender, drop_out_icrd_receiver) = parent.bounded(chan_size);
+            let (drop_out_icrd_sender, drop_out_icrd_receiver) = parent.bounded(softmax_chan_size);
 
             let crd_drop_data = CrdManagerData::<u32, u32> {
                 in_crd_outer: chunk_qk_crd_receiver,
@@ -788,8 +790,9 @@ mod tests {
             // parent.add_child(broadcast);
             // }
 
-            let (out_spacc_val_sender, out_spacc_val_receiver) = parent.bounded(chan_size);
-            let (out_spacc_icrd_sender, out_spacc_icrd_receiver) = parent.bounded(chan_size);
+            let (out_spacc_val_sender, out_spacc_val_receiver) = parent.bounded(softmax_chan_size);
+            let (out_spacc_icrd_sender, out_spacc_icrd_receiver) =
+                parent.bounded(softmax_chan_size);
             let spacc_data = Spacc1Data::<u32, f32, u32> {
                 in_crd_outer: drop_out_icrd_receiver,
                 in_crd_inner: bc1_intersectm3_out_crd_receiver,
@@ -851,7 +854,7 @@ mod tests {
         // let xvals = ValsWrScan::<f32, u32>::new(out_spacc_val_receiver);
         parent.add_child(xvals);
 
-        // parent.print_graph_with_names();
+        parent.print_graph_with_names();
         parent.set_inference(true);
         parent.init();
         parent.run();

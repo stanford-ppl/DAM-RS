@@ -24,6 +24,7 @@ pub(crate) trait ChannelHandle {
     fn sender(&self) -> Option<Identifier>;
     fn receiver(&self) -> Option<Identifier>;
     fn id(&self) -> ChannelID;
+    fn spec(&self) -> Arc<ChannelSpec>;
 }
 
 pub(crate) struct ChannelData<T: Clone> {
@@ -129,5 +130,9 @@ impl<T: Clone> ChannelHandle for ChannelData<T> {
 
     fn id(&self) -> ChannelID {
         self.channel_spec.id()
+    }
+
+    fn spec(&self) -> Arc<ChannelSpec> {
+        self.channel_spec.clone()
     }
 }

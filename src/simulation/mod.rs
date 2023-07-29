@@ -1,3 +1,4 @@
+use core::fmt;
 use std::{
     collections::{HashMap, HashSet},
     hash::Hash,
@@ -33,6 +34,24 @@ pub struct Program<'a> {
 enum ChannelOrContext {
     ChannelID(ChannelID),
     Context(Identifier),
+}
+
+struct ChannelInfo {
+    pub id: ChannelID,
+    pub capacity: usize,
+}
+
+impl ChannelInfo {
+    pub fn new(id: ChannelID, capacity: usize) -> ChannelInfo {
+        let chan_info = ChannelInfo { id, capacity };
+        chan_info
+    }
+}
+
+impl fmt::Debug for ChannelInfo {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?} (Depth: {:?})", self.id, self.capacity)
+    }
 }
 
 impl<'a> Program<'a> {
@@ -262,10 +281,11 @@ impl<'a> Program<'a> {
 
     pub fn print_graph(&self) {
         self.check();
-        let mut graph = DiGraph::<Identifier, ChannelID>::new();
+        let mut graph = DiGraph::<Identifier, ChannelInfo>::new();
         let ids = self.all_node_ids();
         let mut id_node_map: HashMap<Identifier, petgraph::stable_graph::NodeIndex> =
             HashMap::new();
+        // let mut id_channel_info
         for id in ids {
             id_node_map.insert(id, graph.add_node(id));
         }
@@ -278,7 +298,7 @@ impl<'a> Program<'a> {
                 *id_node_map
                     .get(&edge.receiver().expect("Edge didn't have a receiver!"))
                     .expect("Edge receiver was not registered in id_node_map!"),
-                edge.id(),
+                ChannelInfo::new(edge.id(), edge.spec().capacity().unwrap()),
             );
         }
 
@@ -291,7 +311,7 @@ impl<'a> Program<'a> {
 
     pub fn print_graph_with_names(&self) {
         self.check();
-        let mut graph = DiGraph::<&str, ChannelID>::new();
+        let mut graph = DiGraph::<&str, ChannelInfo>::new();
         let ids = self.all_node_ids();
         let node_names = self.all_node_names();
         let mut id_node_map: HashMap<Identifier, petgraph::stable_graph::NodeIndex> =
@@ -308,7 +328,7 @@ impl<'a> Program<'a> {
                 *id_node_map
                     .get(&edge.receiver().expect("Edge didn't have a receiver!"))
                     .expect("Edge receiver was not registered in id_node_map!"),
-                edge.id(),
+                ChannelInfo::new(edge.id(), edge.spec().capacity().unwrap()),
             );
         }
 
