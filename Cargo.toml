@@ -20,6 +20,9 @@ enum_dispatch = "0.3.12"
 petgraph = "0.6.3"
 rustc-hash = "1.1.0"
 
+[dev-dependencies]
+criterion = "0.5.1"
+
 [profile.release-with-debug]
 inherits = "release"
 debug = 1
@@ -29,3 +32,7 @@ codegen-units = 1
 [profile.dev.build-override]
 codegen-units = 1
 opt-level = 3
+
+[[bench]]
+name = "benchmark_examples"
+harness = false
