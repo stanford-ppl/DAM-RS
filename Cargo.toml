@@ -43,3 +43,7 @@ harness = false
 [[bench]]
 name = "benchmark_templates"
 harness = false
+
+[[bench]]
+name = "benchmark_mha_par"
+harness = false
