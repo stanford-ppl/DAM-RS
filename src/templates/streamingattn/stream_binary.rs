@@ -2,8 +2,6 @@ use dam_core::identifier::Identifier;
 use dam_core::TimeManager;
 use dam_macros::{cleanup, identifiable, time_managed};
 
-use ndarray::{ArrayBase, Dim, OwnedRepr};
-
 use crate::{
     channel::{
         utils::{dequeue, enqueue},
@@ -14,18 +12,16 @@ use crate::{
 };
 
 pub struct BinaryData<A: Clone> {
-    pub in1_stream: Receiver<ArrayBase<OwnedRepr<A>, Dim<[usize; 2]>>>,
-    pub in2_stream: Receiver<ArrayBase<OwnedRepr<A>, Dim<[usize; 2]>>>,
-    pub out_stream: Sender<ArrayBase<OwnedRepr<A>, Dim<[usize; 2]>>>,
-    //pub latency: u64,       // pipeline depth -> We assume a single cycle
+    // Performs binary op on two scalars
+    pub in1_stream: Receiver<A>,
+    pub in2_stream: Receiver<A>,
+    pub out_stream: Sender<A>,
+    pub latency: u64,       // pipeline depth
     pub init_inverval: u64, // initiation interval
-    pub loop_bound: u64,
+    pub loop_bound: u64,    // As this is a element-wise op, we only need a single loop bound
 }
 
-impl<A: DAMType> Cleanable for BinaryData<A>
-where
-    ArrayBase<OwnedRepr<A>, Dim<[usize; 2]>>: DAMType,
-{
+impl<A: DAMType> Cleanable for BinaryData<A> {
     fn cleanup(&mut self) {
         self.in1_stream.cleanup();
         self.in2_stream.cleanup();
@@ -50,7 +46,6 @@ pub struct BinaryOp<A: Clone> {
 impl<A: DAMType> BinaryOp<A>
 where
     BinaryOp<A>: Context,
-    ArrayBase<OwnedRepr<A>, Dim<[usize; 2]>>: DAMType,
 {
     pub fn new(binary_data: BinaryData<A>, op: BinaryOpType) -> Self {
         let binary_op = BinaryOp {
@@ -69,13 +64,7 @@ where
 
 impl<A> Context for BinaryOp<A>
 where
-    ArrayBase<OwnedRepr<A>, Dim<[usize; 2]>>: DAMType
-        //+ std::ops::Mul<Output = ArrayBase<OwnedRepr<A>, Dim<[usize; 2]>>>
-        + ndarray::linalg::Dot<
-            ArrayBase<OwnedRepr<A>, Dim<[usize; 2]>>,
-            Output = ArrayBase<OwnedRepr<A>, Dim<[usize; 2]>>,
-        >,
-    A: DAMType + num::Num + std::cmp::PartialOrd + Copy,
+    A: DAMType + num::Num,
 {
     fn init(&mut self) {}
 
@@ -88,7 +77,7 @@ where
                 (Ok(in1), Ok(in2)) => {
                     let in1_data = in1.data;
                     let in2_data = in2.data;
-                    let out_data: ArrayBase<OwnedRepr<A>, Dim<[usize; 2]>>;
+                    let out_data: A;
                     match self.op {
                         BinaryOpType::Add => {
                             out_data = in1_data + in2_data;
@@ -107,7 +96,7 @@ where
                     enqueue(
                         &mut self.time,
                         &mut self.binary_data.out_stream,
-                        ChannelElement::new(curr_time + 1, out_data),
+                        ChannelElement::new(curr_time + self.binary_data.latency, out_data),
                     )
                     .unwrap();
                 }
@@ -115,7 +104,7 @@ where
                     panic!("Reached unhandled case");
                 }
             }
-            self.time.incr_cycles(1);
+            self.time.incr_cycles(self.binary_data.init_inverval);
         }
     }
 
@@ -132,7 +121,8 @@ mod tests {
         context::{checker_context::CheckerContext, generator_context::GeneratorContext},
         simulation::Program,
     };
-    use ndarray::{array, ArrayBase, Dim, OwnedRepr};
+
+    use std::iter;
 
     use super::{BinaryData, BinaryOp, BinaryOpType};
 
@@ -141,8 +131,10 @@ mod tests {
         const HEAD_DIM: usize = 16;
         const SEQ_LEN: u64 = 5;
         const INIT_INTERVAL: u64 = 1;
+        const LATENCY: u64 = 1;
 
         // I32 types for generating data
+        const SEQ_LEN_USIZE: usize = 5;
         const SEQ_LEN_I32: i32 = 5;
         const HEAD_DIM_I32: i32 = 16;
 
@@ -152,18 +144,16 @@ mod tests {
         let mut parent = Program::default();
 
         // Create Channels
-        let (in1_sender, in1_receiver) =
-            parent.bounded::<ArrayBase<OwnedRepr<i32>, Dim<[usize; 2]>>>(chan_size);
-        let (in2_sender, in2_receiver) =
-            parent.bounded::<ArrayBase<OwnedRepr<i32>, Dim<[usize; 2]>>>(chan_size);
-        let (out_sender, out_receiver) =
-            parent.bounded::<ArrayBase<OwnedRepr<i32>, Dim<[usize; 2]>>>(chan_size);
+        let (in1_sender, in1_receiver) = parent.bounded::<i32>(chan_size);
+        let (in2_sender, in2_receiver) = parent.bounded::<i32>(chan_size);
+        let (out_sender, out_receiver) = parent.bounded::<i32>(chan_size);
 
         // Create the Reduce block
         let data = BinaryData::<i32> {
             in1_stream: in1_receiver,
             in2_stream: in2_receiver,
             out_stream: out_sender,
+            latency: LATENCY,
             init_inverval: INIT_INTERVAL,
             loop_bound: SEQ_LEN * SEQ_LEN,
         };
@@ -171,11 +161,11 @@ mod tests {
         let stream_binary_sub = BinaryOp::new(data, BinaryOpType::Sub);
 
         // Create the Iterators for Generators
-        let in1_iter = || (0..(SEQ_LEN_I32 * SEQ_LEN_I32)).map(|i| array![[i]]);
-        let in2_iter = || (0..(SEQ_LEN_I32 * SEQ_LEN_I32)).map(|i| array![[i]]);
+        let in1_iter = || (0..(SEQ_LEN_I32 * SEQ_LEN_I32));
+        let in2_iter = || (0..(SEQ_LEN_I32 * SEQ_LEN_I32));
 
         // Create the Iterators for Checkers
-        let out_iter = || (0..(SEQ_LEN_I32 * SEQ_LEN_I32)).map(|_i| array![[0]]);
+        let out_iter = || iter::repeat(0).take(SEQ_LEN_USIZE * SEQ_LEN_USIZE);
 
         let gen1 = GeneratorContext::new(in1_iter, in1_sender); // Q : [1,D] shaped vectors
         let gen2 = GeneratorContext::new(in2_iter, in2_sender); // Q : [1,D] shaped vectors
@@ -194,8 +184,10 @@ mod tests {
         const HEAD_DIM: usize = 16;
         const SEQ_LEN: u64 = 5;
         const INIT_INTERVAL: u64 = 1;
+        const LATENCY: u64 = 1;
 
         // I32 types for generating data
+        const SEQ_LEN_USIZE: usize = 5;
         const SEQ_LEN_I32: i32 = 5;
         const HEAD_DIM_I32: i32 = 16;
 
@@ -205,18 +197,16 @@ mod tests {
         let mut parent = Program::default();
 
         // Create Channels
-        let (in1_sender, in1_receiver) =
-            parent.bounded::<ArrayBase<OwnedRepr<i32>, Dim<[usize; 2]>>>(chan_size);
-        let (in2_sender, in2_receiver) =
-            parent.bounded::<ArrayBase<OwnedRepr<i32>, Dim<[usize; 2]>>>(chan_size);
-        let (out_sender, out_receiver) =
-            parent.bounded::<ArrayBase<OwnedRepr<i32>, Dim<[usize; 2]>>>(chan_size);
+        let (in1_sender, in1_receiver) = parent.bounded::<i32>(chan_size);
+        let (in2_sender, in2_receiver) = parent.bounded::<i32>(chan_size);
+        let (out_sender, out_receiver) = parent.bounded::<i32>(chan_size);
 
         // Create the Reduce block
         let data = BinaryData::<i32> {
             in1_stream: in1_receiver,
             in2_stream: in2_receiver,
             out_stream: out_sender,
+            latency: LATENCY,
             init_inverval: INIT_INTERVAL,
             loop_bound: SEQ_LEN * SEQ_LEN,
         };
@@ -224,11 +214,11 @@ mod tests {
         let stream_binary_div = BinaryOp::new(data, BinaryOpType::Div);
 
         // Create the Iterators for Generators
-        let in1_iter = || (0..(SEQ_LEN_I32 * SEQ_LEN_I32)).map(|i| array![[i + 1]]);
-        let in2_iter = || (0..(SEQ_LEN_I32 * SEQ_LEN_I32)).map(|i| array![[i + 1]]);
+        let in1_iter = || (1..(SEQ_LEN_I32 * SEQ_LEN_I32 + 1));
+        let in2_iter = || (1..(SEQ_LEN_I32 * SEQ_LEN_I32 + 1));
 
         // Create the Iterators for Checkers
-        let out_iter = || (0..(SEQ_LEN_I32 * SEQ_LEN_I32)).map(|_i| array![[1]]);
+        let out_iter = || iter::repeat(1).take(SEQ_LEN_USIZE * SEQ_LEN_USIZE);
 
         let gen1 = GeneratorContext::new(in1_iter, in1_sender); // Q : [1,D] shaped vectors
         let gen2 = GeneratorContext::new(in2_iter, in2_sender); // Q : [1,D] shaped vectors
@@ -241,5 +231,4 @@ mod tests {
         parent.init();
         parent.run();
     }
-
 }
