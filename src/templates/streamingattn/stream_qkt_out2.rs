@@ -6,7 +6,7 @@ use ndarray::{ArrayBase, Dim, OwnedRepr};
 
 use crate::{
     channel::{
-        utils::{dequeue, enqueue, peek_next},
+        utils::{dequeue, enqueue},
         ChannelElement, Receiver, Sender,
     },
     context::Context,
@@ -14,18 +14,19 @@ use crate::{
 };
 
 pub struct QKTDataOut2<A: Clone> {
-    pub q: Receiver<ArrayBase<OwnedRepr<A>, Dim<[usize; 2]>>>,
-    pub kt: Receiver<ArrayBase<OwnedRepr<A>, Dim<[usize; 2]>>>,
-    pub out_fifo_short: Sender<ArrayBase<OwnedRepr<A>, Dim<[usize; 2]>>>,
-    pub out_fifo_long: Sender<ArrayBase<OwnedRepr<A>, Dim<[usize; 2]>>>,
-    pub latency: u64,       // pipeline depth
-    pub init_inverval: u64, // initiation interval
+    // Performs dot product on two vectors and has two output FIFOs
+    pub q: Receiver<ArrayBase<OwnedRepr<A>, Dim<[usize; 1]>>>, // operand 1: Vector
+    pub kt: Receiver<ArrayBase<OwnedRepr<A>, Dim<[usize; 1]>>>, // operand 2: Vector
+    pub out_fifo_short: Sender<A>, // output -> Scalar FIFO (shorter depth)
+    pub out_fifo_long: Sender<A>,  // output -> Scalar FIFO (longer depth)
+    pub latency: u64,              // pipeline depth
+    pub init_inverval: u64,        // initiation interval
     pub seq_len: u64,
 }
 
 impl<A: DAMType> Cleanable for QKTDataOut2<A>
 where
-    ArrayBase<OwnedRepr<A>, Dim<[usize; 2]>>: DAMType,
+    ArrayBase<OwnedRepr<A>, Dim<[usize; 1]>>: DAMType,
 {
     fn cleanup(&mut self) {
         self.q.cleanup();
@@ -39,13 +40,12 @@ where
 #[identifiable]
 pub struct QKTOut2<A: Clone> {
     qkt_data: QKTDataOut2<A>,
-    //latency: dam_core::time::Time,
 }
 
 impl<A: DAMType> QKTOut2<A>
 where
     QKTOut2<A>: Context,
-    ArrayBase<OwnedRepr<A>, Dim<[usize; 2]>>: DAMType,
+    ArrayBase<OwnedRepr<A>, Dim<[usize; 1]>>: DAMType,
 {
     pub fn new(qkt_data: QKTDataOut2<A>) -> Self {
         let qkt = QKTOut2 {
@@ -64,13 +64,9 @@ where
 
 impl<A> Context for QKTOut2<A>
 where
-    ArrayBase<OwnedRepr<A>, Dim<[usize; 2]>>: DAMType
-        //+ std::ops::Mul<Output = ArrayBase<OwnedRepr<A>, Dim<[usize; 2]>>>
-        + ndarray::linalg::Dot<
-            ArrayBase<OwnedRepr<A>, Dim<[usize; 2]>>,
-            Output = ArrayBase<OwnedRepr<A>, Dim<[usize; 2]>>,
-        >,
-    A: DAMType + num::Num + std::iter::Sum,
+    ArrayBase<OwnedRepr<A>, Dim<[usize; 1]>>:
+        DAMType + ndarray::linalg::Dot<ArrayBase<OwnedRepr<A>, Dim<[usize; 1]>>, Output = A>,
+    A: DAMType + num::Num,
 {
     fn init(&mut self) {}
 
@@ -80,31 +76,26 @@ where
             match q_deq {
                 Ok(q) => {
                     for _i in 0..self.qkt_data.seq_len {
-                        let kt_deq = peek_next(&mut self.time, &mut self.qkt_data.kt);
+                        let kt_deq = dequeue(&mut self.time, &mut self.qkt_data.kt);
                         match kt_deq {
                             Ok(kt) => {
-                                let reduce_sum = q.data.dot(&(kt.data));
+                                let dot_res: A = q.data.dot(&(kt.data));
                                 let curr_time = self.time.tick();
                                 enqueue(
                                     &mut self.time,
                                     &mut self.qkt_data.out_fifo_short,
                                     ChannelElement::new(
                                         curr_time + self.qkt_data.latency,
-                                        reduce_sum.clone(),
+                                        dot_res.clone(),
                                     ),
                                 )
                                 .unwrap();
-                                let curr_time = self.time.tick();
                                 enqueue(
                                     &mut self.time,
                                     &mut self.qkt_data.out_fifo_long,
-                                    ChannelElement::new(
-                                        curr_time + self.qkt_data.latency,
-                                        reduce_sum,
-                                    ),
+                                    ChannelElement::new(curr_time + self.qkt_data.latency, dot_res),
                                 )
                                 .unwrap();
-                                dequeue(&mut self.time, &mut self.qkt_data.kt).unwrap();
                                 self.time.incr_cycles(self.qkt_data.init_inverval);
                                 // initiation interval
                             }
@@ -134,7 +125,7 @@ mod tests {
         context::{checker_context::CheckerContext, generator_context::GeneratorContext},
         simulation::Program,
     };
-    use ndarray::{array, ArrayBase, Dim, OwnedRepr};
+    use ndarray::{Array, ArrayBase, Dim, OwnedRepr};
 
     use super::{QKTDataOut2, QKTOut2};
 
@@ -156,13 +147,11 @@ mod tests {
 
         // Create Channels
         let (in1_sender, in1_receiver) =
-            parent.bounded::<ArrayBase<OwnedRepr<i32>, Dim<[usize; 2]>>>(chan_size);
+            parent.bounded::<ArrayBase<OwnedRepr<i32>, Dim<[usize; 1]>>>(chan_size);
         let (in2_sender, in2_receiver) =
-            parent.bounded::<ArrayBase<OwnedRepr<i32>, Dim<[usize; 2]>>>(chan_size);
-        let (out_short_sender, out_short_receiver) =
-            parent.bounded::<ArrayBase<OwnedRepr<i32>, Dim<[usize; 2]>>>(chan_size);
-        let (out_long_sender, out_long_receiver) =
-            parent.bounded::<ArrayBase<OwnedRepr<i32>, Dim<[usize; 2]>>>(chan_size);
+            parent.bounded::<ArrayBase<OwnedRepr<i32>, Dim<[usize; 1]>>>(chan_size);
+        let (out_short_sender, out_short_receiver) = parent.bounded::<i32>(chan_size);
+        let (out_long_sender, out_long_receiver) = parent.bounded::<i32>(chan_size);
 
         // Create the QKT block
         let data = QKTDataOut2::<i32> {
@@ -178,33 +167,15 @@ mod tests {
         let stream_qkt = QKTOut2::new(data);
 
         // Create the Iterators for Generators
-        let in1_iter = || {
-            (0..(SEQ_LEN_I32))
-                .map(|i| array![[(i + 1); HEAD_DIM]])
-                .collect::<Vec<_>>()
-                .into_iter()
-        };
-        let in2_iter = || {
-            (0..(SEQ_LEN_I32 * SEQ_LEN_I32))
-                .map(|_i| array![[1; HEAD_DIM]].into_shape([HEAD_DIM, 1]).unwrap())
-                .collect::<Vec<_>>()
-                .into_iter()
-        };
+        let in1_iter = || (0..(SEQ_LEN_I32)).map(|i| Array::from_elem(HEAD_DIM, i + 1));
+        let in2_iter = || (0..(SEQ_LEN_I32 * SEQ_LEN_I32)).map(|_i| Array::from_elem(HEAD_DIM, 1));
 
         // Create the Iterators for Checkers
-        let out_short_iter = || {
-            (0..(SEQ_LEN_I32 * SEQ_LEN_I32))
-                .map(|i| array![[(i / SEQ_LEN_I32 + 1) * HEAD_DIM_I32]])
-                .collect::<Vec<_>>()
-                .into_iter()
-        };
+        let out_short_iter =
+            || (0..(SEQ_LEN_I32 * SEQ_LEN_I32)).map(|i| (i / SEQ_LEN_I32 + 1) * HEAD_DIM_I32);
 
-        let out_long_iter = || {
-            (0..(SEQ_LEN_I32 * SEQ_LEN_I32))
-                .map(|i| array![[(i / SEQ_LEN_I32 + 1) * HEAD_DIM_I32]])
-                .collect::<Vec<_>>()
-                .into_iter()
-        };
+        let out_long_iter =
+            || (0..(SEQ_LEN_I32 * SEQ_LEN_I32)).map(|i| (i / SEQ_LEN_I32 + 1) * HEAD_DIM_I32);
 
         let gen1 = GeneratorContext::new(in1_iter, in1_sender); // Q : [1,D] shaped vectors
         let gen2 = GeneratorContext::new(in2_iter, in2_sender); // KT: [D,1] shaped vectors
