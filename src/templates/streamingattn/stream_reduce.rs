@@ -97,7 +97,7 @@ where
                             enqueue(
                                 &mut self.time,
                                 &mut self.reduce_data.out_stream,
-                                ChannelElement::new(curr_time, temp_res),
+                                ChannelElement::new(curr_time + self.reduce_data.latency, temp_res),
                             )
                             .unwrap();
                         }
