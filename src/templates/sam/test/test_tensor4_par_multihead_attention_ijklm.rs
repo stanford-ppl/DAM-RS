@@ -655,7 +655,7 @@ mod tests {
             parent.add_child(broadcast6);
 
             // Max Reduce
-            let (max_out_val_sender, max_out_val_receiver) = parent.bounded(softmax_chan_size);
+            let (max_out_val_sender, max_out_val_receiver) = parent.bounded(chan_size);
             let max_data = ReduceData::<f32, u32> {
                 in_val: bc_out_red_receiver,
                 out_val: max_out_val_sender,
@@ -663,7 +663,7 @@ mod tests {
             let max_red = MaxReduce::new(max_data, f32::MIN);
             parent.add_child(max_red);
 
-            let (rep_out_val_sender, rep_out_val_receiver) = parent.bounded(softmax_chan_size);
+            let (rep_out_val_sender, rep_out_val_receiver) = parent.bounded(chan_size);
             let rep_data = RepeatData::<f32, u32> {
                 in_ref: max_out_val_receiver,
                 in_repsig: bc1_out_repsig_l_receiver,
@@ -673,7 +673,7 @@ mod tests {
             parent.add_child(rep);
 
             // Sub ALU, using Add name to correspond to SAM implementation
-            let (add_out_sender, add_out_receiver) = parent.bounded(softmax_chan_size);
+            let (add_out_sender, add_out_receiver) = parent.bounded(chan_size);
             let add = make_alu(
                 bc1_out_red_receiver,
                 rep_out_val_receiver,
@@ -683,7 +683,7 @@ mod tests {
             parent.add_child(add);
 
             // Exp
-            let (exp_out_sender, exp_out_receiver) = parent.bounded(softmax_chan_size);
+            let (exp_out_sender, exp_out_receiver) = parent.bounded(chan_size);
             let exp = make_unary_alu(add_out_receiver, exp_out_sender, ALUExpOp());
             parent.add_child(exp);
 
@@ -695,7 +695,7 @@ mod tests {
             parent.add_child(broadcast14);
 
             // Reduce
-            let (red1_out_sender, red1_out_receiver) = parent.bounded(softmax_chan_size);
+            let (red1_out_sender, red1_out_receiver) = parent.bounded(chan_size);
             let red1_data = ReduceData::<f32, u32> {
                 in_val: bc_exp_out_receiver,
                 out_val: red1_out_sender,
@@ -753,7 +753,7 @@ mod tests {
             parent.add_child(rep_m);
 
             // mul ALU
-            let (mul2_out_sender, mul2_out_receiver) = parent.bounded(softmax_chan_size);
+            let (mul2_out_sender, mul2_out_receiver) = parent.bounded(chan_size);
             let mul2 = make_alu(
                 rep_m_out_val_receiver,
                 v_out_val_receiver,
@@ -790,9 +790,8 @@ mod tests {
             // parent.add_child(broadcast);
             // }
 
-            let (out_spacc_val_sender, out_spacc_val_receiver) = parent.bounded(softmax_chan_size);
-            let (out_spacc_icrd_sender, out_spacc_icrd_receiver) =
-                parent.bounded(softmax_chan_size);
+            let (out_spacc_val_sender, out_spacc_val_receiver) = parent.bounded(chan_size);
+            let (out_spacc_icrd_sender, out_spacc_icrd_receiver) = parent.bounded(chan_size);
             let spacc_data = Spacc1Data::<u32, f32, u32> {
                 in_crd_outer: drop_out_icrd_receiver,
                 in_crd_inner: bc1_intersectm3_out_crd_receiver,
@@ -811,18 +810,6 @@ mod tests {
             gat1.add_target(out_spacc_val_receiver);
             gat2.add_target(out_spacc_icrd_receiver);
         }
-        // let (out_spacc_val_sender, out_spacc_val_receiver) = parent.bounded(chan_size);
-        // let (out_spacc_icrd_sender, out_spacc_icrd_receiver) = parent.bounded(chan_size);
-        // let spacc_data = Spacc1Data::<u32, f32, u32> {
-        //     in_crd_outer: out_final_ocrd_receiver,
-        //     in_crd_inner: out_final_icrd_receiver,
-        //     // in_val: bc1_exp_out_receiver,
-        //     in_val: out_final_val_receiver,
-        //     out_val: out_spacc_val_sender,
-        //     out_crd_inner: out_spacc_icrd_sender,
-        // };
-        // let spacc = Spacc1::new(spacc_data);
-        // parent.add_child(spacc);
 
         parent.add_child(scat1);
         parent.add_child(scat2);
