@@ -1,6 +1,7 @@
 use std::{fs, path::Path};
 
 use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion};
+use dam_rs::templates::sam::stkn_dropper::StknDrop;
 use dam_rs::token_vec;
 
 use dam_rs::context::broadcast_context::BroadcastContext;
@@ -447,14 +448,27 @@ fn test_par_multihead_attention<'a>(
     let mut gat2 = Gather::new(out_final_icrd_sender);
     // let mut gat3 = Gather::new(out_final_ocrd_sender);
     for _ in 0..par_factor {
+        let (chunk_qk_ref_sender1, chunk_qk_ref_receiver1) = parent.bounded(chan_size);
+        let (chunk_vk_ref_sender1, chunk_vk_ref_receiver1) = parent.bounded(chan_size);
+        let (chunk_kk_ref_sender1, chunk_kk_ref_receiver1) = parent.bounded(chan_size);
+        let (chunk_qk_crd_sender1, chunk_qk_crd_receiver1) = parent.bounded(chan_size);
+        scat1.add_target(chunk_qk_ref_sender1);
+        scat2.add_target(chunk_vk_ref_sender1);
+        scat3.add_target(chunk_kk_ref_sender1);
+        scat4.add_target(chunk_qk_crd_sender1);
+
         let (chunk_qk_ref_sender, chunk_qk_ref_receiver) = parent.bounded(chan_size);
         let (chunk_vk_ref_sender, chunk_vk_ref_receiver) = parent.bounded(chan_size);
         let (chunk_kk_ref_sender, chunk_kk_ref_receiver) = parent.bounded(chan_size);
         let (chunk_qk_crd_sender, chunk_qk_crd_receiver) = parent.bounded(chan_size);
-        scat1.add_target(chunk_qk_ref_sender);
-        scat2.add_target(chunk_vk_ref_sender);
-        scat3.add_target(chunk_kk_ref_sender);
-        scat4.add_target(chunk_qk_crd_sender);
+        let stkn_dropper1 = StknDrop::new(chunk_qk_ref_receiver1, chunk_qk_ref_sender);
+        let stkn_dropper2 = StknDrop::new(chunk_vk_ref_receiver1, chunk_vk_ref_sender);
+        let stkn_dropper3 = StknDrop::new(chunk_kk_ref_receiver1, chunk_kk_ref_sender);
+        let stkn_dropper4 = StknDrop::new(chunk_qk_crd_receiver1, chunk_qk_crd_sender);
+        parent.add_child(stkn_dropper1);
+        parent.add_child(stkn_dropper2);
+        parent.add_child(stkn_dropper3);
+        parent.add_child(stkn_dropper4);
 
         let (kl_out_ref_sender, kl_out_ref_receiver) = parent.bounded(chan_size);
         let (kl_out_crd_sender, kl_out_crd_receiver) = parent.bounded(chan_size);
@@ -900,5 +914,9 @@ pub fn mha_par_benchmark_channels(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(sam_benches, mha_par_benchmark_large);
+criterion_group!(
+    sam_benches,
+    mha_par_benchmark_large,
+    mha_par_benchmark_channels
+);
 criterion_main!(sam_benches);
