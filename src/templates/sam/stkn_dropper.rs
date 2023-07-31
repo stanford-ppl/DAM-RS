@@ -4,8 +4,7 @@ use dam_macros::{cleanup, identifiable, time_managed};
 
 use crate::{
     channel::{
-        self,
-        utils::{dequeue, enqueue, Peekable},
+        utils::{dequeue, enqueue},
         ChannelElement, Receiver, Sender,
     },
     context::Context,
@@ -90,48 +89,5 @@ where
         self.in_val.cleanup();
         self.out_val.cleanup();
         self.time.cleanup();
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::{
-        context::{checker_context::CheckerContext, generator_context::GeneratorContext},
-        simulation::Program,
-        templates::sam::primitive::Token,
-        token_vec,
-    };
-
-    use super::StknDrop;
-
-    #[test]
-    fn val_drop_2d_test() {
-        let in_val = || {
-            token_vec![f32; u32; 0.0, 1.0, 2.0, "S0", 0.0, "S0", 2.0, 3.0, 4.0, "S1", "D"]
-                .into_iter()
-        };
-        let in_crd =
-            || token_vec![u32; u32; 0, 1, 2, "S0", 0, "S0", 2, 3, 4, "S1", "D"].into_iter();
-        let out_val = || token_vec![f32; u32; 1.0, 2.0, "S0", 2.0, 3.0, 4.0, "S1", "D"].into_iter();
-        let out_crd = || token_vec![u32; u32; 1, 2, "S0", 2, 3, 4, "S1", "D"].into_iter();
-        // stkn_drop_test(in_val, out_val);
-    }
-
-    fn stkn_drop_test<IRT1, IRT2, ORT1, ORT2>(in_val: fn() -> IRT1, out_val: fn() -> ORT1)
-    where
-        IRT1: Iterator<Item = Token<f32, u32>> + 'static,
-        ORT1: Iterator<Item = Token<f32, u32>> + 'static,
-    {
-        let mut parent = Program::default();
-        let (in_val_sender, in_val_receiver) = parent.unbounded::<Token<f32, u32>>();
-        let (out_val_sender, out_val_receiver) = parent.unbounded::<Token<f32, u32>>();
-        let stkn_drop = StknDrop::new(in_val_receiver, out_val_sender);
-        let gen1 = GeneratorContext::new(in_val, in_val_sender);
-        let out_val_checker = CheckerContext::new(out_val, out_val_receiver);
-        parent.add_child(gen1);
-        parent.add_child(out_val_checker);
-        parent.add_child(stkn_drop);
-        parent.init();
-        parent.run();
     }
 }
