@@ -9,6 +9,7 @@ pub mod rd_scanner;
 pub mod repeat;
 pub mod scatter_gather;
 pub mod shape_operator;
+pub mod stkn_dropper;
 pub mod test;
 pub mod utils;
 pub mod val_dropper;
