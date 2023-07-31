@@ -879,5 +879,26 @@ pub fn mha_par_benchmark_large(c: &mut Criterion) {
     group.finish();
 }
 
+pub fn mha_par_benchmark_channels(c: &mut Criterion) {
+    const SOFTMAX_CHAN_SIZE: usize = 1 << 15;
+    let mut group = c.benchmark_group("MHA_chan_sweep");
+    let data = load_data("tensor4_mha");
+    for chan_factor in 5..12 {
+        let chan_size = 1 << chan_factor;
+        group.bench_with_input(
+            BenchmarkId::from_parameter(chan_size),
+            &chan_size,
+            |b, &chan_size| {
+                b.iter_batched(
+                    || data.clone(),
+                    |cp| test_par_multihead_attention(cp, chan_size, SOFTMAX_CHAN_SIZE, 16),
+                    BatchSize::LargeInput,
+                );
+            },
+        );
+    }
+    group.finish();
+}
+
 criterion_group!(sam_benches, mha_par_benchmark_large);
 criterion_main!(sam_benches);
