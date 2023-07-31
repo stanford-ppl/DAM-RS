@@ -17,6 +17,7 @@ mod tests {
     use crate::templates::sam::rd_scanner::{CompressedCrdRdScan, RdScanData};
     use crate::templates::sam::repeat::{RepSigGenData, Repeat, RepeatData, RepeatSigGen};
     use crate::templates::sam::scatter_gather::{Gather, Scatter};
+    use crate::templates::sam::stkn_dropper::StknDrop;
     use crate::templates::sam::test::config::Data;
     use crate::templates::sam::utils::read_inputs;
 
@@ -116,7 +117,7 @@ mod tests {
         let chan_size = 32;
         let softmax_chan_size = 65536;
 
-        let par_factor = 1;
+        let par_factor = 16;
 
         // fiberlookup_bi
         let (qi_in_ref_sender, qi_in_ref_receiver) = parent.bounded(chan_size);
@@ -388,14 +389,27 @@ mod tests {
         let mut gat2 = Gather::new(out_final_icrd_sender);
         // let mut gat3 = Gather::new(out_final_ocrd_sender);
         for _ in 0..par_factor {
+            let (chunk_qk_ref_sender1, chunk_qk_ref_receiver1) = parent.bounded(chan_size);
+            let (chunk_vk_ref_sender1, chunk_vk_ref_receiver1) = parent.bounded(chan_size);
+            let (chunk_kk_ref_sender1, chunk_kk_ref_receiver1) = parent.bounded(chan_size);
+            let (chunk_qk_crd_sender1, chunk_qk_crd_receiver1) = parent.bounded(chan_size);
+            scat1.add_target(chunk_qk_ref_sender1);
+            scat2.add_target(chunk_vk_ref_sender1);
+            scat3.add_target(chunk_kk_ref_sender1);
+            scat4.add_target(chunk_qk_crd_sender1);
+
             let (chunk_qk_ref_sender, chunk_qk_ref_receiver) = parent.bounded(chan_size);
             let (chunk_vk_ref_sender, chunk_vk_ref_receiver) = parent.bounded(chan_size);
             let (chunk_kk_ref_sender, chunk_kk_ref_receiver) = parent.bounded(chan_size);
             let (chunk_qk_crd_sender, chunk_qk_crd_receiver) = parent.bounded(chan_size);
-            scat1.add_target(chunk_qk_ref_sender);
-            scat2.add_target(chunk_vk_ref_sender);
-            scat3.add_target(chunk_kk_ref_sender);
-            scat4.add_target(chunk_qk_crd_sender);
+            let stkn_dropper1 = StknDrop::new(chunk_qk_ref_receiver1, chunk_qk_ref_sender);
+            let stkn_dropper2 = StknDrop::new(chunk_vk_ref_receiver1, chunk_vk_ref_sender);
+            let stkn_dropper3 = StknDrop::new(chunk_kk_ref_receiver1, chunk_kk_ref_sender);
+            let stkn_dropper4 = StknDrop::new(chunk_qk_crd_receiver1, chunk_qk_crd_sender);
+            parent.add_child(stkn_dropper1);
+            parent.add_child(stkn_dropper2);
+            parent.add_child(stkn_dropper3);
+            parent.add_child(stkn_dropper4);
 
             let (kl_out_ref_sender, kl_out_ref_receiver) = parent.bounded(chan_size);
             let (kl_out_crd_sender, kl_out_crd_receiver) = parent.bounded(chan_size);
