@@ -2,8 +2,6 @@ use dam_core::identifier::Identifier;
 use dam_core::TimeManager;
 use dam_macros::{cleanup, identifiable, time_managed};
 
-use std::cmp;
-
 use crate::{
     channel::{
         utils::{dequeue, enqueue},
@@ -60,10 +58,63 @@ where
         reduce
     }
 }
+trait MinMax {
+    fn get_max(self, rhs: Self) -> Self;
+}
+impl MinMax for u8 {
+    fn get_max(self, rhs: u8) -> u8 {
+        self.max(rhs)
+    }
+}
+impl MinMax for u16 {
+    fn get_max(self, rhs: u16) -> u16 {
+        self.max(rhs)
+    }
+}
+impl MinMax for u32 {
+    fn get_max(self, rhs: u32) -> u32 {
+        self.max(rhs)
+    }
+}
+impl MinMax for u64 {
+    fn get_max(self, rhs: u64) -> u64 {
+        self.max(rhs)
+    }
+}
+impl MinMax for i8 {
+    fn get_max(self, rhs: i8) -> i8 {
+        self.max(rhs)
+    }
+}
+impl MinMax for i16 {
+    fn get_max(self, rhs: i16) -> i16 {
+        self.max(rhs)
+    }
+}
+impl MinMax for i32 {
+    fn get_max(self, rhs: i32) -> i32 {
+        self.max(rhs)
+    }
+}
+impl MinMax for i64 {
+    fn get_max(self, rhs: i64) -> i64 {
+        self.max(rhs)
+    }
+}
+impl MinMax for f32 {
+    fn get_max(self, rhs: f32) -> f32 {
+        self.max(rhs)
+    }
+}
+impl MinMax for f64 {
+    fn get_max(self, rhs: f64) -> f64 {
+        self.max(rhs)
+    }
+}
 
 impl<A> Context for ReduceOp<A>
 where
-    A: DAMType + num::Num + std::cmp::Ord + Copy,
+    A: DAMType + num::Num + MinMax + Copy,
 {
     fn init(&mut self) {}
 
@@ -81,7 +132,7 @@ where
                                 let in_data = in_elem.data;
                                 match self.op {
                                     ReduceOpType::Max => {
-                                        temp_res = cmp::max(temp_res, in_data);
+                                        temp_res = temp_res.get_max(in_data);
                                     }
                                     ReduceOpType::Sum => {
                                         temp_res = temp_res + in_data;
