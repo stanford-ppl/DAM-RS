@@ -16,7 +16,7 @@ pub struct QKTData<A: Clone> {
     // Performs dot product on two vectors and has one output FIFO
     pub q: Receiver<ArrayBase<OwnedRepr<A>, Dim<[usize; 1]>>>, // operand 1: Vector
     pub kt: Receiver<ArrayBase<OwnedRepr<A>, Dim<[usize; 1]>>>, // operand 2: Vector
-    pub out_fifo: Vec<Sender<A>>,                              // output -> Scalar FIFO
+    pub out_fifo: Vec<Sender<A>>,                              // list of output scalar FIFOs
     pub latency: u64,                                          // pipeline depth
     pub init_inverval: u64,                                    // initiation interval
     pub seq_len: u64,
