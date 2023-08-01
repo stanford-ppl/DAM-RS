@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::{
-        context::{checker_context::CheckerContext, generator_context::GeneratorContext},
+        context::{checker_context::FpBoundedCheckerContext, generator_context::GeneratorContext},
         simulation::Program,
         templates::streamingattn::{
             stream_binary::{BinaryDataElemwise, BinaryOp, BinaryOpType},
@@ -39,9 +39,9 @@ mod tests {
         let kt_iter = || {
             (0..(SEQ_LEN_I32 * SEQ_LEN_I32)).map(|i| {
                 if i % SEQ_LEN_I32 == 0 {
-                    Array::from_elem(HEAD_DIM, 1.1)
+                    Array::from_elem(HEAD_DIM, 1.1_f32)
                 } else {
-                    Array::from_elem(HEAD_DIM, 1.)
+                    Array::from_elem(HEAD_DIM, 1_f32)
                 }
             })
         };
@@ -102,17 +102,10 @@ mod tests {
                 }
             })
         };
-        let out_iter2 = || {
-            (0..(SEQ_LEN_I32 * SEQ_LEN_I32)).map(|i| {
-                if i % SEQ_LEN_I32 == 0 {
-                    0.
-                } else {
-                    -0.1 * (((i / SEQ_LEN_I32) as f32) + 1.) * HEAD_DIM_F32
-                }
-            })
-        };
-        let out_checker1 = CheckerContext::new(out_iter1, sub_receiver);
-        let out_checker2 = CheckerContext::new(out_iter2, old_new_diff_receiver);
+        let out_iter2 = || (0..(SEQ_LEN_I32 * SEQ_LEN_I32)).map(|_i| 0.);
+        let out_checker1 = FpBoundedCheckerContext::new(out_iter1, sub_receiver, 0.0002_f32);
+        let out_checker2 =
+            FpBoundedCheckerContext::new(out_iter2, old_new_diff_receiver, 0.0002_f32);
 
         // Create the Iterators for Checkers
 
