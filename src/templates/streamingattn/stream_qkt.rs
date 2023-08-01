@@ -16,7 +16,7 @@ pub struct QKTData<A: Clone> {
     // Performs dot product on two vectors and has one output FIFO
     pub q: Receiver<ArrayBase<OwnedRepr<A>, Dim<[usize; 1]>>>, // operand 1: Vector
     pub kt: Receiver<ArrayBase<OwnedRepr<A>, Dim<[usize; 1]>>>, // operand 2: Vector
-    pub out_fifo: Sender<A>,                                   // output -> Scalar FIFO
+    pub out_fifo: Vec<Sender<A>>,                              // output -> Scalar FIFO
     pub latency: u64,                                          // pipeline depth
     pub init_inverval: u64,                                    // initiation interval
     pub seq_len: u64,
@@ -29,7 +29,9 @@ where
     fn cleanup(&mut self) {
         self.q.cleanup();
         self.kt.cleanup();
-        self.out_fifo.cleanup();
+        for i in self.out_fifo.iter_mut() {
+            i.cleanup();
+        }
     }
 }
 
@@ -75,7 +77,9 @@ where
         };
         (qkt.qkt_data.q).attach_receiver(&qkt);
         (qkt.qkt_data.kt).attach_receiver(&qkt);
-        (qkt.qkt_data.out_fifo).attach_sender(&qkt);
+        for i in qkt.qkt_data.out_fifo.iter() {
+            i.attach_sender(&qkt);
+        }
 
         qkt
     }
@@ -100,15 +104,27 @@ where
                             Ok(kt) => {
                                 let dot_res: A = q.data.dot(&(kt.data));
                                 let curr_time = self.time.tick();
-                                enqueue(
-                                    &mut self.time,
-                                    &mut self.qkt_data.out_fifo,
-                                    ChannelElement::new(
-                                        curr_time + self.qkt_data.latency,
-                                        dot_res.clone(),
-                                    ),
-                                )
-                                .unwrap();
+
+                                for mut j in self.qkt_data.out_fifo.iter_mut() {
+                                    enqueue(
+                                        &mut self.time,
+                                        &mut j,
+                                        ChannelElement::new(
+                                            curr_time + self.qkt_data.latency,
+                                            dot_res.clone(),
+                                        ),
+                                    )
+                                    .unwrap();
+                                }
+                                // enqueue(
+                                //     &mut self.time,
+                                //     &mut self.qkt_data.out_fifo,
+                                //     ChannelElement::new(
+                                //         curr_time + self.qkt_data.latency,
+                                //         dot_res.clone(),
+                                //     ),
+                                // )
+                                // .unwrap();
 
                                 self.time.incr_cycles(self.qkt_data.init_inverval);
                                 // initiation interval
@@ -253,7 +269,7 @@ mod tests {
         let data = QKTData::<i32> {
             q: in1_receiver,
             kt: in2_receiver,
-            out_fifo: out_sender,
+            out_fifo: vec![out_sender],
             latency: LATENCY,
             init_inverval: INIT_INTERVAL,
             seq_len: SEQ_LEN,
