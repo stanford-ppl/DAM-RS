@@ -22,8 +22,8 @@ macro_rules! RegisterArithmeticOp {
         where
             Token<ValType, StopType>: Copy,
             ValType: num::Num,
-            ValType: types::StaticallySized,
-            StopType: types::StaticallySized,
+            ValType: types::DAMType,
+            StopType: types::DAMType,
         {
             type Output = Token<ValType, StopType>;
             fn $name(self, rhs: Token<ValType, StopType>) -> Token<ValType, StopType> {

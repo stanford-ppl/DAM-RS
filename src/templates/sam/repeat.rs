@@ -1,4 +1,4 @@
-use dam_core::identifier::{Identifier};
+use dam_core::identifier::Identifier;
 use dam_core::metric::LogProducer;
 use dam_core::TimeManager;
 use dam_macros::{cleanup, identifiable, log_producer, time_managed};
@@ -57,8 +57,8 @@ impl<ValType, StopType> Context for Repeat<ValType, StopType>
 where
     ValType: DAMType
         + std::ops::Mul<ValType, Output = ValType>
-        + std::ops::Add<ValType, Output = ValType>
-        + std::cmp::PartialOrd<ValType>,
+        + std::ops::Add<ValType, Output = ValType>,
+    // + std::cmp::PartialOrd<ValType>,
     StopType: DAMType + std::ops::Add<u32, Output = StopType>,
 {
     fn init(&mut self) {}

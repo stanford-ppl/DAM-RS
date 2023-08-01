@@ -1,3 +1,4 @@
+use std::str::FromStr;
 use std::{fs, path::Path};
 
 use criterion::{criterion_group, criterion_main, BatchSize, BenchmarkId, Criterion};
@@ -14,7 +15,7 @@ use dam_rs::templates::sam::alu::{make_alu, make_unary_alu};
 use dam_rs::templates::sam::array::{Array, ArrayData};
 use dam_rs::templates::sam::crd_manager::{CrdDrop, CrdManagerData};
 use dam_rs::templates::sam::joiner::{CrdJoinerData, Intersect};
-use dam_rs::templates::sam::primitive::{ALUExpOp, Token};
+use dam_rs::templates::sam::primitive::{ALUExpOp, Exp, Token};
 use dam_rs::templates::sam::rd_scanner::{CompressedCrdRdScan, RdScanData};
 use dam_rs::templates::sam::repeat::{RepSigGenData, Repeat, RepeatData, RepeatSigGen};
 use dam_rs::templates::sam::scatter_gather::{Gather, Scatter};
@@ -22,41 +23,11 @@ use dam_rs::templates::sam::test::config::Data;
 use dam_rs::templates::sam::utils::read_inputs;
 
 use dam_rs::templates::sam::wr_scanner::{CompressedWrScan, ValsWrScan};
-
-/*
-let q0_seg = read_inputs::<u32>(&q0_seg_filename);
-    let q0_crd = read_inputs::<u32>(&q0_crd_filename);
-    let q1_seg = read_inputs::<u32>(&q1_seg_filename);
-    let q1_crd = read_inputs::<u32>(&q1_crd_filename);
-    let q2_seg = read_inputs::<u32>(&q2_seg_filename);
-    let q2_crd = read_inputs::<u32>(&q2_crd_filename);
-    let q3_seg = read_inputs::<u32>(&q3_seg_filename);
-    let q3_crd = read_inputs::<u32>(&q3_crd_filename);
-    let q_vals = read_inputs::<f32>(&q_vals_filename);
-
-    let k0_seg = read_inputs::<u32>(&k0_seg_filename);
-    let k0_crd = read_inputs::<u32>(&k0_crd_filename);
-    let k1_seg = read_inputs::<u32>(&k1_seg_filename);
-    let k1_crd = read_inputs::<u32>(&k1_crd_filename);
-    let k2_seg = read_inputs::<u32>(&k2_seg_filename);
-    let k2_crd = read_inputs::<u32>(&k2_crd_filename);
-    let k3_seg = read_inputs::<u32>(&k3_seg_filename);
-    let k3_crd = read_inputs::<u32>(&k3_crd_filename);
-    let k_vals = read_inputs::<f32>(&k_vals_filename);
-
-    let v0_seg = read_inputs::<u32>(&v0_seg_filename);
-    let v0_crd = read_inputs::<u32>(&v0_crd_filename);
-    let v1_seg = read_inputs::<u32>(&v1_seg_filename);
-    let v1_crd = read_inputs::<u32>(&v1_crd_filename);
-    let v2_seg = read_inputs::<u32>(&v2_seg_filename);
-    let v2_crd = read_inputs::<u32>(&v2_crd_filename);
-    let v3_seg = read_inputs::<u32>(&v3_seg_filename);
-    let v3_crd = read_inputs::<u32>(&v3_crd_filename);
-    let v_vals = read_inputs::<f32>(&v_vals_filename);
-*/
+use dam_rs::types::unevaluated::Unevaluated;
+use dam_rs::types::DAMType;
 
 #[derive(Clone)]
-struct TestData {
+struct TestData<ValType> {
     q0_seg: Vec<u32>,
     q0_crd: Vec<u32>,
     q1_seg: Vec<u32>,
@@ -65,7 +36,7 @@ struct TestData {
     q2_crd: Vec<u32>,
     q3_seg: Vec<u32>,
     q3_crd: Vec<u32>,
-    q_vals: Vec<f32>,
+    q_vals: Vec<ValType>,
 
     k0_seg: Vec<u32>,
     k0_crd: Vec<u32>,
@@ -75,7 +46,7 @@ struct TestData {
     k2_crd: Vec<u32>,
     k3_seg: Vec<u32>,
     k3_crd: Vec<u32>,
-    k_vals: Vec<f32>,
+    k_vals: Vec<ValType>,
 
     v0_seg: Vec<u32>,
     v0_crd: Vec<u32>,
@@ -85,10 +56,10 @@ struct TestData {
     v2_crd: Vec<u32>,
     v3_seg: Vec<u32>,
     v3_crd: Vec<u32>,
-    v_vals: Vec<f32>,
+    v_vals: Vec<ValType>,
 }
 
-fn load_data(test_name: &str) -> TestData {
+fn load_data<ValType: FromStr>(test_name: &str) -> TestData<ValType> {
     let filename = home::home_dir().unwrap().join("sam_config.toml");
     let contents = fs::read_to_string(filename).unwrap();
     let data: Data = toml::from_str(&contents).unwrap();
@@ -155,12 +126,26 @@ fn load_data(test_name: &str) -> TestData {
     }
 }
 
-fn test_par_multihead_attention<'a>(
-    test_data: TestData,
+fn test_par_multihead_attention<'a, ValType>(
+    test_data: TestData<ValType>,
     chan_size: usize,
     softmax_chan_size: usize,
     par_factor: usize,
-) -> Program<'a> {
+    min_val: ValType,
+) -> Program<'a>
+where
+    ValType: DAMType
+        + std::ops::Mul<Output = ValType>
+        + std::ops::Add<Output = ValType>
+        + std::ops::Sub<Output = ValType>
+        + std::ops::Div<Output = ValType>
+        + std::cmp::PartialOrd
+        + std::ops::AddAssign
+        + Copy
+        + Exp
+        + num::Num
+        + 'a,
+{
     let mut parent = Program::default();
 
     let q0_seg = test_data.q0_seg;
@@ -661,29 +646,29 @@ fn test_par_multihead_attention<'a>(
 
         // arrayvals_q
         let (q_out_val_sender, q_out_val_receiver) = parent.bounded(chan_size);
-        let arrayvals_q_data = ArrayData::<u32, f32, u32> {
+        let arrayvals_q_data = ArrayData::<u32, ValType, u32> {
             in_ref: intersectm3_out_ref2_receiver,
             out_val: q_out_val_sender,
         };
-        let arrayvals_q = Array::<u32, f32, u32>::new(arrayvals_q_data, q_vals.clone());
+        let arrayvals_q = Array::<u32, ValType, u32>::new(arrayvals_q_data, q_vals.clone());
         parent.add_child(arrayvals_q);
 
         // arrayvals_k
         let (k_out_val_sender, k_out_val_receiver) = parent.bounded(chan_size);
-        let arrayvals_k_data = ArrayData::<u32, f32, u32> {
+        let arrayvals_k_data = ArrayData::<u32, ValType, u32> {
             in_ref: intersectm3_out_ref1_receiver,
             out_val: k_out_val_sender,
         };
-        let arrayvals_k = Array::<u32, f32, u32>::new(arrayvals_k_data, k_vals.clone());
+        let arrayvals_k = Array::<u32, ValType, u32>::new(arrayvals_k_data, k_vals.clone());
         parent.add_child(arrayvals_k);
 
         // arrayvals_v
         let (v_out_val_sender, v_out_val_receiver) = parent.bounded(softmax_chan_size);
-        let arrayvals_v_data = ArrayData::<u32, f32, u32> {
+        let arrayvals_v_data = ArrayData::<u32, ValType, u32> {
             in_ref: intersectm2_out_ref2_receiver,
             out_val: v_out_val_sender,
         };
-        let arrayvals_v = Array::<u32, f32, u32>::new(arrayvals_v_data, v_vals.clone());
+        let arrayvals_v = Array::<u32, ValType, u32>::new(arrayvals_v_data, v_vals.clone());
         parent.add_child(arrayvals_v);
 
         // mul ALU
@@ -698,7 +683,7 @@ fn test_par_multihead_attention<'a>(
 
         // Reduce
         let (red_out_sender, red_out_receiver) = parent.bounded(softmax_chan_size);
-        let red_data = ReduceData::<f32, u32> {
+        let red_data = ReduceData::<ValType, u32> {
             in_val: mul_out_receiver,
             out_val: red_out_sender,
         };
@@ -714,15 +699,15 @@ fn test_par_multihead_attention<'a>(
 
         // Max Reduce
         let (max_out_val_sender, max_out_val_receiver) = parent.bounded(softmax_chan_size);
-        let max_data = ReduceData::<f32, u32> {
+        let max_data = ReduceData::<ValType, u32> {
             in_val: bc_out_red_receiver,
             out_val: max_out_val_sender,
         };
-        let max_red = MaxReduce::new(max_data, f32::MIN);
+        let max_red = MaxReduce::new(max_data, min_val);
         parent.add_child(max_red);
 
         let (rep_out_val_sender, rep_out_val_receiver) = parent.bounded(softmax_chan_size);
-        let rep_data = RepeatData::<f32, u32> {
+        let rep_data = RepeatData::<ValType, u32> {
             in_ref: max_out_val_receiver,
             in_repsig: bc1_out_repsig_l_receiver,
             out_ref: rep_out_val_sender,
@@ -754,7 +739,7 @@ fn test_par_multihead_attention<'a>(
 
         // Reduce
         let (red1_out_sender, red1_out_receiver) = parent.bounded(softmax_chan_size);
-        let red1_data = ReduceData::<f32, u32> {
+        let red1_data = ReduceData::<ValType, u32> {
             in_val: bc_exp_out_receiver,
             out_val: red1_out_sender,
         };
@@ -762,7 +747,7 @@ fn test_par_multihead_attention<'a>(
         parent.add_child(red1);
 
         let (rep1_out_val_sender, rep1_out_val_receiver) = parent.bounded(chan_size);
-        let rep1_data = RepeatData::<f32, u32> {
+        let rep1_data = RepeatData::<ValType, u32> {
             in_ref: red1_out_receiver,
             in_repsig: bc2_out_repsig_l_receiver,
             out_ref: rep1_out_val_sender,
@@ -789,7 +774,7 @@ fn test_par_multihead_attention<'a>(
         parent.add_child(repsigm);
 
         let (rep_m_out_val_sender, rep_m_out_val_receiver) = parent.bounded(chan_size);
-        let rep2_data = RepeatData::<f32, u32> {
+        let rep2_data = RepeatData::<ValType, u32> {
             in_ref: div_out_receiver,
             in_repsig: out_repsig_m_receiver,
             out_ref: rep_m_out_val_sender,
@@ -820,7 +805,7 @@ fn test_par_multihead_attention<'a>(
 
         let (out_spacc_val_sender, out_spacc_val_receiver) = parent.bounded(softmax_chan_size);
         let (out_spacc_icrd_sender, out_spacc_icrd_receiver) = parent.bounded(softmax_chan_size);
-        let spacc_data = Spacc1Data::<u32, f32, u32> {
+        let spacc_data = Spacc1Data::<u32, ValType, u32> {
             in_crd_outer: drop_out_icrd_receiver,
             in_crd_inner: bc1_intersectm3_out_crd_receiver,
             // in_val: bc1_exp_out_receiver,
@@ -861,7 +846,7 @@ fn test_par_multihead_attention<'a>(
     parent.add_child(x3_wrscanner);
 
     // fiberwrite_Xvals
-    let xvals = ValsWrScan::<f32, u32>::new(out_final_val_receiver);
+    let xvals = ValsWrScan::<ValType, u32>::new(out_final_val_receiver);
     // let xvals = ValsWrScan::<f32, u32>::new(out_spacc_val_receiver);
     parent.add_child(xvals);
     parent.set_inference(true);
@@ -876,7 +861,8 @@ pub fn mha_par_benchmark_large(c: &mut Criterion) {
     const CHAN_SIZE: usize = 1 << 10;
     const SOFTMAX_CHAN_SIZE: usize = 1 << 15;
     let mut group = c.benchmark_group("MHA_Large");
-    let data = load_data("tensor4_mha");
+    group.sample_size(10);
+    let data = load_data::<f32>("tensor4_mha");
     for par_factor in [1, 2, 4] {
         group.bench_with_input(
             BenchmarkId::from_parameter(par_factor),
@@ -884,7 +870,15 @@ pub fn mha_par_benchmark_large(c: &mut Criterion) {
             |b, &par_factor| {
                 b.iter_batched(
                     || data.clone(),
-                    |cp| test_par_multihead_attention(cp, CHAN_SIZE, SOFTMAX_CHAN_SIZE, par_factor),
+                    |cp| {
+                        test_par_multihead_attention(
+                            cp,
+                            CHAN_SIZE,
+                            SOFTMAX_CHAN_SIZE,
+                            par_factor,
+                            f32::MIN,
+                        )
+                    },
                     BatchSize::LargeInput,
                 );
             },
@@ -896,7 +890,8 @@ pub fn mha_par_benchmark_large(c: &mut Criterion) {
 pub fn mha_par_benchmark_channels(c: &mut Criterion) {
     const SOFTMAX_CHAN_SIZE: usize = 1 << 15;
     let mut group = c.benchmark_group("MHA_chan_sweep");
-    let data = load_data("tensor4_mha");
+    group.sample_size(10);
+    let data = load_data::<f32>("tensor4_mha");
     for chan_factor in 5..12 {
         let chan_size = 1 << chan_factor;
         group.bench_with_input(
@@ -905,7 +900,9 @@ pub fn mha_par_benchmark_channels(c: &mut Criterion) {
             |b, &chan_size| {
                 b.iter_batched(
                     || data.clone(),
-                    |cp| test_par_multihead_attention(cp, chan_size, SOFTMAX_CHAN_SIZE, 16),
+                    |cp| {
+                        test_par_multihead_attention(cp, chan_size, SOFTMAX_CHAN_SIZE, 16, f32::MIN)
+                    },
                     BatchSize::LargeInput,
                 );
             },
@@ -914,9 +911,30 @@ pub fn mha_par_benchmark_channels(c: &mut Criterion) {
     group.finish();
 }
 
+pub fn mha_par_bench_uneval(c: &mut Criterion) {
+    const SOFTMAX_CHAN_SIZE: usize = 1 << 15;
+    const CHAN_SIZE: usize = 32;
+    let data = load_data::<Unevaluated<f32>>("tensor4_mha");
+    let mut group = c.benchmark_group("MHA_eval");
+    group.sample_size(10);
+    group.bench_with_input(BenchmarkId::from_parameter(false), &data, |b, data| {
+        b.iter_with_large_drop(move || {
+            test_par_multihead_attention(
+                data.clone(),
+                CHAN_SIZE,
+                SOFTMAX_CHAN_SIZE,
+                32,
+                Unevaluated::default(),
+            )
+        });
+    });
+    group.finish();
+}
+
 criterion_group!(
     sam_benches,
     mha_par_benchmark_large,
-    mha_par_benchmark_channels
+    mha_par_benchmark_channels,
+    mha_par_bench_uneval
 );
 criterion_main!(sam_benches);
