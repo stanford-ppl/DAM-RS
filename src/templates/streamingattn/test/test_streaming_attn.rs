@@ -159,13 +159,13 @@ mod tests {
         // Test Configuration
         const HEAD_DIM: usize = 16;
         const INIT_INTERVAL: u64 = 1;
-        const SEQ_LEN: u64 = 5;
-        const SEQ_LEN_I32: i32 = 5; // I32 types for generating data
+        const SEQ_LEN: u64 = 512;
+        const SEQ_LEN_I32: i32 = 512; // I32 types for generating data
         const HEAD_DIM_I32: i32 = 16; // I32 types for generating data
-        const SEQ_LEN_F32: f32 = 5.; // I32 types for generating data
+        const SEQ_LEN_F32: f32 = 512.; // I32 types for generating data
 
         let short_fifo_chan_size = 2;
-        let long_fifo_chan_size = 30;
+        let long_fifo_chan_size = 513;
 
         let mut parent = Program::default();
 
