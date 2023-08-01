@@ -2,7 +2,7 @@ use core::fmt;
 
 use crate::{
     templates::ops::{ALUOp, PipelineRegister},
-    types::DAMType,
+    types::{unevaluated::Unevaluated, DAMType},
     RegisterALUOp,
 };
 
@@ -26,6 +26,12 @@ pub trait Exp {
 }
 
 RegisterALUOp!(ALUExpOp, |(i0), ()| [i0.exp()], T: DAMType + Exp);
+
+impl<T: Exp> Exp for Unevaluated<T> {
+    fn exp(self) -> Self {
+        Self::default()
+    }
+}
 
 impl<ValType: DAMType, StopType: DAMType> Exp for Token<ValType, StopType>
 where

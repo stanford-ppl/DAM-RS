@@ -57,8 +57,7 @@ where
     ValType: DAMType
         + std::ops::AddAssign<ValType>
         + std::ops::Mul<ValType, Output = ValType>
-        + std::ops::Add<ValType, Output = ValType>
-        + std::cmp::PartialOrd<ValType>,
+        + std::ops::Add<ValType, Output = ValType>,
     StopType: DAMType
         + std::ops::Add<u32, Output = StopType>
         + std::ops::Sub<u32, Output = StopType>
