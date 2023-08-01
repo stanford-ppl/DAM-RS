@@ -7,6 +7,7 @@ use dam_core::{
 
 use crate::channel::ChannelID;
 
+pub mod approx_checker_context;
 pub mod broadcast_context;
 pub mod checker_context;
 pub mod function_context;
