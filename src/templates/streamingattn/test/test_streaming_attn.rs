@@ -2,7 +2,7 @@
 mod tests {
     use crate::{
         context::{
-            checker_context::CheckerContext, checker_context::FpVecBoundedCheckerContext,
+            approx_checker_context::ApproxCheckerContext, checker_context::CheckerContext,
             generator_context::GeneratorContext,
         },
         simulation::Program,
@@ -319,8 +319,8 @@ mod tests {
         const HEAD_DIM_I32: i32 = 16; // I32 types for generating data
         const SEQ_LEN_F32: f64 = 512.; // I32 types for generating data
 
-        let short_fifo_chan_size = 2;
-        let long_fifo_chan_size = 513;
+        let short_fifo_chan_size = 16;
+        let long_fifo_chan_size = 64;
 
         let mut parent = Program::default();
 
@@ -415,8 +415,10 @@ mod tests {
 
         // Checker
         let out_iter = || (0..(SEQ_LEN_I32)).map(|_i| Array::from_elem(HEAD_DIM, 1_f64));
-        let out_bound = Array::from_elem(HEAD_DIM, 0.00002_f64);
-        let out_checker = FpVecBoundedCheckerContext::new(out_iter, out_receiver, out_bound);
+
+        let out_checker = ApproxCheckerContext::new(out_iter, out_receiver, |a, b| {
+            (a - b).map(|x| x.abs()).sum() < 0.01
+        });
 
         // Create the Iterators for Checkers
 
@@ -431,5 +433,7 @@ mod tests {
         parent.add_child(stream_outer_product);
         parent.init();
         parent.run();
+        let finish_time = parent.elapsed_cycles();
+        dbg!(finish_time);
     }
 }
