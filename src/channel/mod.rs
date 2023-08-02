@@ -12,23 +12,21 @@ pub mod channel_spec;
 mod receiver;
 mod sender;
 
+mod deadlock;
+
 pub(crate) mod handle;
 
 use std::sync::Arc;
 
-
 use crate::context::Context;
-use crate::types::Cleanable;
-use crate::types::DAMType;
+use crate::types::{Cleanable, DAMType};
 use dam_core::*;
 
 use dam_core::time::Time;
 use dam_macros::log_producer;
 
-use self::events::ReceiverEvent;
-use self::events::SendEvent;
-use self::handle::ChannelData;
-use self::handle::ChannelHandle;
+use self::events::{ChannelEvent, ReceiverEvent, SendEvent};
+use self::handle::{ChannelData, ChannelHandle};
 use self::receiver::{ReceiverFlavor, ReceiverImpl};
 use dam_core::metric::LogProducer;
 
@@ -69,7 +67,10 @@ impl<T: DAMType> Sender<T> {
     }
 
     pub fn attach_sender(&self, sender: &dyn Context) {
-        // Self::log(SendEvent::AttachSender(self.id, sender.id()));
+        let event = SendEvent::AttachSender(self.id(), sender.id());
+        Self::log(event);
+        deadlock::register_event(ChannelEvent::SendEvent(event));
+
         self.under().attach_sender(sender);
     }
 
@@ -83,9 +84,16 @@ impl<T: DAMType> Sender<T> {
         manager: &mut TimeManager,
         data: ChannelElement<T>,
     ) -> Result<(), EnqueueError> {
-        Self::log(SendEvent::EnqueueStart(self.id()));
+        let enqueue_start = SendEvent::EnqueueStart(self.id());
+        Self::log(enqueue_start);
+        deadlock::register_event(ChannelEvent::SendEvent(enqueue_start));
+
         let res = self.under().enqueue(manager, data);
-        Self::log(SendEvent::EnqueueFinish(self.id()));
+
+        let enqueue_finish = SendEvent::EnqueueFinish(self.id());
+        Self::log(enqueue_finish);
+        deadlock::register_event(ChannelEvent::SendEvent(enqueue_finish));
+
         res
     }
 }
@@ -119,7 +127,10 @@ impl<T: DAMType> Receiver<T> {
     }
 
     pub fn attach_receiver(&self, receiver: &dyn Context) {
-        Self::log(ReceiverEvent::AttachReceiver(self.id(), receiver.id()));
+        let event = ReceiverEvent::AttachReceiver(self.id(), receiver.id());
+        Self::log(event);
+        deadlock::register_event(ChannelEvent::ReceiverEvent(event));
+
         self.under().attach_receiver(receiver)
     }
 
@@ -128,16 +139,30 @@ impl<T: DAMType> Receiver<T> {
         self.under().peek()
     }
     pub fn peek_next(&mut self, manager: &mut TimeManager) -> Recv<T> {
-        Self::log(ReceiverEvent::PeekNextStart(self.id()));
+        let peek_next_start = ReceiverEvent::PeekNextStart(self.id());
+        Self::log(peek_next_start);
+        deadlock::register_event(ChannelEvent::ReceiverEvent(peek_next_start));
+
         let result = self.under().peek_next(manager);
-        Self::log(ReceiverEvent::PeekNextFinish(self.id()));
+
+        let peek_next_finish = ReceiverEvent::PeekNextFinish(self.id());
+        Self::log(peek_next_finish);
+        deadlock::register_event(ChannelEvent::ReceiverEvent(peek_next_finish));
+
         result
     }
 
     pub fn dequeue(&mut self, manager: &mut TimeManager) -> Recv<T> {
-        Self::log(ReceiverEvent::DequeueStart(self.id()));
+        let dequeue_start = ReceiverEvent::DequeueStart(self.id());
+        Self::log(dequeue_start);
+        deadlock::register_event(ChannelEvent::ReceiverEvent(dequeue_start));
+
         let result = self.under().dequeue(manager);
-        Self::log(ReceiverEvent::DequeueFinish(self.id()));
+
+        let dequeue_finish = ReceiverEvent::DequeueFinish(self.id());
+        Self::log(dequeue_finish);
+        deadlock::register_event(ChannelEvent::ReceiverEvent(dequeue_finish));
+
         result
     }
 }

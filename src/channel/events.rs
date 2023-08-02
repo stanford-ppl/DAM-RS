@@ -3,7 +3,13 @@ use serde::{Deserialize, Serialize};
 
 use super::ChannelID;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Copy, Clone)]
+pub enum ChannelEvent {
+    SendEvent(SendEvent),
+    ReceiverEvent(ReceiverEvent),
+}
+
+#[derive(Serialize, Deserialize, Debug, Copy, Clone)]
 pub enum SendEvent {
     TrySend(ChannelID),
     EnqueueStart(ChannelID),
