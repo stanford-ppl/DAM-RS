@@ -130,7 +130,7 @@ impl AtomicTime {
 
     pub fn load(&self) -> Time {
         let time = self.time.load(std::sync::atomic::Ordering::Relaxed);
-        let done = self.done.load(std::sync::atomic::Ordering::Relaxed);
+        let done = self.done.load(std::sync::atomic::Ordering::Acquire);
         Time { time, done }
     }
     pub fn set_infinite(&self) {
