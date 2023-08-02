@@ -80,10 +80,46 @@ impl DeadlockDetector {
             .or_insert(ChannelStatus::Open);
     }
 
+    fn get_sender(&self, chan_id: &ChannelID) -> Identifier {
+        let users = self
+            .channel_users
+            .get(chan_id)
+            .expect("channel should be recorded in channel_users");
+        users.0.expect("sender for channel should not be None")
+    }
+
+    fn get_receiver(&self, chan_id: &ChannelID) -> Identifier {
+        let users = self
+            .channel_users
+            .get(chan_id)
+            .expect("channel should be recorded in channel_users");
+        users.1.expect("sender for channel should not be None")
+    }
+
     fn handle_send(&mut self, event: SendEvent) {
         match event {
             SendEvent::AttachSender(id, sender) => self.register_sender(id, sender),
-            SendEvent::EnqueueStart(id) => {}
+            SendEvent::EnqueueStart(id) => {
+                let status = self
+                    .channel_statuses
+                    .get(&id)
+                    .expect("cannot find channel, likely enqueuing to a closed channel");
+                if let ChannelStatus::ReceiveClosed = status {
+                    panic!("enqueuing to a channel with receiver closed");
+                }
+
+                let sender = self.get_sender(&id);
+                let sender_status = self
+                    .context_statuses
+                    .get_mut(&sender)
+                    .expect("sender status not recorded");
+                *sender_status = ContextStatus::Blocked;
+
+                self.num_blocked += 1;
+                if self.num_blocked == self.context_statuses.len() {
+                    println!("all contexts blocked, potential deadlock");
+                }
+            }
             SendEvent::EnqueueFinish(id) => {}
             SendEvent::Cleanup(id) => {}
             _ => {}
