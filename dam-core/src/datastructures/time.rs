@@ -126,7 +126,7 @@ pub struct AtomicTime {
 }
 
 impl AtomicTime {
-    const UPDATE_ORDERING: std::sync::atomic::Ordering = std::sync::atomic::Ordering::AcqRel;
+    const UPDATE_ORDERING: std::sync::atomic::Ordering = std::sync::atomic::Ordering::Release;
 
     pub fn load(&self) -> Time {
         let time = self.time.load(std::sync::atomic::Ordering::Relaxed);
