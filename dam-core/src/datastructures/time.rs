@@ -105,6 +105,17 @@ impl std::ops::Add<Time> for Time {
     }
 }
 
+impl std::ops::Sub<u64> for Time {
+    type Output = Time;
+    fn sub(self, rhs: u64) -> Time {
+        assert!(self.time >= rhs);
+        Time {
+            time: self.time - rhs,
+            done: self.done,
+        }
+    }
+}
+
 impl std::ops::AddAssign<u64> for Time {
     fn add_assign(&mut self, rhs: u64) {
         self.time += rhs;

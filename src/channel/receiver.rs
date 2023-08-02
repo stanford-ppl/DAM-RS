@@ -196,7 +196,7 @@ impl<T: Clone> CyclicReceiver<T> {
     fn register_recv(&mut self, time: Time) {
         let ct: Time = self.view_struct.receiver_tlb();
         let prev_srd = self.view_struct.register_recv();
-        let _ = self.resp.send(ct.max(time));
+        let _ = self.resp.send(ct.max(time) + 1);
         assert_ne!(prev_srd, 0);
     }
 }
@@ -341,7 +341,7 @@ impl<T: Clone> AcyclicReceiver<T> {
     fn register_recv(&mut self, time: Time) {
         let ct: Time = self.view_struct.receiver_tlb();
         let prev_srd = self.view_struct.register_recv();
-        let _ = self.resp.send(ct.max(time));
+        let _ = self.resp.send(ct.max(time) + 1);
         assert_ne!(prev_srd, 0);
     }
 }
