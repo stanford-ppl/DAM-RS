@@ -16,12 +16,12 @@ mod tests {
     fn stream_spatial_streamed_attn() {
         const LATENCY: u64 = 1;
         const INIT_INTERVAL: u64 = 1;
-        const SEQ_LEN: u64 = 16;
 
-        const SEQ_LEN_F64: f64 = 16.;
+        const SEQ_LEN: u64 = 2048;
+        const SEQ_LEN_F64: f64 = 2048.;
+        let chan_size_long = 2050;
 
-        let chan_size = 3; // FIFO Depth
-        let chan_size_long = 18;
+        let chan_size = 2; // FIFO Depth
 
         let mut parent = Program::default();
 
@@ -29,8 +29,9 @@ mod tests {
         let (q_sender, q_receiver) = parent.bounded::<f64>(chan_size);
         let (kt_sender, kt_receiver) = parent.bounded::<f64>(chan_size);
         let (v_sender, v_receiver) = parent.bounded::<f64>(chan_size);
-        let q_iter = || (0..(SEQ_LEN)).map(|_i| 1_f64);
-        let kt_iter = || (0..(SEQ_LEN * SEQ_LEN)).map(|_i| 1_f64);
+        let q_iter = || (0..(SEQ_LEN)).map(|i| (i as f64) * 0.01_f64);
+        let kt_iter =
+            || (0..(SEQ_LEN * SEQ_LEN)).map(|i| if i % SEQ_LEN == 0 { 0.11_f64 } else { 0.1_f64 });
         let v_iter = || (0..(SEQ_LEN * SEQ_LEN)).map(|_i| 1_f64);
         let q_gen = GeneratorContext::new(q_iter, q_sender); // Q : [1,D] shaped vectors
         let kt_gen = GeneratorContext::new(kt_iter, kt_sender); // KT: [D,1] shaped vectors
