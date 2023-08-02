@@ -17,9 +17,9 @@ mod tests {
         const LATENCY: u64 = 1;
         const INIT_INTERVAL: u64 = 1;
 
-        const SEQ_LEN: u64 = 2048;
-        const SEQ_LEN_F64: f64 = 2048.;
-        let chan_size_long = 2050;
+        const SEQ_LEN: u64 = 512;
+        const SEQ_LEN_F64: f64 = 512.;
+        let chan_size_long = 514;
 
         let chan_size = 2; // FIFO Depth
 
@@ -101,6 +101,7 @@ mod tests {
         parent.add_child(stream_div);
         parent.add_child(stream_mat_vec_prod);
         parent.add_child(out_checker);
+        // parent.set_inference(true); // turn on flavor inference
         parent.init();
         parent.run();
         let finish_time = parent.elapsed_cycles();
