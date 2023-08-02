@@ -126,11 +126,11 @@ pub struct AtomicTime {
 }
 
 impl AtomicTime {
-    const UPDATE_ORDERING: std::sync::atomic::Ordering = std::sync::atomic::Ordering::AcqRel;
+    const UPDATE_ORDERING: std::sync::atomic::Ordering = std::sync::atomic::Ordering::Release;
 
     pub fn load(&self) -> Time {
         let time = self.time.load(std::sync::atomic::Ordering::Relaxed);
-        let done = self.done.load(std::sync::atomic::Ordering::Relaxed);
+        let done = self.done.load(std::sync::atomic::Ordering::Acquire);
         Time { time, done }
     }
     pub fn set_infinite(&self) {
@@ -138,7 +138,7 @@ impl AtomicTime {
     }
 
     pub fn try_advance(&self, rhs: Time) -> bool {
-        let old_done = self.done.fetch_or(rhs.done, Self::UPDATE_ORDERING);
+        let old_done = self.done.load(std::sync::atomic::Ordering::Relaxed);
         match (old_done, rhs.done) {
             (true, _) => {
                 // If we're both done, then just finish.
@@ -146,14 +146,19 @@ impl AtomicTime {
                 false
             }
             (false, true) => {
+                self.done.store(true, std::sync::atomic::Ordering::Release);
                 // If we weren't done, but they were.
                 true
             }
             (false, false) => {
                 // If we weren't done, and neither were they.
-                let old_time = self.time.fetch_max(rhs.time, Self::UPDATE_ORDERING);
-
-                old_time < rhs.time
+                let old_done = self.time.load(std::sync::atomic::Ordering::Relaxed);
+                if old_done < rhs.time {
+                    self.time
+                        .store(rhs.time, std::sync::atomic::Ordering::Release);
+                    return true;
+                }
+                return false;
             }
         }
     }
