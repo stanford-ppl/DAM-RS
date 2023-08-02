@@ -104,6 +104,9 @@ where
     fn cleanup(&mut self) {
         self.unary_data.cleanup();
         self.time.cleanup();
+        // let curr_time = self.time.tick();
+        // println!("Unary Op");
+        // dbg!(curr_time);
     }
 }
 

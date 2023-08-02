@@ -229,6 +229,8 @@ where
     fn cleanup(&mut self) {
         self.qkt_data.cleanup();
         self.time.cleanup();
+        // let curr_time = self.time.tick();
+        // dbg!(curr_time);
     }
 }
 
