@@ -48,32 +48,20 @@ impl DeadlockDetector {
         }
     }
 
-    fn register_sender(&mut self, chan_id: ChannelID, sender: Identifier) {
-        if let Some(count) = self.num_channels.get_mut(&sender) {
+    fn register_context(&mut self, chan_id: ChannelID, context: Identifier, is_sender: bool) {
+        if let Some(count) = self.num_channels.get_mut(&context) {
             *count += 1;
         } else {
-            self.num_channels.insert(sender, 1);
-            self.context_statuses.insert(sender, ContextStatus::Free);
+            self.num_channels.insert(context, 1);
+            self.context_statuses.insert(context, ContextStatus::Free);
         }
 
         let users = self.channel_users.entry(chan_id).or_insert((None, None));
-        users.0 = Some(sender);
-
-        self.channel_statuses
-            .entry(chan_id)
-            .or_insert(ChannelStatus::Open);
-    }
-
-    fn register_receiver(&mut self, chan_id: ChannelID, receiver: Identifier) {
-        if let Some(count) = self.num_channels.get_mut(&receiver) {
-            *count += 1;
+        if is_sender {
+            users.0 = Some(context);
         } else {
-            self.num_channels.insert(receiver, 1);
-            self.context_statuses.insert(receiver, ContextStatus::Free);
+            users.1 = Some(context);
         }
-
-        let users = self.channel_users.entry(chan_id).or_insert((None, None));
-        users.1 = Some(receiver);
 
         self.channel_statuses
             .entry(chan_id)
@@ -96,39 +84,88 @@ impl DeadlockDetector {
         users.1.expect("sender for channel should not be None")
     }
 
+    fn get_channel_status(&self, chan_id: &ChannelID) -> &ChannelStatus {
+        self.channel_statuses
+            .get(chan_id)
+            .expect("cannot find channel, likely enqueuing to a closed channel")
+    }
+
+    fn get_channel_status_mut(&mut self, chan_id: &ChannelID) -> &mut ChannelStatus {
+        self.channel_statuses
+            .get_mut(chan_id)
+            .expect("cannot find channel, likely enqueuing to a closed channel")
+    }
+
+    fn get_sender_status_mut(&mut self, sender: &Identifier) -> &mut ContextStatus {
+        self.context_statuses
+            .get_mut(sender)
+            .expect("sender status not recorded")
+    }
+
+    fn enqueue_channel_status_check(&self, chan_id: &ChannelID) {
+        let status = self.get_channel_status(chan_id);
+        if let ChannelStatus::ReceiveClosed = status {
+            panic!("enqueuing to a channel with receiver closed");
+        }
+    }
+
+    fn set_context_status(&mut self, context: &Identifier, status: ContextStatus) {
+        let context_status = self.get_sender_status_mut(context);
+        *context_status = status;
+    }
+
+    fn get_num_channels_mut(&mut self, context: &Identifier) -> &mut usize {
+        self.num_channels
+            .get_mut(context)
+            .expect("sender's number of channel should be recorded")
+    }
+
     fn handle_send(&mut self, event: SendEvent) {
         match event {
-            SendEvent::AttachSender(id, sender) => self.register_sender(id, sender),
+            SendEvent::AttachSender(id, sender) => {
+                self.register_context(id, sender, true);
+            }
             SendEvent::EnqueueStart(id) => {
-                let status = self
-                    .channel_statuses
-                    .get(&id)
-                    .expect("cannot find channel, likely enqueuing to a closed channel");
-                if let ChannelStatus::ReceiveClosed = status {
-                    panic!("enqueuing to a channel with receiver closed");
-                }
+                self.enqueue_channel_status_check(&id);
 
                 let sender = self.get_sender(&id);
-                let sender_status = self
-                    .context_statuses
-                    .get_mut(&sender)
-                    .expect("sender status not recorded");
-                *sender_status = ContextStatus::Blocked;
+                self.set_context_status(&sender, ContextStatus::Blocked);
 
                 self.num_blocked += 1;
                 if self.num_blocked == self.context_statuses.len() {
                     println!("all contexts blocked, potential deadlock");
                 }
             }
-            SendEvent::EnqueueFinish(id) => {}
-            SendEvent::Cleanup(id) => {}
+            SendEvent::EnqueueFinish(id) => {
+                self.enqueue_channel_status_check(&id);
+                let sender = self.get_sender(&id);
+                self.set_context_status(&sender, ContextStatus::Free);
+                self.num_blocked -= 1;
+            }
+            SendEvent::Cleanup(id) => {
+                let status = self.get_channel_status_mut(&id);
+                if let ChannelStatus::ReceiveClosed = status {
+                    self.channel_statuses.remove(&id);
+                } else {
+                    *status = ChannelStatus::SendClosed;
+                }
+
+                let sender = self.get_sender(&id);
+                let channels = self.get_num_channels_mut(&sender);
+                *channels -= 1;
+                if *channels == 0 {
+                    self.context_statuses.remove(&sender);
+                }
+            }
             _ => {}
         }
     }
 
     fn handle_receive(&mut self, event: ReceiverEvent) {
         match event {
-            ReceiverEvent::AttachReceiver(id, receiver) => self.register_receiver(id, receiver),
+            ReceiverEvent::AttachReceiver(id, receiver) => {
+                self.register_context(id, receiver, false)
+            }
             ReceiverEvent::PeekNextStart(id) => {}
             ReceiverEvent::PeekNextFinish(id) => {}
             ReceiverEvent::DequeueStart(id) => {}
