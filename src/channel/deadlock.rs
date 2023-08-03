@@ -22,6 +22,7 @@ enum ContextStatus {
     Blocked,
 }
 
+#[derive(PartialEq)]
 enum ChannelStatus {
     Open,
     SendClosed,
@@ -109,6 +110,10 @@ impl DeadlockDetector {
         }
     }
 
+    fn dequeue_channel_status_check(&self, chan_id: &ChannelID) {
+        self.get_channel_status(chan_id);
+    }
+
     fn set_context_status(&mut self, context: &Identifier, status: ContextStatus) {
         let context_status = self.get_sender_status_mut(context);
         *context_status = status;
@@ -118,6 +123,38 @@ impl DeadlockDetector {
         self.num_channels
             .get_mut(context)
             .expect("sender's number of channel should be recorded")
+    }
+
+    fn deadlock_check(&self) {
+        if self.num_blocked == self.context_statuses.len() {
+            println!("all contexts blocked, potential deadlock");
+        }
+    }
+
+    fn cleanup_context(&mut self, chan_id: &ChannelID, is_sender: bool) {
+        let status = self.get_channel_status_mut(chan_id);
+        let remove_criterion = if is_sender {
+            ChannelStatus::ReceiveClosed
+        } else {
+            ChannelStatus::SendClosed
+        };
+
+        if remove_criterion == *status {
+            self.channel_statuses.remove(chan_id);
+        } else {
+            *status = if is_sender {
+                ChannelStatus::SendClosed
+            } else {
+                ChannelStatus::ReceiveClosed
+            };
+        }
+
+        let context = self.get_sender(chan_id);
+        let channels = self.get_num_channels_mut(&context);
+        *channels -= 1;
+        if *channels == 0 {
+            self.context_statuses.remove(&context);
+        }
     }
 
     fn handle_send(&mut self, event: SendEvent) {
@@ -132,9 +169,7 @@ impl DeadlockDetector {
                 self.set_context_status(&sender, ContextStatus::Blocked);
 
                 self.num_blocked += 1;
-                if self.num_blocked == self.context_statuses.len() {
-                    println!("all contexts blocked, potential deadlock");
-                }
+                self.deadlock_check();
             }
             SendEvent::EnqueueFinish(id) => {
                 self.enqueue_channel_status_check(&id);
@@ -143,19 +178,7 @@ impl DeadlockDetector {
                 self.num_blocked -= 1;
             }
             SendEvent::Cleanup(id) => {
-                let status = self.get_channel_status_mut(&id);
-                if let ChannelStatus::ReceiveClosed = status {
-                    self.channel_statuses.remove(&id);
-                } else {
-                    *status = ChannelStatus::SendClosed;
-                }
-
-                let sender = self.get_sender(&id);
-                let channels = self.get_num_channels_mut(&sender);
-                *channels -= 1;
-                if *channels == 0 {
-                    self.context_statuses.remove(&sender);
-                }
+                self.cleanup_context(&id, true);
             }
             _ => {}
         }
@@ -166,11 +189,22 @@ impl DeadlockDetector {
             ReceiverEvent::AttachReceiver(id, receiver) => {
                 self.register_context(id, receiver, false)
             }
-            ReceiverEvent::PeekNextStart(id) => {}
-            ReceiverEvent::PeekNextFinish(id) => {}
-            ReceiverEvent::DequeueStart(id) => {}
-            ReceiverEvent::DequeueFinish(id) => {}
-            ReceiverEvent::Cleanup(id) => {}
+            ReceiverEvent::PeekNextStart(id) | ReceiverEvent::DequeueStart(id) => {
+                self.dequeue_channel_status_check(&id);
+                let receiver = self.get_receiver(&id);
+                self.set_context_status(&receiver, ContextStatus::Blocked);
+                self.num_blocked += 1;
+                self.deadlock_check();
+            }
+            ReceiverEvent::PeekNextFinish(id) | ReceiverEvent::DequeueFinish(id) => {
+                self.dequeue_channel_status_check(&id);
+                let receiver = self.get_receiver(&id);
+                self.set_context_status(&receiver, ContextStatus::Free);
+                self.num_blocked -= 1;
+            }
+            ReceiverEvent::Cleanup(id) => {
+                self.cleanup_context(&id, false);
+            }
             _ => {}
         }
     }
