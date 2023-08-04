@@ -1,0 +1,3 @@
+mod deadlock {
+    mod simple;
+}

@@ -13,7 +13,6 @@ static DEADLOCK_DETECTOR: Lazy<Arc<Mutex<DeadlockDetector>>> = Lazy::new(|| {
 });
 
 pub fn register_event(event: ChannelEvent) {
-    println!("{:?}", event);
     let mut dd = DEADLOCK_DETECTOR.lock().unwrap();
     dd.handle_event(event);
 }
@@ -127,7 +126,6 @@ impl DeadlockDetector {
     }
 
     fn deadlock_check(&self) {
-        println!("{}/{}", self.num_blocked, self.context_statuses.len());
         if self.num_blocked == self.context_statuses.len() {
             println!("all contexts blocked, potential deadlock");
         }

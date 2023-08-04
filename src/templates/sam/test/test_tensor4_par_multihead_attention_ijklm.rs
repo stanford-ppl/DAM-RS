@@ -115,7 +115,7 @@ mod tests {
 
         let mut parent = Program::default();
         let chan_size = 32;
-        let softmax_chan_size = 65536;
+        let softmax_chan_size = 32;
 
         let par_factor = 16;
 
