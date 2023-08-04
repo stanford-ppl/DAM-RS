@@ -12,6 +12,7 @@ pub mod channel_spec;
 mod receiver;
 mod sender;
 
+#[cfg(feature = "deadlock_detection")]
 mod deadlock;
 
 pub(crate) mod handle;
@@ -69,6 +70,8 @@ impl<T: DAMType> Sender<T> {
     pub fn attach_sender(&self, sender: &dyn Context) {
         let event = SendEvent::AttachSender(self.id(), sender.id());
         Self::log(event);
+
+        #[cfg(feature = "deadlock_detection")]
         deadlock::register_event(ChannelEvent::SendEvent(event));
 
         self.under().attach_sender(sender);
@@ -86,12 +89,16 @@ impl<T: DAMType> Sender<T> {
     ) -> Result<(), EnqueueError> {
         let enqueue_start = SendEvent::EnqueueStart(self.id());
         Self::log(enqueue_start);
+
+        #[cfg(feature = "deadlock_detection")]
         deadlock::register_event(ChannelEvent::SendEvent(enqueue_start));
 
         let res = self.under().enqueue(manager, data);
 
         let enqueue_finish = SendEvent::EnqueueFinish(self.id());
         Self::log(enqueue_finish);
+
+        #[cfg(feature = "deadlock_detection")]
         deadlock::register_event(ChannelEvent::SendEvent(enqueue_finish));
 
         res
@@ -129,6 +136,8 @@ impl<T: DAMType> Receiver<T> {
     pub fn attach_receiver(&self, receiver: &dyn Context) {
         let event = ReceiverEvent::AttachReceiver(self.id(), receiver.id());
         Self::log(event);
+
+        #[cfg(feature = "deadlock_detection")]
         deadlock::register_event(ChannelEvent::ReceiverEvent(event));
 
         self.under().attach_receiver(receiver)
@@ -141,12 +150,16 @@ impl<T: DAMType> Receiver<T> {
     pub fn peek_next(&mut self, manager: &mut TimeManager) -> Recv<T> {
         let peek_next_start = ReceiverEvent::PeekNextStart(self.id());
         Self::log(peek_next_start);
+
+        #[cfg(feature = "deadlock_detection")]
         deadlock::register_event(ChannelEvent::ReceiverEvent(peek_next_start));
 
         let result = self.under().peek_next(manager);
 
         let peek_next_finish = ReceiverEvent::PeekNextFinish(self.id());
         Self::log(peek_next_finish);
+
+        #[cfg(feature = "deadlock_detection")]
         deadlock::register_event(ChannelEvent::ReceiverEvent(peek_next_finish));
 
         result
@@ -155,12 +168,16 @@ impl<T: DAMType> Receiver<T> {
     pub fn dequeue(&mut self, manager: &mut TimeManager) -> Recv<T> {
         let dequeue_start = ReceiverEvent::DequeueStart(self.id());
         Self::log(dequeue_start);
+
+        #[cfg(feature = "deadlock_detection")]
         deadlock::register_event(ChannelEvent::ReceiverEvent(dequeue_start));
 
         let result = self.under().dequeue(manager);
 
         let dequeue_finish = ReceiverEvent::DequeueFinish(self.id());
         Self::log(dequeue_finish);
+
+        #[cfg(feature = "deadlock_detection")]
         deadlock::register_event(ChannelEvent::ReceiverEvent(dequeue_finish));
 
         result
