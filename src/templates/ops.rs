@@ -58,3 +58,9 @@ RegisterALUOp!(
     |(i0, i1), ()| [i0 * i1],
     T: std::ops::Mul<T, Output = T>
 );
+
+RegisterALUOp!(
+    ALUDivOp,
+    |(i0, i1), ()| [i0 / i1],
+    T: std::ops::Div<T, Output = T>
+);
