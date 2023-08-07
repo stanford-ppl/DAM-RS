@@ -254,6 +254,7 @@ impl<T> CyclicSender<T> {
                     return true;
                 }
                 Err(channel::RecvError) => {
+                    assert!(self.next_available == SendOptions::Unknown);
                     self.next_available = SendOptions::Never;
                     return true;
                 }

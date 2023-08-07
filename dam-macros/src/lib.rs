@@ -160,23 +160,3 @@ pub fn log_producer(_attrs: TokenStream, item: TokenStream) -> TokenStream {
     }
     .into();
 }
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn playground() {
-        use syn::{parse_quote, Attribute};
-
-        let attr: Attribute = parse_quote! {
-            #[cleanup(time_viewable, identifiable)]
-        };
-
-        attr.parse_nested_meta(|meta| {
-            println!("{:?}", meta.path);
-            Ok(())
-        })
-        .unwrap();
-
-        3;
-    }
-}

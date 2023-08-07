@@ -1,6 +1,8 @@
 use std::sync::{atomic::AtomicUsize, Mutex};
 
-use dam_core::{identifier::Identifier, time::Time, ContextView, TimeView};
+use dam_core::{
+    identifier::Identifier, sync_unsafe::SyncUnsafeCell, time::Time, ContextView, TimeView,
+};
 
 use crate::context::Context;
 
@@ -15,7 +17,8 @@ struct ViewData {
 }
 
 pub struct ChannelSpec {
-    views: RwLock<ViewData>,
+    sender_view: SyncUnsafeCell<ViewType>,
+    receiver_view: SyncUnsafeCell<ViewType>,
 
     current_send_receive_delta: AtomicUsize,
     total_sent: AtomicUsize,
@@ -30,7 +33,8 @@ pub struct ChannelSpec {
 impl ChannelSpec {
     pub fn new(capacity: Option<usize>) -> Self {
         Self {
-            views: Default::default(),
+            sender_view: Default::default(),
+            receiver_view: Default::default(),
             current_send_receive_delta: AtomicUsize::new(0),
             total_sent: AtomicUsize::new(0),
             total_received: AtomicUsize::new(0),
@@ -50,12 +54,16 @@ impl ChannelSpec {
     }
 
     pub fn attach_sender(&self, sender: &dyn Context) {
-        self.views.write().unwrap().sender = Some(sender.view());
+        unsafe {
+            *self.sender_view.get() = Some(sender.view());
+        }
         *self.sender_id.lock().unwrap() = Some(sender.id());
     }
 
     pub fn attach_receiver(&self, receiver: &dyn Context) {
-        self.views.write().unwrap().receiver = Some(receiver.view());
+        unsafe {
+            *self.receiver_view.get() = Some(receiver.view());
+        }
         *self.receiver_id.lock().unwrap() = Some(receiver.id());
     }
 
@@ -74,23 +82,27 @@ impl ChannelSpec {
     }
 
     pub fn sender_tlb(&self) -> Time {
-        self.views
-            .read()
-            .unwrap()
-            .sender
-            .as_ref()
-            .unwrap()
-            .tick_lower_bound()
+        unsafe {
+            self.sender_view
+                .get()
+                .as_ref()
+                .unwrap()
+                .as_ref()
+                .unwrap()
+                .tick_lower_bound()
+        }
     }
 
     pub fn receiver_tlb(&self) -> Time {
-        self.views
-            .read()
-            .unwrap()
-            .receiver
-            .as_ref()
-            .unwrap()
-            .tick_lower_bound()
+        unsafe {
+            self.receiver_view
+                .get()
+                .as_ref()
+                .unwrap()
+                .as_ref()
+                .unwrap()
+                .tick_lower_bound()
+        }
     }
 
     pub fn current_srd(&self) -> usize {
@@ -99,23 +111,27 @@ impl ChannelSpec {
     }
 
     pub fn wait_until_sender(&self, time: Time) -> Time {
-        self.views
-            .read()
-            .unwrap()
-            .sender
-            .as_ref()
-            .unwrap()
-            .wait_until(time)
+        unsafe {
+            self.sender_view
+                .get()
+                .as_mut()
+                .unwrap()
+                .as_ref()
+                .unwrap()
+                .wait_until(time)
+        }
     }
 
     pub fn wait_until_receiver(&self, time: Time) -> Time {
-        self.views
-            .read()
-            .unwrap()
-            .receiver
-            .as_ref()
-            .unwrap()
-            .wait_until(time)
+        unsafe {
+            self.receiver_view
+                .get()
+                .as_mut()
+                .unwrap()
+                .as_ref()
+                .unwrap()
+                .wait_until(time)
+        }
     }
 
     pub fn capacity(&self) -> Option<usize> {
