@@ -140,10 +140,17 @@ impl AtomicTime {
     const UPDATE_ORDERING: std::sync::atomic::Ordering = std::sync::atomic::Ordering::Release;
 
     pub fn load(&self) -> Time {
-        let time = self.time.load(std::sync::atomic::Ordering::Relaxed);
+        let time = self.time.load(std::sync::atomic::Ordering::Acquire);
         let done = self.done.load(std::sync::atomic::Ordering::Acquire);
         Time { time, done }
     }
+
+    pub fn load_relaxed(&self) -> Time {
+        let time = self.time.load(std::sync::atomic::Ordering::Relaxed);
+        let done = self.done.load(std::sync::atomic::Ordering::Relaxed);
+        Time { time, done }
+    }
+
     pub fn set_infinite(&self) {
         self.done.fetch_or(true, Self::UPDATE_ORDERING);
     }
