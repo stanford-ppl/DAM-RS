@@ -1,4 +1,4 @@
-use std::sync::{atomic::AtomicUsize, Mutex, RwLock};
+use std::sync::{atomic::AtomicUsize, Mutex};
 
 use dam_core::{identifier::Identifier, time::Time, ContextView, TimeView};
 

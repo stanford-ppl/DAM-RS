@@ -1,4 +1,4 @@
-use std::sync::{atomic::AtomicBool, Arc, Mutex};
+use std::sync::{Arc, Mutex};
 
 use linkme::distributed_slice;
 use serde::{Deserialize, Serialize};
