@@ -23,6 +23,8 @@ pub trait SenderFlavor<T> {
 
     fn try_send(&mut self, data: ChannelElement<T>) -> Result<(), SendOptions>;
 
+    fn wait_until_available(&mut self, manager: &mut TimeManager) -> Result<(), EnqueueError>;
+
     fn enqueue(
         &mut self,
         manager: &mut TimeManager,
@@ -71,7 +73,14 @@ impl<T> SenderFlavor<T> for VoidSender<T> {
         Ok(())
     }
 
-    fn cleanup(&mut self) {} // Nothing to clean up either.
+    fn cleanup(&mut self) {
+        // Nothing to clean up either.
+    }
+
+    fn wait_until_available(&mut self, _manager: &mut TimeManager) -> Result<(), EnqueueError> {
+        // No-op
+        Ok(())
+    }
 }
 
 pub struct UndefinedSender<T> {
@@ -97,6 +106,10 @@ impl<T> SenderFlavor<T> for UndefinedSender<T> {
 
     fn cleanup(&mut self) {
         // No-op since it's part of drop
+    }
+
+    fn wait_until_available(&mut self, _manager: &mut TimeManager) -> Result<(), EnqueueError> {
+        panic!();
     }
 }
 
@@ -172,6 +185,27 @@ impl<T: Clone> SenderFlavor<T> for CyclicSender<T> {
 
     fn cleanup(&mut self) {
         self.underlying = SenderState::Closed;
+    }
+
+    fn wait_until_available(&mut self, manager: &mut TimeManager) -> Result<(), EnqueueError> {
+        loop {
+            if !self.is_full() {
+                return Ok(());
+            }
+            match self.next_available {
+                SendOptions::Never => {
+                    return Err(EnqueueError {});
+                }
+                SendOptions::CheckBackAt(time) | SendOptions::AvailableAt(time) => {
+                    // Have to make sure that we're making progress
+                    assert!(time > manager.tick());
+                    manager.advance(time);
+                }
+                SendOptions::Unknown => {
+                    panic!("We should always know when to try again!")
+                }
+            }
+        }
     }
 }
 
@@ -379,6 +413,33 @@ impl<T: Clone> SenderFlavor<T> for AcyclicSender<T> {
     fn cleanup(&mut self) {
         self.underlying = SenderState::Closed;
     }
+
+    fn wait_until_available(&mut self, manager: &mut TimeManager) -> Result<(), EnqueueError> {
+        if self.send_receive_delta == self.capacity {
+            match self.next_available {
+                SendOptions::Never => return Err(EnqueueError {}),
+
+                // Unknown is the base state.
+                SendOptions::Unknown => {
+                    let new_time = self.resp.recv().unwrap();
+                    self.send_receive_delta -= 1;
+                    manager.advance(new_time);
+                }
+
+                // We're ready, so we pop the availability and continue with the write.
+                SendOptions::AvailableAt(time) => {
+                    manager.advance(time);
+                    self.next_available = SendOptions::Unknown;
+                    self.send_receive_delta -= 1;
+                }
+
+                SendOptions::CheckBackAt(_) => {
+                    panic!("We should never have to check back in an acyclic sender");
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 impl<T> AcyclicSender<T> {
@@ -445,5 +506,9 @@ impl<T: Clone> SenderFlavor<T> for InfiniteSender<T> {
 
     fn cleanup(&mut self) {
         self.underlying = SenderState::Closed;
+    }
+
+    fn wait_until_available(&mut self, _manager: &mut TimeManager) -> Result<(), EnqueueError> {
+        Ok(())
     }
 }

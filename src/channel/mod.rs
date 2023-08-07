@@ -16,7 +16,6 @@ pub(crate) mod handle;
 
 use std::sync::Arc;
 
-
 use crate::context::Context;
 use crate::types::Cleanable;
 use crate::types::DAMType;
@@ -87,6 +86,10 @@ impl<T: DAMType> Sender<T> {
         let res = self.under().enqueue(manager, data);
         Self::log(SendEvent::EnqueueFinish(self.id()));
         res
+    }
+
+    pub fn wait_until_available(&mut self, manager: &mut TimeManager) -> Result<(), EnqueueError> {
+        self.under().wait_until_available(manager)
     }
 }
 
