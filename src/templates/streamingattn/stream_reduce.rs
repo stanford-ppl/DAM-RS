@@ -54,57 +54,121 @@ pub enum ReduceOpType {
     Sum,
 }
 
-trait MinMax {
+pub trait MinMax {
     fn get_max(self, rhs: Self) -> Self;
+    fn get_min_val() -> Self;
+    fn get_zero() -> Self;
 }
 impl MinMax for u8 {
     fn get_max(self, rhs: u8) -> u8 {
         self.max(rhs)
+    }
+
+    fn get_min_val() -> u8 {
+        u8::MIN
+    }
+
+    fn get_zero() -> u8 {
+        0u8
     }
 }
 impl MinMax for u16 {
     fn get_max(self, rhs: u16) -> u16 {
         self.max(rhs)
     }
+    fn get_min_val() -> u16 {
+        u16::MIN
+    }
+    fn get_zero() -> u16 {
+        0u16
+    }
 }
 impl MinMax for u32 {
     fn get_max(self, rhs: u32) -> u32 {
         self.max(rhs)
+    }
+    fn get_min_val() -> u32 {
+        u32::MIN
+    }
+    fn get_zero() -> u32 {
+        0u32
     }
 }
 impl MinMax for u64 {
     fn get_max(self, rhs: u64) -> u64 {
         self.max(rhs)
     }
+    fn get_min_val() -> u64 {
+        u64::MIN
+    }
+    fn get_zero() -> u64 {
+        0u64
+    }
 }
 impl MinMax for i8 {
     fn get_max(self, rhs: i8) -> i8 {
         self.max(rhs)
+    }
+    fn get_min_val() -> i8 {
+        i8::MIN
+    }
+    fn get_zero() -> i8 {
+        0i8
     }
 }
 impl MinMax for i16 {
     fn get_max(self, rhs: i16) -> i16 {
         self.max(rhs)
     }
+    fn get_min_val() -> i16 {
+        i16::MIN
+    }
+    fn get_zero() -> i16 {
+        0i16
+    }
 }
 impl MinMax for i32 {
     fn get_max(self, rhs: i32) -> i32 {
         self.max(rhs)
+    }
+    fn get_min_val() -> i32 {
+        i32::MIN
+    }
+    fn get_zero() -> i32 {
+        0i32
     }
 }
 impl MinMax for i64 {
     fn get_max(self, rhs: i64) -> i64 {
         self.max(rhs)
     }
+    fn get_min_val() -> i64 {
+        i64::MIN
+    }
+    fn get_zero() -> i64 {
+        0i64
+    }
 }
 impl MinMax for f32 {
     fn get_max(self, rhs: f32) -> f32 {
         self.max(rhs)
     }
+    fn get_min_val() -> f32 {
+        f32::MIN
+    }
+    fn get_zero() -> f32 {
+        0_f32
+    }
 }
 impl MinMax for f64 {
     fn get_max(self, rhs: f64) -> f64 {
         self.max(rhs)
+    }
+    fn get_min_val() -> f64 {
+        f64::MIN
+    }
+    fn get_zero() -> f64 {
+        0_f64
     }
 }
 
@@ -254,7 +318,7 @@ where
 
                     // From the second iteration
                     for _i in 1..self.reduce_data.inner_loop_bound {
-                        let mut old_new_diff = temp_res;
+                        let old_new_diff;
                         let in_deq = dequeue(&mut self.time, &mut self.reduce_data.in_stream);
                         match in_deq {
                             Ok(in_elem) => {
