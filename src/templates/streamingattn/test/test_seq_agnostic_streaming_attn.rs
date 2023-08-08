@@ -1,124 +1,130 @@
 #[cfg(test)]
 mod tests {
     use crate::{
-        context::{checker_context::FpBoundedCheckerContext, generator_context::GeneratorContext},
+        context::{
+            approx_checker_context::ApproxCheckerContext, generator_context::GeneratorContext,
+        },
         simulation::Program,
         templates::streamingattn::{
+            stream_agnostic_attn::{
+                IncrMax, IncrMaxData, IncrOutP, IncrOutPData, IncrSum, IncrSumData,
+            },
             stream_binary::{BinaryDataElemwise, BinaryOp, BinaryOpType},
-            stream_outer_product::{MatmulData, MatmulOuter},
-            stream_qkt::{QKTData, QKT},
-            stream_reduce::{IncrReduceOp, ReduceData2, ReduceOpType},
+            stream_spatial_attn::{QKTExp, QKTExpData},
         },
     };
-    use ndarray::{Array, ArrayBase, Dim, OwnedRepr};
 
     #[test]
     fn test_seq_agnostic_streaming_attn() {
-        // Test Configuration
-        const HEAD_DIM: usize = 16;
+        const LATENCY: u64 = 1;
         const INIT_INTERVAL: u64 = 1;
-        const SEQ_LEN: u64 = 5;
-        const SEQ_LEN_I32: i32 = 5; // I32 types for generating data
-        const HEAD_DIM_I32: i32 = 16; // I32 types for generating data
-        const SEQ_LEN_F32: f32 = 5.; // I32 types for generating data
-        const HEAD_DIM_F32: f32 = 16.; // I32 types for generating data
 
-        let fifo_chan_size: usize = 4;
+        const SEQ_LEN: u64 = 512;
+        const SEQ_LEN_F64: f64 = 512.;
+
+        let chan_size = 12; // FIFO Depth
 
         let mut parent = Program::default();
 
-        // Generator
-        let (q_sender, q_receiver) =
-            parent.bounded::<ArrayBase<OwnedRepr<f32>, Dim<[usize; 1]>>>(fifo_chan_size);
-        let (kt_sender, kt_receiver) =
-            parent.bounded::<ArrayBase<OwnedRepr<f32>, Dim<[usize; 1]>>>(fifo_chan_size);
-        // let (v_sender, v_receiver) =
-        //     parent.bounded::<ArrayBase<OwnedRepr<f32>, Dim<[usize; 1]>>>(fifo_chan_size);
+        // Generators
+        let (q_sender, q_receiver) = parent.bounded::<f64>(chan_size);
+        let (kt_sender, kt_receiver) = parent.bounded::<f64>(chan_size);
+        let (v_sender, v_receiver) = parent.bounded::<f64>(chan_size);
 
-        let q_iter = || (0..(SEQ_LEN_I32)).map(|i| Array::from_elem(HEAD_DIM, (i as f32) + 1.));
-        let kt_iter = || {
-            (0..(SEQ_LEN_I32 * SEQ_LEN_I32)).map(|i| {
-                if i % SEQ_LEN_I32 == 0 {
-                    Array::from_elem(HEAD_DIM, 1.1_f32)
-                } else {
-                    Array::from_elem(HEAD_DIM, 1_f32)
-                }
-            })
-        };
-        // let v_iter = || {
-        //     (0..(SEQ_LEN_I32 * SEQ_LEN_I32)).map(|_i| Array::from_elem(HEAD_DIM, SEQ_LEN_F32 - 1.))
-        // };
+        let q_iter = || (0..(SEQ_LEN)).map(|i| (i as f64) * 0.01_f64);
+        let kt_iter =
+            || (0..(SEQ_LEN * SEQ_LEN)).map(|i| if i % SEQ_LEN == 0 { 0.11_f64 } else { 0.1_f64 });
+        let v_iter = || (0..(SEQ_LEN * SEQ_LEN)).map(|_i| 1_f64);
 
-        let q_gen = GeneratorContext::new(q_iter, q_sender); // Q : D length vectors
-        let kt_gen = GeneratorContext::new(kt_iter, kt_sender); // KT: D length vectors
-                                                                //let v_gen = GeneratorContext::new(v_iter, v_sender); // KT: D length vectors
+        let q_gen = GeneratorContext::new(q_iter, q_sender); // Q : [1,D] shaped vectors
+        let kt_gen = GeneratorContext::new(kt_iter, kt_sender); // KT: [D,1] shaped vectors
+        let v_gen = GeneratorContext::new(v_iter, v_sender); // KT: [D,1] shaped vectors
 
-        // QKT block
-        let (qkt_sender1, qkt_receiver1) = parent.bounded::<f32>(fifo_chan_size);
-        let (qkt_sender2, qkt_receiver2) = parent.bounded::<f32>(fifo_chan_size);
-        let qkt_data = QKTData::<f32> {
+        // QKT & Exp block
+        let (qkt_exp_sender, qkt_exp_receiver) = parent.bounded::<f64>(chan_size);
+        let qkt_exp_data = QKTExpData::<f64> {
             q: q_receiver,
             kt: kt_receiver,
-            out_fifo: vec![qkt_sender1, qkt_sender2],
-            latency: 1 + (HEAD_DIM_I32.ilog2() as u64),
+            out_fifo: vec![qkt_exp_sender],
+            latency: LATENCY,
             init_inverval: INIT_INTERVAL,
             seq_len: SEQ_LEN,
         };
-        let stream_qkt = QKT::new(qkt_data);
+        let stream_qkt_exp = QKTExp::new(qkt_exp_data);
 
-        // Max
-        let (new_max_sender, new_max_receiver) = parent.bounded::<f32>(fifo_chan_size);
-        let (old_new_diff_sender, old_new_diff_receiver) = parent.bounded::<f32>(fifo_chan_size);
-        let incr_max_data = ReduceData2::<f32> {
-            in_stream: qkt_receiver1,
-            new_max: new_max_sender,
-            old_new_diff: old_new_diff_sender,
-            latency: 2,
+        // Incremental Max
+        let (delta_sender1, delta_receiver1) = parent.bounded::<f64>(chan_size);
+        let (delta_sender2, delta_receiver2) = parent.bounded::<f64>(chan_size);
+        let (curr_sender1, curr_receiver1) = parent.bounded::<f64>(chan_size);
+        let (curr_sender2, curr_receiver2) = parent.bounded::<f64>(chan_size);
+        let incr_max_data = IncrMaxData::<f64> {
+            in_stream: qkt_exp_receiver,
+            curr_out_stream: vec![curr_sender1, curr_sender2],
+            delta_out_stream: vec![delta_sender1, delta_sender2],
+            latency: LATENCY,
             init_inverval: INIT_INTERVAL,
             inner_loop_bound: SEQ_LEN,
             outer_loop_bound: SEQ_LEN,
         };
-        let stream_incr_max = IncrReduceOp::new(incr_max_data, ReduceOpType::Max);
+        let incr_max = IncrMax::new(incr_max_data);
 
-        // Sub
-        let (sub_sender, sub_receiver) = parent.bounded::<f32>(fifo_chan_size);
-        let sub_data = BinaryDataElemwise::<f32> {
-            in1_stream: qkt_receiver2,
-            in2_stream: new_max_receiver,
-            out_stream: sub_sender,
-            latency: 1,
+        // Incremental Sum
+        let (rowsum_sender, rowsum_receiver) = parent.bounded::<f64>(chan_size);
+        let incr_sum_data = IncrSumData::<f64> {
+            in_delta_stream: delta_receiver1,
+            in_curr_stream: curr_receiver1,
+            out_stream: rowsum_sender,
+            latency: LATENCY,
             init_inverval: INIT_INTERVAL,
-            loop_bound: SEQ_LEN * SEQ_LEN,
+            inner_loop_bound: SEQ_LEN,
+            outer_loop_bound: SEQ_LEN,
         };
-        let binary_sub = BinaryOp::new(sub_data, BinaryOpType::Sub);
+        let incr_sum = IncrSum::new(incr_sum_data);
 
-        // Checker
-        let out_iter1 = || {
-            (0..(SEQ_LEN_I32 * SEQ_LEN_I32)).map(|i| {
-                if i % SEQ_LEN_I32 == 0 {
-                    0.
-                } else {
-                    -0.1 * (((i / SEQ_LEN_I32) as f32) + 1.) * HEAD_DIM_F32
-                }
-            })
+        // Incremental outer product
+        let (matmul_sender, matmul_receiver) = parent.bounded::<f64>(chan_size);
+        let incr_outp_data = IncrOutPData::<f64> {
+            in_delta_stream: delta_receiver2,
+            in_curr_stream: curr_receiver2,
+            in_v_stream: v_receiver,
+            out_stream: matmul_sender,
+            latency: LATENCY,
+            init_inverval: INIT_INTERVAL,
+            inner_loop_bound: SEQ_LEN,
+            outer_loop_bound: SEQ_LEN,
         };
-        let out_iter2 = || (0..(SEQ_LEN_I32 * SEQ_LEN_I32)).map(|_i| 0.);
-        let out_checker1 = FpBoundedCheckerContext::new(out_iter1, sub_receiver, 0.0002_f32);
-        let out_checker2 =
-            FpBoundedCheckerContext::new(out_iter2, old_new_diff_receiver, 0.0002_f32);
+        let incr_outp = IncrOutP::new(incr_outp_data);
 
-        // Create the Iterators for Checkers
+        // Div
+        let (final_sender, final_receiver) = parent.bounded::<f64>(chan_size);
+        let div_data = BinaryDataElemwise::<f64> {
+            in1_stream: matmul_receiver,
+            in2_stream: rowsum_receiver,
+            out_stream: final_sender,
+            latency: LATENCY,
+            init_inverval: INIT_INTERVAL,
+            loop_bound: SEQ_LEN,
+        };
+        let div = BinaryOp::new(div_data, BinaryOpType::Div);
+
+        // Checkers
+        let out_iter = || (0..(SEQ_LEN)).map(|_i| (1_f64));
+        let out_checker =
+            ApproxCheckerContext::new(out_iter, final_receiver, |a, b| (a - b).abs() < 0.0001);
 
         parent.add_child(q_gen);
         parent.add_child(kt_gen);
-        //parent.add_child(v_gen);
-        parent.add_child(out_checker1);
-        parent.add_child(out_checker2);
-        parent.add_child(stream_qkt);
-        parent.add_child(stream_incr_max);
-        parent.add_child(binary_sub);
+        parent.add_child(v_gen);
+        parent.add_child(stream_qkt_exp);
+        parent.add_child(incr_max);
+        parent.add_child(incr_sum);
+        parent.add_child(incr_outp);
+        parent.add_child(div);
+        parent.add_child(out_checker);
+        parent.set_inference(true); // turn on flavor inference
         parent.init();
-        parent.print_graph();
         parent.run();
+        let finish_time = parent.elapsed_cycles();
+        dbg!(finish_time);
     }
 }
