@@ -6,7 +6,7 @@ use ndarray::{ArrayBase, Dim, OwnedRepr};
 
 use crate::{
     channel::{
-        utils::{dequeue, enqueue},
+        utils::{dequeue, enqueue, peek_next},
         ChannelElement, Receiver, Sender,
     },
     context::Context,
@@ -69,6 +69,9 @@ where
 
     fn run(&mut self) -> () {
         for _i in 0..self.qkt_exp_data.seq_len {
+            let _ = peek_next(&mut self.time, &mut self.qkt_exp_data.q);
+            let _ = peek_next(&mut self.time, &mut self.qkt_exp_data.kt);
+
             let q_deq = dequeue(&mut self.time, &mut self.qkt_exp_data.q);
             match q_deq {
                 Ok(q) => {
@@ -79,10 +82,14 @@ where
                                 let qkt_exp_res = (q.data * kt.data).exp();
                                 let curr_time = self.time.tick();
 
-                                for mut j in self.qkt_exp_data.out_fifo.iter_mut() {
+                                for k in self.qkt_exp_data.out_fifo.iter_mut() {
+                                    let _ = k.wait_until_available(&mut self.time);
+                                }
+
+                                for mut k in self.qkt_exp_data.out_fifo.iter_mut() {
                                     enqueue(
                                         &mut self.time,
-                                        &mut j,
+                                        &mut k,
                                         ChannelElement::new(
                                             curr_time + self.qkt_exp_data.latency,
                                             qkt_exp_res.clone(),

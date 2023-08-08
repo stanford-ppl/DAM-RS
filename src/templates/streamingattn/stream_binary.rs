@@ -4,7 +4,7 @@ use dam_macros::{cleanup, identifiable, time_managed};
 
 use crate::{
     channel::{
-        utils::{dequeue, enqueue},
+        utils::{dequeue, enqueue, peek_next},
         ChannelElement, Receiver, Sender,
     },
     context::Context,
@@ -187,7 +187,9 @@ where
     fn init(&mut self) {}
 
     fn run(&mut self) -> () {
-        for _i in 0..self.binary_data.outer_loop_bound {
+        for i in 0..self.binary_data.outer_loop_bound {
+            let _ = peek_next(&mut self.time, &mut self.binary_data.in1_stream);
+            let _ = peek_next(&mut self.time, &mut self.binary_data.in2_stream);
             let in1_deq = dequeue(&mut self.time, &mut self.binary_data.in1_stream);
             let in2_deq = dequeue(&mut self.time, &mut self.binary_data.in2_stream);
 
