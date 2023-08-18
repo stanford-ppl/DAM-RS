@@ -101,7 +101,8 @@ mod tests {
         parent.add_child(stream_div);
         parent.add_child(stream_mat_vec_prod);
         parent.add_child(out_checker);
-        // parent.set_inference(true); // turn on flavor inference
+        parent.set_inference(true); // turn on flavor inference
+        parent.print_graph_with_names();
         parent.init();
         parent.run();
         let finish_time = parent.elapsed_cycles();
