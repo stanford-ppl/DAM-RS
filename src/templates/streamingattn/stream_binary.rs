@@ -187,7 +187,7 @@ where
     fn init(&mut self) {}
 
     fn run(&mut self) -> () {
-        for i in 0..self.binary_data.outer_loop_bound {
+        for _i in 0..self.binary_data.outer_loop_bound {
             let _ = peek_next(&mut self.time, &mut self.binary_data.in1_stream);
             let _ = peek_next(&mut self.time, &mut self.binary_data.in2_stream);
             let in1_deq = dequeue(&mut self.time, &mut self.binary_data.in1_stream);
