@@ -16,4 +16,5 @@ serde_json = "1.0.101"
 toml = { version = "0.7.6", feature = ["preserve_order"]}
 dam-macros = { version = "0.1.0", path = "../dam-macros" }
 rustc-hash = "1.1.0"
+thread-priority = "0.13.1"
 

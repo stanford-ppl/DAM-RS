@@ -4,10 +4,6 @@ use std::{
     sync::Arc,
 };
 
-use dam_core::{identifier::Identifier, log_graph::with_log_scope, time::Time, ContextView};
-use petgraph::{dot::Dot, prelude::DiGraph};
-use rustc_hash::{FxHashMap, FxHashSet};
-
 use crate::{
     channel::{
         channel_spec::ChannelSpec,
@@ -16,6 +12,9 @@ use crate::{
     },
     context::Context,
 };
+use dam_core::{identifier::Identifier, log_graph::with_log_scope, time::Time, ContextView};
+use petgraph::{dot::Dot, prelude::DiGraph};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 // A Program consists of all of its nodes and all of its edges.
 
@@ -261,13 +260,26 @@ impl<'a> Program<'a> {
     }
 
     pub fn run(&mut self) {
+        let priority = thread_priority::ThreadPriority::Crossplatform(10u8.try_into().unwrap());
+        let policy = thread_priority::unix::ThreadSchedulePolicy::Realtime(
+            thread_priority::RealtimeThreadSchedulePolicy::Fifo,
+        );
+        // println!("Priority: {priority:?}, Policy: {policy:?}");
+
         std::thread::scope(|s| {
             self.nodes.iter_mut().for_each(|child| {
                 let id = child.id();
                 let name = child.name();
-                std::thread::Builder::new()
-                    .name(format!("{}({})", child.id(), child.name()))
-                    .spawn_scoped(s, || {
+                let builder = thread_priority::ThreadBuilder::default().name(format!(
+                    "{}({})",
+                    child.id(),
+                    child.name()
+                ));
+
+                let builder = builder.priority(priority).policy(policy);
+
+                builder
+                    .spawn_scoped_careless(s, || {
                         with_log_scope(child.id(), child.name(), || {
                             child.run();
                             child.cleanup();

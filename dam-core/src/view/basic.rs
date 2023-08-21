@@ -5,7 +5,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     identifier::Identifier,
-    log_graph::get_registry,
     metric::{LogProducer, METRICS},
     time::{AtomicTime, Time},
 };
@@ -63,10 +62,12 @@ impl TimeManager {
     fn scan_and_write_signals(&mut self) {
         let mut signal_buffer = self.underlying.signal_buffer.lock().unwrap();
         let tlb = self.underlying.time.load();
+        #[cfg(logging)]
         let mut released = Vec::new();
         signal_buffer.retain(|signal| {
             if signal.when <= tlb {
                 signal.thread.unpark();
+                #[cfg(logging)]
                 released.push(signal.thread.id());
                 false
             } else {
@@ -75,6 +76,7 @@ impl TimeManager {
         });
 
         drop(signal_buffer);
+        #[cfg(logging)]
         if !released.is_empty() {
             let graph = get_registry();
             Self::log(TimeEvent::ScanAndWrite(
