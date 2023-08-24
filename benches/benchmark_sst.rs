@@ -109,6 +109,7 @@ pub fn merge_benchmark(c: &mut Criterion) {
                     }
 
                     parent.set_inference(true);
+                    parent.set_mode(dam_rs::simulation::RunMode::FIFO);
                     parent.init();
                     parent.run();
                     parent
@@ -225,6 +226,7 @@ pub fn add_benchmark(c: &mut Criterion) {
                 parent.add_child(cap);
 
                 parent.set_inference(true);
+                parent.set_mode(dam_rs::simulation::RunMode::FIFO);
                 parent.init();
                 parent.run();
                 parent

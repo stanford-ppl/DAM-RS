@@ -26,6 +26,7 @@ pub struct Program<'a> {
     void_edges: Vec<Arc<dyn ChannelHandle + 'a>>,
 
     infer_flavors: bool,
+    run_mode: RunMode,
 }
 
 #[derive(Copy, Clone, Eq, Debug, PartialEq, Hash)]
@@ -50,6 +51,13 @@ impl fmt::Debug for ChannelInfo {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?} (Depth: {:?})", self.id, self.capacity)
     }
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+pub enum RunMode {
+    #[default]
+    Simple,
+    FIFO,
 }
 
 impl<'a> Program<'a> {
@@ -94,6 +102,10 @@ impl<'a> Program<'a> {
 
     pub fn set_inference(&mut self, infer: bool) {
         self.infer_flavors = infer;
+    }
+
+    pub fn set_mode(&mut self, mode: RunMode) {
+        self.run_mode = mode;
     }
 
     fn all_node_ids(&self) -> HashSet<Identifier> {
@@ -260,10 +272,21 @@ impl<'a> Program<'a> {
     }
 
     pub fn run(&mut self) {
-        let priority = thread_priority::ThreadPriority::Crossplatform(10u8.try_into().unwrap());
-        let policy = thread_priority::unix::ThreadSchedulePolicy::Realtime(
-            thread_priority::RealtimeThreadSchedulePolicy::Fifo,
-        );
+        let (priority, policy) = match self.run_mode {
+            RunMode::Simple => (
+                thread_priority::get_current_thread_priority().unwrap(),
+                thread_priority::thread_schedule_policy().unwrap(),
+            ),
+            RunMode::FIFO => {
+                let priority =
+                    thread_priority::ThreadPriority::Crossplatform(10u8.try_into().unwrap());
+                let policy = thread_priority::unix::ThreadSchedulePolicy::Realtime(
+                    thread_priority::RealtimeThreadSchedulePolicy::Fifo,
+                );
+                (priority, policy)
+            }
+        };
+
         // println!("Priority: {priority:?}, Policy: {policy:?}");
 
         std::thread::scope(|s| {
