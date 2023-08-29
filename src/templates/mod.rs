@@ -1,7 +1,9 @@
 pub mod datastore;
 pub mod dram;
 pub mod llops;
+pub mod moe;
 pub mod ops;
 pub mod pcu;
 pub mod pmu;
 pub mod streamingattn;
+pub mod vec_ops;
