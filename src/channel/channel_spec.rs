@@ -1,8 +1,6 @@
-use std::sync::{Mutex};
+use std::sync::Mutex;
 
-use dam_core::{
-    identifier::Identifier, time::Time, ContextView, TimeView,
-};
+use dam_core::{identifier::Identifier, time::Time, ContextView, TimeView};
 
 use crate::context::Context;
 
