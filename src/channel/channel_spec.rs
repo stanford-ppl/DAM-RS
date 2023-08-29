@@ -1,7 +1,7 @@
-use std::sync::{atomic::AtomicUsize, Mutex};
+use std::sync::{Mutex};
 
 use dam_core::{
-    identifier::Identifier, sync_unsafe::SyncUnsafeCell, time::Time, ContextView, TimeView,
+    identifier::Identifier, time::Time, ContextView, TimeView,
 };
 
 use crate::context::Context;
@@ -10,38 +10,47 @@ use super::ChannelID;
 
 type ViewType = Option<TimeView>;
 
-#[derive(Default)]
-struct ViewData {
-    pub sender: ViewType,
-    pub receiver: ViewType,
-}
-
 pub struct ChannelSpec {
-    sender_view: SyncUnsafeCell<ViewType>,
-    receiver_view: SyncUnsafeCell<ViewType>,
-
-    current_send_receive_delta: AtomicUsize,
-    total_sent: AtomicUsize,
-    total_received: AtomicUsize,
+    sender_view: Mutex<ViewType>,
+    receiver_view: Mutex<ViewType>,
 
     sender_id: Mutex<Option<Identifier>>,
     receiver_id: Mutex<Option<Identifier>>,
     channel_id: ChannelID,
     capacity: Option<usize>,
+    send_latency: u64,
+    response_latency: u64,
+}
+
+pub struct InlineSpec {
+    pub channel_id: ChannelID,
+    pub capacity: Option<usize>,
+    pub send_latency: u64,
+    pub response_latency: u64,
+
+    sender_view: ViewType,
+    receiver_view: ViewType,
 }
 
 impl ChannelSpec {
-    pub fn new(capacity: Option<usize>) -> Self {
+    pub fn new(
+        capacity: Option<usize>,
+        send_latency: Option<u64>,
+        resp_latency: Option<u64>,
+    ) -> Self {
+        let lat = send_latency.unwrap_or(1);
+        let resp_lat = resp_latency.unwrap_or(1);
+        assert!(lat > 0);
+        assert!(resp_lat > 0);
         Self {
             sender_view: Default::default(),
             receiver_view: Default::default(),
-            current_send_receive_delta: AtomicUsize::new(0),
-            total_sent: AtomicUsize::new(0),
-            total_received: AtomicUsize::new(0),
             sender_id: Mutex::new(None),
             receiver_id: Mutex::new(None),
             channel_id: ChannelID::new(),
             capacity,
+            send_latency: lat,
+            response_latency: resp_lat,
         }
     }
 
@@ -49,89 +58,26 @@ impl ChannelSpec {
         *self.sender_id.lock().unwrap()
     }
 
+    pub fn latency(&self) -> u64 {
+        self.send_latency
+    }
+
+    pub fn resp_latency(&self) -> u64 {
+        self.response_latency
+    }
+
     pub fn receiver_id(&self) -> Option<Identifier> {
         *self.receiver_id.lock().unwrap()
     }
 
     pub fn attach_sender(&self, sender: &dyn Context) {
-        unsafe {
-            *self.sender_view.get() = Some(sender.view());
-        }
+        *self.sender_view.lock().unwrap() = Some(sender.view());
         *self.sender_id.lock().unwrap() = Some(sender.id());
     }
 
     pub fn attach_receiver(&self, receiver: &dyn Context) {
-        unsafe {
-            *self.receiver_view.get() = Some(receiver.view());
-        }
+        *self.receiver_view.lock().unwrap() = Some(receiver.view());
         *self.receiver_id.lock().unwrap() = Some(receiver.id());
-    }
-
-    pub fn register_send(&self) -> usize {
-        self.total_sent
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        self.current_send_receive_delta
-            .fetch_add(1, std::sync::atomic::Ordering::AcqRel)
-    }
-
-    pub fn register_recv(&self) -> usize {
-        self.total_received
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        self.current_send_receive_delta
-            .fetch_sub(1, std::sync::atomic::Ordering::AcqRel)
-    }
-
-    pub fn sender_tlb(&self) -> Time {
-        unsafe {
-            self.sender_view
-                .get()
-                .as_ref()
-                .unwrap()
-                .as_ref()
-                .unwrap()
-                .tick_lower_bound()
-        }
-    }
-
-    pub fn receiver_tlb(&self) -> Time {
-        unsafe {
-            self.receiver_view
-                .get()
-                .as_ref()
-                .unwrap()
-                .as_ref()
-                .unwrap()
-                .tick_lower_bound()
-        }
-    }
-
-    pub fn current_srd(&self) -> usize {
-        self.current_send_receive_delta
-            .load(std::sync::atomic::Ordering::Acquire)
-    }
-
-    pub fn wait_until_sender(&self, time: Time) -> Time {
-        unsafe {
-            self.sender_view
-                .get()
-                .as_mut()
-                .unwrap()
-                .as_ref()
-                .unwrap()
-                .wait_until(time)
-        }
-    }
-
-    pub fn wait_until_receiver(&self, time: Time) -> Time {
-        unsafe {
-            self.receiver_view
-                .get()
-                .as_mut()
-                .unwrap()
-                .as_ref()
-                .unwrap()
-                .wait_until(time)
-        }
     }
 
     pub fn capacity(&self) -> Option<usize> {
@@ -140,5 +86,34 @@ impl ChannelSpec {
 
     pub fn id(&self) -> ChannelID {
         self.channel_id
+    }
+
+    pub fn make_inline(&self) -> InlineSpec {
+        InlineSpec {
+            channel_id: self.channel_id,
+            capacity: self.capacity,
+            send_latency: self.send_latency,
+            response_latency: self.response_latency,
+            sender_view: self.sender_view.lock().unwrap().clone(),
+            receiver_view: self.receiver_view.lock().unwrap().clone(),
+        }
+    }
+}
+
+impl InlineSpec {
+    pub fn wait_until_sender(&self, time: Time) -> Time {
+        self.sender_view.as_ref().unwrap().wait_until(time)
+    }
+
+    pub fn sender_tlb(&self) -> Time {
+        self.sender_view.as_ref().unwrap().tick_lower_bound()
+    }
+
+    pub fn wait_until_receiver(&self, time: Time) -> Time {
+        self.receiver_view.as_ref().unwrap().wait_until(time)
+    }
+
+    pub fn receiver_tlb(&self) -> Time {
+        self.receiver_view.as_ref().unwrap().tick_lower_bound()
     }
 }

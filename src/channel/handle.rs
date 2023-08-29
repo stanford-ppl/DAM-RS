@@ -63,17 +63,16 @@ impl<T: Clone> ChannelHandle for ChannelData<T> {
                     ChannelFlavor::Unknown => panic!("Cannot set flavor to unknown!"),
                     ChannelFlavor::Acyclic => {
                         *self.sender() =
-                            AcyclicSender::new(tx, resp_r, capacity, self.channel_spec.clone())
-                                .into();
+                            AcyclicSender::new(tx, resp_r, self.channel_spec.make_inline()).into();
                         *self.receiver() =
-                            AcyclicReceiver::new(rx, resp_t, self.channel_spec.clone()).into();
+                            AcyclicReceiver::new(rx, resp_t, self.channel_spec.make_inline())
+                                .into();
                     }
                     ChannelFlavor::Cyclic => {
                         *self.sender() =
-                            CyclicSender::new(tx, resp_r, capacity, self.channel_spec.clone())
-                                .into();
+                            CyclicSender::new(tx, resp_r, self.channel_spec.make_inline()).into();
                         *self.receiver() =
-                            CyclicReceiver::new(rx, resp_t, self.channel_spec.clone()).into();
+                            CyclicReceiver::new(rx, resp_t, self.channel_spec.make_inline()).into();
                     }
                     ChannelFlavor::Void => *self.sender() = VoidSender::default().into(),
                 }
@@ -89,13 +88,13 @@ impl<T: Clone> ChannelHandle for ChannelData<T> {
 
                         *self.sender() = InfiniteSender::new(
                             super::sender::SenderState::Open(snd),
-                            self.channel_spec.clone(),
+                            self.channel_spec.make_inline(),
                         )
                         .into();
 
                         *self.receiver() = AcyclicInfiniteReceiver::new(
                             super::receiver::ReceiverState::Open(rcv),
-                            self.channel_spec.clone(),
+                            self.channel_spec.make_inline(),
                         )
                         .into();
                     }
@@ -104,13 +103,13 @@ impl<T: Clone> ChannelHandle for ChannelData<T> {
 
                         *self.sender() = InfiniteSender::new(
                             super::sender::SenderState::Open(snd),
-                            self.channel_spec.clone(),
+                            self.channel_spec.make_inline(),
                         )
                         .into();
 
                         *self.receiver() = CyclicInfiniteReceiver::new(
                             super::receiver::ReceiverState::Open(rcv),
-                            self.channel_spec.clone(),
+                            self.channel_spec.make_inline(),
                         )
                         .into();
                     }

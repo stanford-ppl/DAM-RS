@@ -38,18 +38,26 @@ enum ChannelOrContext {
 struct ChannelInfo {
     pub id: ChannelID,
     pub capacity: usize,
+    pub latency: u64,
 }
 
 impl ChannelInfo {
-    pub fn new(id: ChannelID, capacity: usize) -> ChannelInfo {
-        let chan_info = ChannelInfo { id, capacity };
-        chan_info
+    pub fn new(id: ChannelID, capacity: usize, latency: u64) -> ChannelInfo {
+        ChannelInfo {
+            id,
+            capacity,
+            latency,
+        }
     }
 }
 
 impl fmt::Debug for ChannelInfo {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?} (Depth: {:?})", self.id, self.capacity)
+        write!(
+            f,
+            "{:?} (Depth: {:?}, Latency: {:?})",
+            self.id, self.capacity, self.latency
+        )
     }
 }
 
@@ -62,11 +70,16 @@ pub enum RunMode {
 
 impl<'a> Program<'a> {
     // Methods to add channels
-    fn make_channel<T>(&mut self, capacity: Option<usize>) -> (Sender<T>, Receiver<T>)
+    fn make_channel_with_latency<T>(
+        &mut self,
+        capacity: Option<usize>,
+        latency: Option<u64>,
+        resp_latency: Option<u64>,
+    ) -> (Sender<T>, Receiver<T>)
     where
         T: Clone + 'a,
     {
-        let spec = Arc::new(ChannelSpec::new(capacity));
+        let spec = Arc::new(ChannelSpec::new(capacity, latency, resp_latency));
         let underlying = Arc::new(ChannelData::new(spec));
         self.edges.push(underlying.clone());
 
@@ -79,15 +92,32 @@ impl<'a> Program<'a> {
     }
 
     pub fn bounded<T: Clone + 'a>(&mut self, capacity: usize) -> (Sender<T>, Receiver<T>) {
-        self.make_channel(Some(capacity))
+        self.make_channel_with_latency(Some(capacity), None, None)
+    }
+
+    pub fn bounded_with_latency<T: Clone + 'a>(
+        &mut self,
+        capacity: usize,
+        latency: u64,
+        resp_latency: u64,
+    ) -> (Sender<T>, Receiver<T>) {
+        self.make_channel_with_latency(Some(capacity), Some(latency), Some(resp_latency))
     }
 
     pub fn unbounded<T: Clone + 'a>(&mut self) -> (Sender<T>, Receiver<T>) {
-        self.make_channel(None)
+        self.make_channel_with_latency(None, None, None)
+    }
+
+    pub fn unbounded_with_latency<T: Clone + 'a>(
+        &mut self,
+        latency: u64,
+        resp_latency: u64,
+    ) -> (Sender<T>, Receiver<T>) {
+        self.make_channel_with_latency(None, Some(latency), Some(resp_latency))
     }
 
     pub fn void<T: Clone + 'a>(&mut self) -> Sender<T> {
-        let spec = Arc::new(ChannelSpec::new(None));
+        let spec = Arc::new(ChannelSpec::new(None, None, None));
         let underlying = Arc::new(ChannelData::new(spec));
         self.void_edges.push(underlying.clone());
         Sender { underlying }
@@ -356,7 +386,11 @@ impl<'a> Program<'a> {
                 *id_node_map
                     .get(&edge.receiver().expect("Edge didn't have a receiver!"))
                     .expect("Edge receiver was not registered in id_node_map!"),
-                ChannelInfo::new(edge.id(), edge.spec().capacity().unwrap()),
+                ChannelInfo::new(
+                    edge.id(),
+                    edge.spec().capacity().unwrap(),
+                    edge.spec().latency(),
+                ),
             );
         }
 

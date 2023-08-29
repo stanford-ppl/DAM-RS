@@ -7,7 +7,10 @@ use enum_dispatch::enum_dispatch;
 
 use crate::context::Context;
 
-use super::{channel_spec::ChannelSpec, ChannelElement, EnqueueError};
+use super::{
+    channel_spec::{ChannelSpec, InlineSpec},
+    ChannelElement, EnqueueError,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum SendOptions {
@@ -19,7 +22,9 @@ pub enum SendOptions {
 
 #[enum_dispatch(SenderImpl<T>)]
 pub trait SenderFlavor<T> {
-    fn attach_sender(&self, sender: &dyn Context);
+    fn attach_sender(&self, _sender: &dyn Context) {
+        panic!("Can only attach a sender from an Undefined Sender")
+    }
 
     fn try_send(&mut self, data: ChannelElement<T>) -> Result<(), SendOptions>;
 
@@ -133,15 +138,13 @@ pub(crate) struct CyclicSender<T> {
     resp: channel::Receiver<Time>,
     send_receive_delta: usize,
     capacity: usize,
+    latency: u64,
+    resp_latency: u64,
 
-    view_struct: Arc<ChannelSpec>,
+    view_struct: InlineSpec,
     next_available: SendOptions,
 }
 impl<T: Clone> SenderFlavor<T> for CyclicSender<T> {
-    fn attach_sender(&self, sender: &dyn Context) {
-        self.view_struct.attach_sender(sender);
-    }
-
     fn try_send(&mut self, elem: ChannelElement<T>) -> Result<(), SendOptions> {
         if self.is_full() {
             return Err(self.next_available);
@@ -149,8 +152,6 @@ impl<T: Clone> SenderFlavor<T> for CyclicSender<T> {
 
         assert!(self.send_receive_delta < self.capacity);
         assert!(elem.time >= self.view_struct.sender_tlb());
-        let prev_srd = self.view_struct.register_send();
-        assert!(prev_srd < self.capacity);
         self.under_send(elem).unwrap();
         self.send_receive_delta += 1;
 
@@ -234,14 +235,10 @@ impl<T> CyclicSender<T> {
         // We don't know when it'll be available.
         self.next_available = SendOptions::Unknown;
 
-        let real_srd = self.view_struct.current_srd();
-        assert!(real_srd <= self.send_receive_delta);
-        let srd_diff = self.send_receive_delta - real_srd;
-
         let mut retval = false;
 
-        for _ in 0..srd_diff {
-            match self.resp.recv() {
+        loop {
+            match self.resp.try_recv() {
                 Ok(time) if time <= send_time => {
                     assert!(self.send_receive_delta > 0);
                     self.send_receive_delta -= 1;
@@ -253,14 +250,16 @@ impl<T> CyclicSender<T> {
                     self.next_available = SendOptions::AvailableAt(time);
                     return true;
                 }
-                Err(channel::RecvError) => {
+                Err(channel::TryRecvError::Empty) => {
+                    return retval;
+                }
+                Err(channel::TryRecvError::Disconnected) => {
                     assert!(self.next_available == SendOptions::Unknown);
                     self.next_available = SendOptions::Never;
                     return true;
                 }
             }
         }
-        retval
     }
 
     fn update_len(&mut self) {
@@ -297,7 +296,7 @@ impl<T> CyclicSender<T> {
 
         self.update_srd();
         if self.next_available == SendOptions::Unknown {
-            self.next_available = SendOptions::CheckBackAt(new_time + 1)
+            self.next_available = SendOptions::CheckBackAt(new_time + self.resp_latency)
         }
     }
 }
@@ -306,14 +305,15 @@ impl<T> CyclicSender<T> {
     pub(crate) fn new(
         sender: channel::Sender<ChannelElement<T>>,
         resp: channel::Receiver<Time>,
-        capacity: usize,
-        view_struct: Arc<ChannelSpec>,
+        view_struct: InlineSpec,
     ) -> Self {
         Self {
             underlying: SenderState::Open(sender),
             resp,
             send_receive_delta: 0,
-            capacity,
+            capacity: view_struct.capacity.unwrap(),
+            latency: view_struct.send_latency,
+            resp_latency: view_struct.response_latency,
             view_struct,
             next_available: SendOptions::Unknown,
         }
@@ -324,19 +324,14 @@ pub(crate) struct AcyclicSender<T> {
     underlying: SenderState<ChannelElement<T>>,
     resp: channel::Receiver<Time>,
     send_receive_delta: usize,
-    capacity: usize,
 
-    view_struct: Arc<ChannelSpec>,
+    view_struct: InlineSpec,
     next_available: SendOptions,
 }
 
 impl<T: Clone> SenderFlavor<T> for AcyclicSender<T> {
-    fn attach_sender(&self, sender: &dyn Context) {
-        self.view_struct.attach_sender(sender)
-    }
-
     fn try_send(&mut self, data: ChannelElement<T>) -> Result<(), SendOptions> {
-        if self.send_receive_delta == self.capacity {
+        if self.send_receive_delta == self.view_struct.capacity.unwrap() {
             let sender_time = self.view_struct.sender_tlb();
             match self.next_available {
                 SendOptions::AvailableAt(time) if time > sender_time => {
@@ -366,8 +361,7 @@ impl<T: Clone> SenderFlavor<T> for AcyclicSender<T> {
                 }
             }
         }
-        assert!(self.send_receive_delta < self.capacity);
-        self.view_struct.register_send();
+        assert!(self.send_receive_delta < self.view_struct.capacity.unwrap());
         // Not full, proceed.
         match &self.underlying {
             SenderState::Open(sender) => match sender.send(data) {
@@ -415,7 +409,7 @@ impl<T: Clone> SenderFlavor<T> for AcyclicSender<T> {
     }
 
     fn wait_until_available(&mut self, manager: &mut TimeManager) -> Result<(), EnqueueError> {
-        if self.send_receive_delta == self.capacity {
+        if self.send_receive_delta == self.view_struct.capacity.unwrap() {
             match self.next_available {
                 SendOptions::Never => return Err(EnqueueError {}),
 
@@ -446,14 +440,12 @@ impl<T> AcyclicSender<T> {
     pub(crate) fn new(
         sender: channel::Sender<ChannelElement<T>>,
         resp: channel::Receiver<Time>,
-        capacity: usize,
-        view_struct: Arc<ChannelSpec>,
+        view_struct: InlineSpec,
     ) -> Self {
         Self {
             underlying: SenderState::Open(sender),
             resp,
             send_receive_delta: 0,
-            capacity,
             view_struct,
             next_available: SendOptions::Unknown,
         }
@@ -462,14 +454,11 @@ impl<T> AcyclicSender<T> {
 
 pub(crate) struct InfiniteSender<T> {
     underlying: SenderState<ChannelElement<T>>,
-    view_struct: Arc<ChannelSpec>,
+    view_struct: InlineSpec,
 }
 
 impl<T> InfiniteSender<T> {
-    pub(crate) fn new(
-        underlying: SenderState<ChannelElement<T>>,
-        view_struct: Arc<ChannelSpec>,
-    ) -> Self {
+    pub(crate) fn new(underlying: SenderState<ChannelElement<T>>, view_struct: InlineSpec) -> Self {
         Self {
             underlying,
             view_struct,
@@ -478,13 +467,8 @@ impl<T> InfiniteSender<T> {
 }
 
 impl<T: Clone> SenderFlavor<T> for InfiniteSender<T> {
-    fn attach_sender(&self, sender: &dyn Context) {
-        self.view_struct.attach_sender(sender);
-    }
-
     fn try_send(&mut self, elem: ChannelElement<T>) -> Result<(), SendOptions> {
         assert!(elem.time >= self.view_struct.sender_tlb());
-        let _ = self.view_struct.register_send();
         match &self.underlying {
             SenderState::Open(chan) => match chan.send(elem) {
                 Ok(_) => Ok(()),
