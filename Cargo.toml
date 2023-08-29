@@ -33,15 +33,3 @@ codegen-units = 1
 [profile.dev.build-override]
 codegen-units = 1
 opt-level = 3
-
-[[bench]]
-name = "benchmark_examples"
-harness = false
-
-[[bench]]
-name = "benchmark_templates"
-harness = false
-
-[[bench]]
-name = "benchmark_sst"
-harness = false
