@@ -8,7 +8,7 @@ where
         2 * A::SIZE
     }
 }
- */
+
 macro_rules! builtin_tup {
     ($tp: tt, $tup: tt, $len: literal) => {
         impl<$tp> DAMType for $tup
@@ -27,6 +27,21 @@ builtin_tup!(A, (A, A, A), 3);
 builtin_tup!(A, (A, A, A, A), 4);
 builtin_tup!(A, (A, A, A, A, A), 5);
 builtin_tup!(A, (A, A, A, A, A, A), 6);
+ */
+macro_rules! builtin_tup2 {
+    ($tp: tt, $len: literal) => {
+        impl DAMType for ($tp, $tp)
+        where
+            $tp: PartialEq + std::fmt::Debug + Clone + Default + Sync + Send + StaticallySized,
+        {
+            fn dam_size(&self) -> usize {
+                $len * $tp::SIZE
+            }
+        }
+    };
+}
+
+builtin_tup2!(i32, 2);
 
 #[cfg(test)]
 mod tests {
