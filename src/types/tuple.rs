@@ -8,7 +8,7 @@ where
         2 * A::SIZE
     }
 }
-
+ */
 macro_rules! builtin_tup {
     ($tp: tt, $tup: tt, $len: literal) => {
         impl<$tp> DAMType for $tup
@@ -27,7 +27,7 @@ builtin_tup!(A, (A, A, A), 3);
 builtin_tup!(A, (A, A, A, A), 4);
 builtin_tup!(A, (A, A, A, A, A), 5);
 builtin_tup!(A, (A, A, A, A, A, A), 6);
- */
+/*
 macro_rules! builtin_tup2 {
     ($tp: tt, $len: literal) => {
         impl DAMType for ($tp, $tp)
@@ -42,7 +42,7 @@ macro_rules! builtin_tup2 {
 }
 
 //builtin_tup2!(i32, 2);
-/*
+
 impl DAMType for (i32, i32) {
     fn dam_size(&self) -> usize {
         2 * i32::SIZE
