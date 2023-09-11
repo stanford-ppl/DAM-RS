@@ -1,5 +1,5 @@
 use super::{DAMType, StaticallySized};
-
+/*
 macro_rules! builtin_tup {
     ($tp: tt, $tup: tt, $len: literal) => {
         impl<$tp> DAMType for $tup
@@ -9,6 +9,17 @@ macro_rules! builtin_tup {
             fn dam_size(&self) -> usize {
                 $len * $tp::SIZE
             }
+        }
+    };
+}
+*/
+macro_rules! builtin_tup {
+    ($tp: tt, $tup: tt, $len: literal) => {
+        impl<$tp> StaticallySized for $tup
+        where
+            A: Clone + StaticallySized,
+        {
+            const SIZE: usize = $len * $tp::SIZE;
         }
     };
 }
