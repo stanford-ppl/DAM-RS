@@ -41,7 +41,14 @@ macro_rules! builtin_tup2 {
     };
 }
 
-builtin_tup2!(i32, 2);
+//builtin_tup2!(i32, 2);
+/*
+impl DAMType for (i32, i32) {
+    fn dam_size(&self) -> usize {
+        2 * i32::SIZE
+    }
+}
+ */
 
 #[cfg(test)]
 mod tests {
