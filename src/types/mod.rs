@@ -1,5 +1,6 @@
 pub mod scalar;
 pub mod tensor;
+pub mod tuple;
 pub mod unevaluated;
 
 //Sync + Send + Default + core::fmt::Debug + std::cmp::PartialEq + Clone;
