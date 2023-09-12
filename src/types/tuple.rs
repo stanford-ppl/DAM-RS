@@ -1,4 +1,4 @@
-use super::{DAMType, StaticallySized};
+use super::StaticallySized;
 /*
 macro_rules! builtin_tup {
     ($tp: tt, $tup: tt, $len: literal) => {
