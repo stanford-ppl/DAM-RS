@@ -1,11 +1,10 @@
-use std::sync::{atomic::AtomicBool, Arc, Mutex};
+use std::sync::{Arc, Mutex};
 
 use linkme::distributed_slice;
 use serde::{Deserialize, Serialize};
 
 use crate::{
     identifier::Identifier,
-    log_graph::get_registry,
     metric::{LogProducer, METRICS},
     time::{AtomicTime, Time},
 };
@@ -63,13 +62,12 @@ impl TimeManager {
     fn scan_and_write_signals(&mut self) {
         let mut signal_buffer = self.underlying.signal_buffer.lock().unwrap();
         let tlb = self.underlying.time.load();
+        #[cfg(logging)]
         let mut released = Vec::new();
         signal_buffer.retain(|signal| {
             if signal.when <= tlb {
-                signal
-                    .done
-                    .store(true, std::sync::atomic::Ordering::Release);
                 signal.thread.unpark();
+                #[cfg(logging)]
                 released.push(signal.thread.id());
                 false
             } else {
@@ -78,6 +76,7 @@ impl TimeManager {
         });
 
         drop(signal_buffer);
+        #[cfg(logging)]
         if !released.is_empty() {
             let graph = get_registry();
             Self::log(TimeEvent::ScanAndWrite(
@@ -95,7 +94,7 @@ impl TimeManager {
     }
 
     pub fn tick(&self) -> Time {
-        self.underlying.time.load()
+        self.underlying.time.load_relaxed()
     }
 
     pub fn cleanup(&mut self) {
@@ -134,22 +133,23 @@ impl ContextView for BasicContextView {
         }
 
         let mut signal_buffer = self.under.signal_buffer.lock().unwrap();
-        let cur_time = self.under.time.load();
+        let mut cur_time = self.under.time.load();
         if cur_time >= when {
             return cur_time;
         } else {
-            let done = Arc::new(AtomicBool::new(false));
             signal_buffer.push(SignalElement {
                 when,
-                done: done.clone(),
                 thread: std::thread::current(),
             });
             // Unlock the signal buffer
             drop(signal_buffer);
 
             Self::log(ContextViewEvent::Park);
-            while !done.load(std::sync::atomic::Ordering::Acquire) {
+
+            while cur_time < when {
+                // Park is Acquire, so the load can be relaxed
                 std::thread::park();
+                cur_time = self.under.time.load_relaxed();
             }
             Self::log(ContextViewEvent::Unpark);
 
@@ -167,8 +167,6 @@ impl ContextView for BasicContextView {
 #[derive(Debug, Clone)]
 struct SignalElement {
     when: Time,
-
-    done: Arc<AtomicBool>,
     thread: std::thread::Thread,
 }
 

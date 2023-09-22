@@ -14,6 +14,7 @@ pub trait ContextView {
 }
 
 #[enum_delegate::implement(ContextView)]
+#[derive(Clone)]
 pub enum TimeView {
     BasicContextView(BasicContextView),
     ParentView(ParentView),

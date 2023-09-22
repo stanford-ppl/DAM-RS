@@ -2,6 +2,7 @@ use crate::time::Time;
 
 use super::{ContextView, TimeView};
 
+#[derive(Clone)]
 pub struct ParentView {
     pub child_views: Vec<TimeView>,
 }

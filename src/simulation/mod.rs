@@ -1,10 +1,8 @@
+use core::fmt;
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
 };
-
-use dam_core::{identifier::Identifier, log_graph::with_log_scope};
-use petgraph::{dot::Dot, prelude::DiGraph};
 
 use crate::{
     channel::{
@@ -14,6 +12,9 @@ use crate::{
     },
     context::Context,
 };
+use dam_core::{identifier::Identifier, log_graph::with_log_scope, time::Time, ContextView};
+use petgraph::{dot::Dot, prelude::DiGraph};
+use rustc_hash::{FxHashMap, FxHashSet};
 
 // A Program consists of all of its nodes and all of its edges.
 
@@ -23,6 +24,9 @@ pub struct Program<'a> {
     // In order to perform optimizations such as flavor inference, the program also needs to hold onto all of its edges.
     edges: Vec<Arc<dyn ChannelHandle + 'a>>,
     void_edges: Vec<Arc<dyn ChannelHandle + 'a>>,
+
+    infer_flavors: bool,
+    run_mode: RunMode,
 }
 
 #[derive(Copy, Clone, Eq, Debug, PartialEq, Hash)]
@@ -31,13 +35,51 @@ enum ChannelOrContext {
     Context(Identifier),
 }
 
+struct ChannelInfo {
+    pub id: ChannelID,
+    pub capacity: usize,
+    pub latency: u64,
+}
+
+impl ChannelInfo {
+    pub fn new(id: ChannelID, capacity: usize, latency: u64) -> ChannelInfo {
+        ChannelInfo {
+            id,
+            capacity,
+            latency,
+        }
+    }
+}
+
+impl fmt::Debug for ChannelInfo {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{:?} (Depth: {:?}, Latency: {:?})",
+            self.id, self.capacity, self.latency
+        )
+    }
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+pub enum RunMode {
+    #[default]
+    Simple,
+    FIFO,
+}
+
 impl<'a> Program<'a> {
     // Methods to add channels
-    fn make_channel<T>(&mut self, capacity: Option<usize>) -> (Sender<T>, Receiver<T>)
+    fn make_channel_with_latency<T>(
+        &mut self,
+        capacity: Option<usize>,
+        latency: Option<u64>,
+        resp_latency: Option<u64>,
+    ) -> (Sender<T>, Receiver<T>)
     where
         T: Clone + 'a,
     {
-        let spec = Arc::new(ChannelSpec::new(capacity));
+        let spec = Arc::new(ChannelSpec::new(capacity, latency, resp_latency));
         let underlying = Arc::new(ChannelData::new(spec));
         self.edges.push(underlying.clone());
 
@@ -50,15 +92,32 @@ impl<'a> Program<'a> {
     }
 
     pub fn bounded<T: Clone + 'a>(&mut self, capacity: usize) -> (Sender<T>, Receiver<T>) {
-        self.make_channel(Some(capacity))
+        self.make_channel_with_latency(Some(capacity), None, None)
+    }
+
+    pub fn bounded_with_latency<T: Clone + 'a>(
+        &mut self,
+        capacity: usize,
+        latency: u64,
+        resp_latency: u64,
+    ) -> (Sender<T>, Receiver<T>) {
+        self.make_channel_with_latency(Some(capacity), Some(latency), Some(resp_latency))
     }
 
     pub fn unbounded<T: Clone + 'a>(&mut self) -> (Sender<T>, Receiver<T>) {
-        self.make_channel(None)
+        self.make_channel_with_latency(None, None, None)
+    }
+
+    pub fn unbounded_with_latency<T: Clone + 'a>(
+        &mut self,
+        latency: u64,
+        resp_latency: u64,
+    ) -> (Sender<T>, Receiver<T>) {
+        self.make_channel_with_latency(None, Some(latency), Some(resp_latency))
     }
 
     pub fn void<T: Clone + 'a>(&mut self) -> Sender<T> {
-        let spec = Arc::new(ChannelSpec::new(None));
+        let spec = Arc::new(ChannelSpec::new(None, None, None));
         let underlying = Arc::new(ChannelData::new(spec));
         self.void_edges.push(underlying.clone());
         Sender { underlying }
@@ -71,6 +130,14 @@ impl<'a> Program<'a> {
         self.nodes.push(Box::new(child));
     }
 
+    pub fn set_inference(&mut self, infer: bool) {
+        self.infer_flavors = infer;
+    }
+
+    pub fn set_mode(&mut self, mode: RunMode) {
+        self.run_mode = mode;
+    }
+
     fn all_node_ids(&self) -> HashSet<Identifier> {
         let tree = self.nodes.iter().map(|x| x.child_ids());
         HashSet::from_iter(
@@ -79,16 +146,32 @@ impl<'a> Program<'a> {
         )
     }
 
-    pub fn init(&mut self) {
+    fn all_node_names(&self) -> HashMap<Identifier, String> {
+        let mut hashmap = HashMap::new();
+        for node in self.nodes.iter() {
+            hashmap.insert(node.id(), node.name());
+        }
+        hashmap
+    }
+
+    pub fn check(&self) {
         // Make sure that all edges have registered endpoints.
         self.edges.iter().for_each(|edge| {
-            assert!(edge.sender().is_some());
-            assert!(edge.receiver().is_some());
+            if edge.sender().is_none() {
+                panic!("Edge {:?} had no sender!", edge.id());
+            }
+            if edge.receiver().is_none() {
+                panic!("Edge {:?} had no receiver!", edge.id());
+            }
         });
 
         self.void_edges.iter().for_each(|edge| {
-            assert!(edge.sender().is_some());
-            assert!(edge.receiver().is_none());
+            if edge.sender().is_none() {
+                panic!("Void edge {:?} had no sender!", edge.id());
+            }
+            if let Some(recv) = edge.receiver() {
+                panic!("Void edge {:?} had a receiver! ({recv:?})", edge.id());
+            }
         });
 
         let all_node_ids = self.all_node_ids();
@@ -103,120 +186,153 @@ impl<'a> Program<'a> {
                     }
                 })
         });
+    }
 
+    pub fn init(&mut self) {
         // construct the edge reachability graph.
         // an edge is reachable from another edge
+        self.check();
 
         self.void_edges
             .iter()
             .for_each(|edge| edge.set_flavor(crate::channel::ChannelFlavor::Void));
 
-        let all_channel_ids: Vec<_> = self
-            .edges
-            .iter()
-            .chain(self.void_edges.iter())
-            .map(|handle| handle.id())
-            .collect();
+        if self.infer_flavors {
+            let all_channel_ids: Vec<_> = self
+                .edges
+                .iter()
+                .chain(self.void_edges.iter())
+                .map(|handle| handle.id())
+                .collect();
 
-        let mut edge_graph = DiGraph::<ChannelOrContext, ()>::new();
-        // All edges are nodes on the graph
-        // all contexts map to one or more nodes
-        let mut graph_node_map = HashMap::new();
-        all_channel_ids.iter().for_each(|chan_id| {
-            let handle = ChannelOrContext::ChannelID(*chan_id);
-            let node = edge_graph.add_node(handle);
-            graph_node_map.insert(handle, node);
-        });
+            let mut edge_graph = DiGraph::<ChannelOrContext, ()>::new();
+            // All edges are nodes on the graph
+            // all contexts map to one or more nodes
+            let mut graph_node_map = FxHashMap::default();
+            all_channel_ids.iter().for_each(|chan_id| {
+                let handle = ChannelOrContext::ChannelID(*chan_id);
+                let node = edge_graph.add_node(handle);
+                graph_node_map.insert(handle, node);
+            });
 
-        let mut manually_managed_nodes = HashSet::new();
+            let mut manually_managed_nodes = FxHashSet::default();
 
-        for explicit_conn in self.nodes.iter().flat_map(|node| node.edge_connections()) {
-            for (node, mapping) in explicit_conn {
-                manually_managed_nodes.insert(node);
-                for (srcs, dsts) in mapping {
-                    let temp_node = edge_graph.add_node(ChannelOrContext::Context(node));
-                    for src in srcs {
-                        edge_graph.add_edge(
-                            *graph_node_map
-                                .get(&ChannelOrContext::ChannelID(src))
-                                .unwrap(),
-                            temp_node,
-                            (),
-                        );
-                    }
+            for explicit_conn in self.nodes.iter().flat_map(|node| node.edge_connections()) {
+                for (node, mapping) in explicit_conn {
+                    manually_managed_nodes.insert(node);
+                    for (srcs, dsts) in mapping {
+                        let temp_node = edge_graph.add_node(ChannelOrContext::Context(node));
+                        for src in srcs {
+                            edge_graph.add_edge(
+                                *graph_node_map
+                                    .get(&ChannelOrContext::ChannelID(src))
+                                    .unwrap(),
+                                temp_node,
+                                (),
+                            );
+                        }
 
-                    for dst in dsts {
-                        edge_graph.add_edge(
-                            temp_node,
-                            *graph_node_map
-                                .get(&ChannelOrContext::ChannelID(dst))
-                                .unwrap(),
-                            (),
-                        );
+                        for dst in dsts {
+                            edge_graph.add_edge(
+                                temp_node,
+                                *graph_node_map
+                                    .get(&ChannelOrContext::ChannelID(dst))
+                                    .unwrap(),
+                                (),
+                            );
+                        }
                     }
                 }
             }
+
+            for node in self.all_node_ids() {
+                if !manually_managed_nodes.contains(&node) {
+                    let handle = ChannelOrContext::Context(node);
+                    graph_node_map.insert(handle, edge_graph.add_node(handle));
+                }
+            }
+
+            // Now iterate over all the edges, populating the remaining stuff.
+            for edge in self.edges.iter() {
+                let own_node = graph_node_map
+                    .get(&ChannelOrContext::ChannelID(edge.id()))
+                    .unwrap();
+                let src = edge.sender().unwrap();
+                if !manually_managed_nodes.contains(&src) {
+                    // connect the source onto ourselves
+                    edge_graph.add_edge(
+                        *graph_node_map.get(&ChannelOrContext::Context(src)).unwrap(),
+                        *own_node,
+                        (),
+                    );
+                }
+
+                let dst = edge.receiver().unwrap();
+                if !manually_managed_nodes.contains(&dst) {
+                    edge_graph.add_edge(
+                        *own_node,
+                        *graph_node_map.get(&ChannelOrContext::Context(dst)).unwrap(),
+                        (),
+                    );
+                }
+            }
+
+            let sccs = petgraph::algo::tarjan_scc(&edge_graph);
+            let actual_sccs: HashSet<_> =
+                HashSet::from_iter(sccs.into_iter().filter(|x| x.len() > 1).flatten());
+
+            // One of the major things to do here is to optimize all of the edges.
+            self.edges.iter().for_each(|edge| {
+                let handle = graph_node_map
+                    .get(&ChannelOrContext::ChannelID(edge.id()))
+                    .unwrap();
+                if actual_sccs.contains(handle) {
+                    edge.set_flavor(crate::channel::ChannelFlavor::Cyclic);
+                } else {
+                    edge.set_flavor(crate::channel::ChannelFlavor::Acyclic);
+                }
+            });
+        } else {
+            self.edges
+                .iter()
+                .for_each(|edge| edge.set_flavor(crate::channel::ChannelFlavor::Cyclic));
         }
-
-        for node in all_node_ids {
-            if !manually_managed_nodes.contains(&node) {
-                let handle = ChannelOrContext::Context(node);
-                graph_node_map.insert(handle, edge_graph.add_node(handle));
-            }
-        }
-
-        // Now iterate over all the edges, populating the remaining stuff.
-        for edge in self.edges.iter() {
-            let own_node = graph_node_map
-                .get(&ChannelOrContext::ChannelID(edge.id()))
-                .unwrap();
-            let src = edge.sender().unwrap();
-            if !manually_managed_nodes.contains(&src) {
-                // connect the source onto ourselves
-                edge_graph.add_edge(
-                    *graph_node_map.get(&ChannelOrContext::Context(src)).unwrap(),
-                    *own_node,
-                    (),
-                );
-            }
-
-            let dst = edge.receiver().unwrap();
-            if !manually_managed_nodes.contains(&dst) {
-                edge_graph.add_edge(
-                    *own_node,
-                    *graph_node_map.get(&ChannelOrContext::Context(dst)).unwrap(),
-                    (),
-                );
-            }
-        }
-
-        let sccs = petgraph::algo::tarjan_scc(&edge_graph);
-        let actual_sccs: HashSet<_> =
-            HashSet::from_iter(sccs.into_iter().filter(|x| x.len() > 1).flatten());
-
-        // One of the major things to do here is to optimize all of the edges.
-        self.edges.iter().for_each(|edge| {
-            let handle = graph_node_map
-                .get(&ChannelOrContext::ChannelID(edge.id()))
-                .unwrap();
-            if actual_sccs.contains(handle) {
-                edge.set_flavor(crate::channel::ChannelFlavor::Cyclic);
-            } else {
-                edge.set_flavor(crate::channel::ChannelFlavor::Acyclic);
-            }
-        });
 
         self.nodes.iter_mut().for_each(|child| child.init());
     }
 
     pub fn run(&mut self) {
+        let (priority, policy) = match self.run_mode {
+            RunMode::Simple => (
+                thread_priority::get_current_thread_priority().unwrap(),
+                thread_priority::thread_schedule_policy().unwrap(),
+            ),
+            RunMode::FIFO => {
+                let priority =
+                    thread_priority::ThreadPriority::Crossplatform(10u8.try_into().unwrap());
+                let policy = thread_priority::unix::ThreadSchedulePolicy::Realtime(
+                    thread_priority::RealtimeThreadSchedulePolicy::Fifo,
+                );
+                (priority, policy)
+            }
+        };
+
+        // println!("Priority: {priority:?}, Policy: {policy:?}");
+
         std::thread::scope(|s| {
             self.nodes.iter_mut().for_each(|child| {
                 let id = child.id();
                 let name = child.name();
-                std::thread::Builder::new()
-                    .name(format!("{}({})", child.id(), child.name()))
-                    .spawn_scoped(s, || {
+                let builder = thread_priority::ThreadBuilder::default().name(format!(
+                    "{}({})",
+                    child.id(),
+                    child.name()
+                ));
+
+                let builder = builder.priority(priority).policy(policy);
+
+                builder
+                    .spawn_scoped_careless(s, || {
                         with_log_scope(child.id(), child.name(), || {
                             child.run();
                             child.cleanup();
@@ -228,6 +344,7 @@ impl<'a> Program<'a> {
     }
 
     pub fn print_graph(&self) {
+        self.check();
         let mut graph = DiGraph::<Identifier, ChannelID>::new();
         let ids = self.all_node_ids();
         let mut id_node_map = HashMap::new();
@@ -237,12 +354,54 @@ impl<'a> Program<'a> {
 
         for edge in &self.edges {
             graph.add_edge(
-                *id_node_map.get(&edge.sender().unwrap()).unwrap(),
-                *id_node_map.get(&edge.receiver().unwrap()).unwrap(),
+                *id_node_map
+                    .get(&edge.sender().expect("Edge didn't have a sender!"))
+                    .expect("Edge sender was not registered in id_node_map!"),
+                *id_node_map
+                    .get(&edge.receiver().expect("Edge didn't have a receiver!"))
+                    .expect("Edge receiver was not registered in id_node_map!"),
                 edge.id(),
             );
         }
 
         println!("{:?}", Dot::with_config(&graph, &[]));
+    }
+
+    pub fn print_graph_with_names(&self) {
+        self.check();
+        let mut graph = DiGraph::<&str, ChannelInfo>::new();
+        let ids = self.all_node_ids();
+        let node_names = self.all_node_names();
+        let mut id_node_map: HashMap<Identifier, petgraph::stable_graph::NodeIndex> =
+            HashMap::new();
+        for id in ids {
+            id_node_map.insert(id, graph.add_node(node_names[&id].as_str().clone()));
+        }
+
+        for edge in &self.edges {
+            graph.add_edge(
+                *id_node_map
+                    .get(&edge.sender().expect("Edge didn't have a sender!"))
+                    .expect("Edge sender was not registered in id_node_map!"),
+                *id_node_map
+                    .get(&edge.receiver().expect("Edge didn't have a receiver!"))
+                    .expect("Edge receiver was not registered in id_node_map!"),
+                ChannelInfo::new(
+                    edge.id(),
+                    edge.spec().capacity().unwrap(),
+                    edge.spec().latency(),
+                ),
+            );
+        }
+
+        println!("{:?}", Dot::with_config(&graph, &[]));
+    }
+
+    pub fn elapsed_cycles(&self) -> Time {
+        let ticks = self
+            .nodes
+            .iter()
+            .map(|child| child.view().tick_lower_bound());
+        ticks.max().unwrap_or(Time::new(0))
     }
 }

@@ -8,7 +8,10 @@ use enum_dispatch::enum_dispatch;
 
 use crate::context::Context;
 
-use super::{channel_spec::ChannelSpec, ChannelElement, Recv};
+use super::{
+    channel_spec::{ChannelSpec, InlineSpec},
+    ChannelElement, Recv,
+};
 
 pub(crate) enum ReceiverState<T> {
     Open(channel::Receiver<T>),
@@ -17,7 +20,9 @@ pub(crate) enum ReceiverState<T> {
 
 #[enum_dispatch(ReceiverImpl<T>)]
 pub(crate) trait ReceiverFlavor<T> {
-    fn attach_receiver(&self, receiver: &dyn Context);
+    fn attach_receiver(&self, _receiver: &dyn Context) {
+        panic!("attach_receiver can only be called on an Undefined Receiver")
+    }
     fn peek(&mut self) -> Recv<T>;
     fn peek_next(&mut self, manager: &mut TimeManager) -> Recv<T>;
     fn dequeue(&mut self, manager: &mut TimeManager) -> Recv<T>;
@@ -65,7 +70,7 @@ impl<T> ReceiverFlavor<T> for UndefinedReceiver<T> {
     }
 
     fn cleanup(&mut self) {
-        panic!();
+        // No-op since it's part of drop
     }
 }
 
@@ -73,15 +78,11 @@ pub(crate) struct CyclicReceiver<T> {
     pub(crate) underlying: ReceiverState<ChannelElement<T>>,
     pub(crate) resp: channel::Sender<Time>,
 
-    pub(crate) view_struct: Arc<ChannelSpec>,
+    pub(crate) view_struct: InlineSpec,
     pub(crate) head: Recv<T>,
 }
 
 impl<T: Clone> ReceiverFlavor<T> for CyclicReceiver<T> {
-    fn attach_receiver(&self, receiver: &dyn Context) {
-        self.view_struct.attach_receiver(receiver);
-    }
-
     fn peek(&mut self) -> Recv<T> {
         let recv_time = self.view_struct.receiver_tlb();
         match self.head {
@@ -144,7 +145,7 @@ impl<T: Clone> CyclicReceiver<T> {
     pub fn new(
         underlying: channel::Receiver<ChannelElement<T>>,
         resp: channel::Sender<Time>,
-        view_struct: Arc<ChannelSpec>,
+        view_struct: InlineSpec,
     ) -> Self {
         Self {
             underlying: ReceiverState::Open(underlying),
@@ -195,9 +196,9 @@ impl<T: Clone> CyclicReceiver<T> {
 
     fn register_recv(&mut self, time: Time) {
         let ct: Time = self.view_struct.receiver_tlb();
-        let prev_srd = self.view_struct.register_recv();
-        let _ = self.resp.send(ct.max(time));
-        assert_ne!(prev_srd, 0);
+        let _ = self
+            .resp
+            .send(ct.max(time) + self.view_struct.response_latency);
     }
 }
 
@@ -205,15 +206,11 @@ pub struct AcyclicReceiver<T> {
     pub(crate) underlying: ReceiverState<ChannelElement<T>>,
     pub(crate) resp: channel::Sender<Time>,
 
-    pub(crate) view_struct: Arc<ChannelSpec>,
+    pub(crate) view_struct: InlineSpec,
     pub(crate) head: Recv<T>,
 }
 
 impl<T: Clone> ReceiverFlavor<T> for AcyclicReceiver<T> {
-    fn attach_receiver(&self, receiver: &dyn Context) {
-        self.view_struct.attach_receiver(receiver);
-    }
-
     fn peek(&mut self) -> Recv<T> {
         let recv_time = self.view_struct.receiver_tlb();
         match self.head {
@@ -294,7 +291,7 @@ impl<T: Clone> AcyclicReceiver<T> {
     pub fn new(
         underlying: channel::Receiver<ChannelElement<T>>,
         resp: channel::Sender<Time>,
-        view_struct: Arc<ChannelSpec>,
+        view_struct: InlineSpec,
     ) -> Self {
         Self {
             underlying: ReceiverState::Open(underlying),
@@ -340,24 +337,20 @@ impl<T: Clone> AcyclicReceiver<T> {
 
     fn register_recv(&mut self, time: Time) {
         let ct: Time = self.view_struct.receiver_tlb();
-        let prev_srd = self.view_struct.register_recv();
-        let _ = self.resp.send(ct.max(time));
-        assert_ne!(prev_srd, 0);
+        let _ = self
+            .resp
+            .send(ct.max(time) + self.view_struct.response_latency);
     }
 }
 
 pub struct AcyclicInfiniteReceiver<T> {
     underlying: ReceiverState<ChannelElement<T>>,
 
-    view_struct: Arc<ChannelSpec>,
+    view_struct: InlineSpec,
     head: Recv<T>,
 }
 
 impl<T: Clone> ReceiverFlavor<T> for AcyclicInfiniteReceiver<T> {
-    fn attach_receiver(&self, receiver: &dyn Context) {
-        self.view_struct.attach_receiver(receiver);
-    }
-
     fn peek(&mut self) -> Recv<T> {
         let recv_time = self.view_struct.receiver_tlb();
         match self.head {
@@ -406,7 +399,6 @@ impl<T: Clone> ReceiverFlavor<T> for AcyclicInfiniteReceiver<T> {
             let time = x.time;
             let mut result = Recv::Unknown;
             std::mem::swap(&mut self.head, &mut result);
-            self.view_struct.register_recv();
             manager.advance(time);
             return result;
         }
@@ -418,7 +410,6 @@ impl<T: Clone> ReceiverFlavor<T> for AcyclicInfiniteReceiver<T> {
         // At this point, we can just block!
         match self.under_recv() {
             Ok(ce) => {
-                self.view_struct.register_recv();
                 manager.advance(ce.time);
                 Recv::Something(ce)
             }
@@ -437,7 +428,7 @@ impl<T: Clone> ReceiverFlavor<T> for AcyclicInfiniteReceiver<T> {
 impl<T: Clone> AcyclicInfiniteReceiver<T> {
     pub(crate) fn new(
         underlying: ReceiverState<ChannelElement<T>>,
-        view_struct: Arc<ChannelSpec>,
+        view_struct: InlineSpec,
     ) -> Self {
         Self {
             underlying,
@@ -484,15 +475,11 @@ impl<T: Clone> AcyclicInfiniteReceiver<T> {
 pub struct CyclicInfiniteReceiver<T> {
     underlying: ReceiverState<ChannelElement<T>>,
 
-    view_struct: Arc<ChannelSpec>,
+    view_struct: InlineSpec,
     head: Recv<T>,
 }
 
 impl<T: Clone> ReceiverFlavor<T> for CyclicInfiniteReceiver<T> {
-    fn attach_receiver(&self, receiver: &dyn Context) {
-        self.view_struct.attach_receiver(receiver);
-    }
-
     fn peek(&mut self) -> Recv<T> {
         let recv_time = self.view_struct.receiver_tlb();
         match self.head {
@@ -541,7 +528,6 @@ impl<T: Clone> ReceiverFlavor<T> for CyclicInfiniteReceiver<T> {
             let time = x.time;
             let mut result = Recv::Unknown;
             std::mem::swap(&mut self.head, &mut result);
-            self.view_struct.register_recv();
             manager.advance(time);
             return result;
         }
@@ -553,7 +539,6 @@ impl<T: Clone> ReceiverFlavor<T> for CyclicInfiniteReceiver<T> {
         // At this point, we can just block!
         match self.under_recv() {
             Ok(ce) => {
-                self.view_struct.register_recv();
                 manager.advance(ce.time);
                 Recv::Something(ce)
             }
@@ -572,7 +557,7 @@ impl<T: Clone> ReceiverFlavor<T> for CyclicInfiniteReceiver<T> {
 impl<T: Clone> CyclicInfiniteReceiver<T> {
     pub(crate) fn new(
         underlying: ReceiverState<ChannelElement<T>>,
-        view_struct: Arc<ChannelSpec>,
+        view_struct: InlineSpec,
     ) -> Self {
         Self {
             underlying,

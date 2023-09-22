@@ -12,17 +12,15 @@ use dam_macros::identifiable;
 
 use super::Context;
 
-type ChildType = dyn Context;
-
 #[identifiable]
 #[derive(Default)]
 pub struct BasicParentContext<'a> {
-    children: Vec<&'a mut ChildType>,
+    children: Vec<Box<dyn Context + 'a>>,
 }
 
 impl<'a> BasicParentContext<'a> {
-    pub fn add_child(&mut self, child: &'a mut ChildType) {
-        self.children.push(child);
+    pub fn add_child<T: Context + 'a>(&mut self, child: T) {
+        self.children.push(Box::new(child));
     }
 }
 
