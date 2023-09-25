@@ -42,3 +42,41 @@ impl<T: DAMType> ConsumerContext<T> {
         s
     }
 }
+
+#[identifiable]
+#[time_managed]
+pub struct PrinterContext<T: DAMType> {
+    chan: Receiver<T>,
+}
+
+impl<T: DAMType> Context for PrinterContext<T> {
+    fn init(&mut self) {}
+
+    fn run(&mut self) {
+        loop {
+            match self.chan.dequeue(&mut self.time) {
+                crate::channel::Recv::Something(x) => println!("{:?}", x),
+                crate::channel::Recv::Closed => return,
+                _ => unreachable!("Dequeue can only receive Something or be Closed"),
+            }
+            self.time.incr_cycles(1);
+        }
+    }
+
+    fn cleanup(&mut self) {
+        self.chan.cleanup();
+        self.time.cleanup();
+    }
+}
+
+impl<T: DAMType> PrinterContext<T> {
+    pub fn new(chan: Receiver<T>) -> Self {
+        let s = Self {
+            chan,
+            identifier: Default::default(),
+            time: Default::default(),
+        };
+        s.chan.attach_receiver(&s);
+        s
+    }
+}
