@@ -33,9 +33,9 @@ impl<T> BoundedProvider for BoundedAcyclicSender<T> {
         match self.bound.resp.recv() {
             Ok(time) => {
                 manager.advance(time);
-                return Ok(());
+                Ok(())
             }
-            Err(_) => return Err(EnqueueError {}),
+            Err(_) => Err(EnqueueError {}),
         }
     }
 }
@@ -84,7 +84,7 @@ impl<T> BoundedCyclicSender<T> {
                 }
                 Ok(time) => {
                     // Got a time in the future
-                    assert!(self.next_available == None);
+                    assert!(self.next_available.is_none());
                     self.next_available = Some(SendOptions::AvailableAt(time));
                     return true;
                 }
@@ -92,7 +92,7 @@ impl<T> BoundedCyclicSender<T> {
                     return retval;
                 }
                 Err(channel::TryRecvError::Disconnected) => {
-                    assert!(self.next_available == None);
+                    assert!(self.next_available.is_none());
                     self.next_available = Some(SendOptions::Never);
                     return true;
                 }
