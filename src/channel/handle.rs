@@ -9,9 +9,13 @@ use dam_core::{identifier::Identifier, sync_unsafe::SyncUnsafeCell, time::Time};
 
 use super::{
     channel_spec::ChannelSpec,
-    receiver::{undefined::UndefinedReceiver, *},
+    receiver::{uninitialized::UninitializedReceiver, *},
     sender::{
-        AcyclicSender, CyclicSender, InfiniteSender, SenderImpl, UndefinedSender, VoidSender,
+        bounded::{BoundedAcyclicSender, BoundedCyclicSender, BoundedData},
+        unbounded::UnboundedSender,
+        uninitialized::UninitializedSender,
+        void::VoidSender,
+        SenderData, SenderImpl,
     },
     ChannelElement, ChannelFlavor, ChannelID,
 };
@@ -33,8 +37,8 @@ pub(crate) struct ChannelData<T: Clone> {
 impl<T: Clone> ChannelData<T> {
     pub fn new(spec: Arc<ChannelSpec>) -> Self {
         Self {
-            sender: SyncUnsafeCell::new(UndefinedSender::new(spec.clone()).into()),
-            receiver: SyncUnsafeCell::new(UndefinedReceiver::new(spec.clone()).into()),
+            sender: SyncUnsafeCell::new(UninitializedSender::new(spec.clone()).into()),
+            receiver: SyncUnsafeCell::new(UninitializedReceiver::new(spec.clone()).into()),
             channel_spec: spec,
         }
     }
@@ -52,10 +56,14 @@ impl<T: Clone> ChannelData<T> {
 
 impl<T: Clone> ChannelHandle for ChannelData<T> {
     fn set_flavor(&self, flavor: ChannelFlavor) {
-        let make_channel_data = |underlying| ReceiverData::<T> {
+        let make_receiver_data = |underlying| ReceiverData::<T> {
             spec: self.channel_spec.make_inline(),
             underlying,
             head: None,
+        };
+        let make_sender_data = |underlying| SenderData::<T> {
+            spec: self.channel_spec.make_inline(),
+            underlying,
         };
         match self.channel_spec.capacity() {
             Some(capacity) => {
@@ -64,19 +72,32 @@ impl<T: Clone> ChannelHandle for ChannelData<T> {
                 match flavor {
                     ChannelFlavor::Unknown => panic!("Cannot set flavor to unknown!"),
                     ChannelFlavor::Acyclic => {
-                        *self.sender() =
-                            AcyclicSender::new(tx, resp_r, self.channel_spec.make_inline()).into();
+                        *self.sender() = BoundedAcyclicSender {
+                            data: make_sender_data(tx),
+                            bound: BoundedData {
+                                resp: resp_r,
+                                send_receive_delta: 0,
+                            },
+                        }
+                        .into();
                         *self.receiver() = BoundedAcyclicReceiver {
-                            data: make_channel_data(rx),
+                            data: make_receiver_data(rx),
                             resp: resp_t,
                         }
                         .into();
                     }
                     ChannelFlavor::Cyclic => {
-                        *self.sender() =
-                            CyclicSender::new(tx, resp_r, self.channel_spec.make_inline()).into();
+                        *self.sender() = BoundedCyclicSender {
+                            data: make_sender_data(tx),
+                            bound: BoundedData {
+                                resp: resp_r,
+                                send_receive_delta: 0,
+                            },
+                            next_available: None,
+                        }
+                        .into();
                         *self.receiver() = BoundedCyclicReceiver {
-                            data: make_channel_data(rx),
+                            data: make_receiver_data(rx),
                             resp: resp_t,
                         }
                         .into();
@@ -93,28 +114,26 @@ impl<T: Clone> ChannelHandle for ChannelData<T> {
                     ChannelFlavor::Acyclic => {
                         let (snd, rcv) = channel::unbounded();
 
-                        *self.sender() = InfiniteSender::new(
-                            super::sender::SenderState::Open(snd),
-                            self.channel_spec.make_inline(),
-                        )
+                        *self.sender() = UnboundedSender {
+                            data: make_sender_data(snd),
+                        }
                         .into();
 
                         *self.receiver() = InfiniteAcyclicReceiver {
-                            data: make_channel_data(rcv),
+                            data: make_receiver_data(rcv),
                         }
                         .into();
                     }
                     ChannelFlavor::Cyclic => {
                         let (snd, rcv) = channel::unbounded();
 
-                        *self.sender() = InfiniteSender::new(
-                            super::sender::SenderState::Open(snd),
-                            self.channel_spec.make_inline(),
-                        )
+                        *self.sender() = UnboundedSender {
+                            data: make_sender_data(snd),
+                        }
                         .into();
 
                         *self.receiver() = InfiniteCyclicReceiver {
-                            data: make_channel_data(rcv),
+                            data: make_receiver_data(rcv),
                         }
                         .into();
                     }

@@ -9,17 +9,17 @@ use crate::{
 
 use super::ReceiverFlavor;
 
-pub struct UndefinedReceiver {
+pub struct UninitializedReceiver {
     spec: Arc<ChannelSpec>,
 }
 
-impl UndefinedReceiver {
+impl UninitializedReceiver {
     pub fn new(spec: Arc<ChannelSpec>) -> Self {
         Self { spec }
     }
 }
 
-impl<T> ReceiverFlavor<T> for UndefinedReceiver {
+impl<T> ReceiverFlavor<T> for UninitializedReceiver {
     fn peek(&mut self) -> PeekResult<T> {
         panic!();
     }
@@ -33,7 +33,7 @@ impl<T> ReceiverFlavor<T> for UndefinedReceiver {
     }
 }
 
-impl UndefinedReceiver {
+impl UninitializedReceiver {
     pub fn attach_receiver(&self, receiver: &dyn Context) {
         self.spec.attach_receiver(receiver);
     }

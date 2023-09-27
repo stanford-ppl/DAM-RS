@@ -11,7 +11,7 @@ use super::{channel_spec::InlineSpec, ChannelElement, DequeueResult, PeekResult}
 mod acyclic;
 mod cyclic;
 pub mod terminated;
-pub mod undefined;
+pub mod uninitialized;
 
 #[enum_dispatch(ReceiverImpl<T>)]
 pub(super) trait ReceiverFlavor<T> {
@@ -23,7 +23,7 @@ pub(super) trait ReceiverFlavor<T> {
 #[enum_dispatch]
 pub(super) enum ReceiverImpl<T: Clone> {
     // This just tracks metadata
-    Uninitialized(undefined::UndefinedReceiver),
+    Uninitialized(uninitialized::UninitializedReceiver),
 
     // For marking termination and performing GC
     Terminated(terminated::TerminatedReceiver),
@@ -143,7 +143,7 @@ pub(super) struct BoundedCyclicReceiver<T> {
 
 impl<T> Responsive for BoundedCyclicReceiver<T> {
     fn register_recv(&self, time: Time) {
-        self.resp.send(time).unwrap();
+        let _ = self.resp.send(time + self.data.spec.response_latency);
     }
 }
 RegisterReceiver!(BoundedCyclicReceiver, CyclicReceiver);
@@ -155,7 +155,7 @@ pub(super) struct BoundedAcyclicReceiver<T> {
 
 impl<T> Responsive for BoundedAcyclicReceiver<T> {
     fn register_recv(&self, time: Time) {
-        self.resp.send(time).unwrap()
+        let _ = self.resp.send(time + self.data.spec.response_latency);
     }
 }
 RegisterReceiver!(BoundedAcyclicReceiver, AcyclicReceiver);

@@ -31,9 +31,10 @@ use self::handle::ChannelHandle;
 use self::receiver::terminated::TerminatedReceiver;
 
 use self::receiver::{ReceiverFlavor, ReceiverImpl};
+use self::sender::terminated::TerminatedSender;
 use dam_core::metric::LogProducer;
 
-use self::sender::{SendOptions, SenderFlavor, SenderImpl};
+use self::sender::{SenderFlavor, SenderImpl};
 
 #[derive(Clone, Debug)]
 pub struct ChannelElement<T> {
@@ -45,7 +46,9 @@ impl<T: Clone> ChannelElement<T> {
     pub fn new(time: Time, data: T) -> ChannelElement<T> {
         ChannelElement { time, data }
     }
+}
 
+impl<T> ChannelElement<T> {
     pub fn update_time(&mut self, new_time: Time) {
         self.time = std::cmp::max(self.time, new_time);
     }
@@ -88,14 +91,12 @@ impl<T: DAMType> Sender<T> {
 
     pub fn attach_sender(&self, sender: &dyn Context) {
         // Self::log(SendEvent::AttachSender(self.id, sender.id()));
-        self.under().attach_sender(sender);
+        if let SenderImpl::Uninitialized(uninit) = self.under() {
+            uninit.attach_sender(sender);
+        } else {
+            panic!("Cannot attach a context to an initialized sender!");
+        }
     }
-
-    pub fn try_send(&mut self, data: ChannelElement<T>) -> Result<(), SendOptions> {
-        Self::log(SendEvent::TrySend(self.id()));
-        self.under().try_send(data)
-    }
-
     pub fn enqueue(
         &mut self,
         manager: &mut TimeManager,
@@ -120,7 +121,7 @@ impl<T: Clone> Sender<T> {
 
 impl<T: Clone> Cleanable for Sender<T> {
     fn cleanup(&mut self) {
-        self.under().cleanup();
+        *self.under() = TerminatedSender::default().into()
         // Self::log(SendEvent::Cleanup(self.id));
     }
 }
