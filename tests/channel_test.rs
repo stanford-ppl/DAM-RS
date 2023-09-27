@@ -22,7 +22,7 @@ mod tests {
                 // rcv.peek_next(time);
                 time.incr_cycles(u64::try_from(iter).unwrap());
                 let res = match rcv.dequeue(time) {
-                    dam_rs::channel::Recv::Something(x) => x.data,
+                    dam_rs::channel::DequeueResult::Something(x) => x.data,
                     _ => panic!("This shouldn't happen!"),
                 };
                 assert_eq!(res, iter);

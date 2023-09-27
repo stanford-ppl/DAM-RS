@@ -9,10 +9,7 @@ use dam_core::{identifier::Identifier, sync_unsafe::SyncUnsafeCell, time::Time};
 
 use super::{
     channel_spec::ChannelSpec,
-    receiver::{
-        AcyclicInfiniteReceiver, AcyclicReceiver, CyclicInfiniteReceiver, CyclicReceiver,
-        ReceiverImpl, UndefinedReceiver,
-    },
+    receiver::{undefined::UndefinedReceiver, *},
     sender::{
         AcyclicSender, CyclicSender, InfiniteSender, SenderImpl, UndefinedSender, VoidSender,
     },
@@ -28,9 +25,9 @@ pub(crate) trait ChannelHandle {
 }
 
 pub(crate) struct ChannelData<T: Clone> {
-    pub(crate) sender: SyncUnsafeCell<SenderImpl<T>>,
-    pub(crate) receiver: SyncUnsafeCell<ReceiverImpl<T>>,
-    pub(crate) channel_spec: Arc<ChannelSpec>,
+    sender: SyncUnsafeCell<SenderImpl<T>>,
+    receiver: SyncUnsafeCell<ReceiverImpl<T>>,
+    channel_spec: Arc<ChannelSpec>,
 }
 
 impl<T: Clone> ChannelData<T> {
@@ -55,6 +52,11 @@ impl<T: Clone> ChannelData<T> {
 
 impl<T: Clone> ChannelHandle for ChannelData<T> {
     fn set_flavor(&self, flavor: ChannelFlavor) {
+        let make_channel_data = |underlying| ReceiverData::<T> {
+            spec: self.channel_spec.make_inline(),
+            underlying,
+            head: None,
+        };
         match self.channel_spec.capacity() {
             Some(capacity) => {
                 let (tx, rx) = channel::bounded::<ChannelElement<T>>(capacity);
@@ -64,15 +66,20 @@ impl<T: Clone> ChannelHandle for ChannelData<T> {
                     ChannelFlavor::Acyclic => {
                         *self.sender() =
                             AcyclicSender::new(tx, resp_r, self.channel_spec.make_inline()).into();
-                        *self.receiver() =
-                            AcyclicReceiver::new(rx, resp_t, self.channel_spec.make_inline())
-                                .into();
+                        *self.receiver() = BoundedAcyclicReceiver {
+                            data: make_channel_data(rx),
+                            resp: resp_t,
+                        }
+                        .into();
                     }
                     ChannelFlavor::Cyclic => {
                         *self.sender() =
                             CyclicSender::new(tx, resp_r, self.channel_spec.make_inline()).into();
-                        *self.receiver() =
-                            CyclicReceiver::new(rx, resp_t, self.channel_spec.make_inline()).into();
+                        *self.receiver() = BoundedCyclicReceiver {
+                            data: make_channel_data(rx),
+                            resp: resp_t,
+                        }
+                        .into();
                     }
                     ChannelFlavor::Void => *self.sender() = VoidSender::default().into(),
                 }
@@ -92,10 +99,9 @@ impl<T: Clone> ChannelHandle for ChannelData<T> {
                         )
                         .into();
 
-                        *self.receiver() = AcyclicInfiniteReceiver::new(
-                            super::receiver::ReceiverState::Open(rcv),
-                            self.channel_spec.make_inline(),
-                        )
+                        *self.receiver() = InfiniteAcyclicReceiver {
+                            data: make_channel_data(rcv),
+                        }
                         .into();
                     }
                     ChannelFlavor::Cyclic => {
@@ -107,10 +113,9 @@ impl<T: Clone> ChannelHandle for ChannelData<T> {
                         )
                         .into();
 
-                        *self.receiver() = CyclicInfiniteReceiver::new(
-                            super::receiver::ReceiverState::Open(rcv),
-                            self.channel_spec.make_inline(),
-                        )
+                        *self.receiver() = InfiniteCyclicReceiver {
+                            data: make_channel_data(rcv),
+                        }
                         .into();
                     }
                     ChannelFlavor::Void => *self.sender() = VoidSender::default().into(),

@@ -26,7 +26,7 @@ impl<T: DAMType + std::cmp::Ord> Context for MergeUnit<T> {
             let a = self.input_a.peek_next(&mut self.time);
             let b = self.input_b.peek_next(&mut self.time);
             match (a, b) {
-                (Recv::Something(ce_a), Recv::Something(ce_b)) => {
+                (DequeueResult::Something(ce_a), DequeueResult::Something(ce_b)) => {
                     let min = std::cmp::min(ce_a.data.clone(), ce_b.data.clone());
                     if ce_a.data == min {
                         self.input_a.dequeue(&mut self.time);
@@ -39,15 +39,15 @@ impl<T: DAMType + std::cmp::Ord> Context for MergeUnit<T> {
                         .enqueue(&mut self.time, ChannelElement::new(time, min))
                         .unwrap();
                 }
-                (Recv::Something(ce_a), Recv::Closed) => {
+                (DequeueResult::Something(ce_a), DequeueResult::Closed) => {
                     self.input_a.dequeue(&mut self.time);
                     self.output.enqueue(&mut self.time, ce_a).unwrap();
                 }
-                (Recv::Closed, Recv::Something(ce_b)) => {
+                (DequeueResult::Closed, DequeueResult::Something(ce_b)) => {
                     self.input_b.dequeue(&mut self.time);
                     self.output.enqueue(&mut self.time, ce_b).unwrap();
                 }
-                (Recv::Closed, Recv::Closed) => return,
+                (DequeueResult::Closed, DequeueResult::Closed) => return,
                 _ => panic!(),
             }
             self.time.incr_cycles(1);
@@ -139,7 +139,7 @@ where
             let a = self.input_a.dequeue(&mut self.time);
             let b = self.input_b.dequeue(&mut self.time);
             match (a, b) {
-                (Recv::Something(ce_a), Recv::Something(ce_b)) => {
+                (DequeueResult::Something(ce_a), DequeueResult::Something(ce_b)) => {
                     let time = self.time.tick() + 1;
                     self.output
                         .enqueue(
@@ -148,7 +148,7 @@ where
                         )
                         .unwrap();
                 }
-                (Recv::Closed, Recv::Closed) => return,
+                (DequeueResult::Closed, DequeueResult::Closed) => return,
                 _ => panic!(),
             }
             self.time.incr_cycles(1);

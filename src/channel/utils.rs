@@ -38,9 +38,8 @@ pub fn dequeue<T: DAMType>(
     recv: &mut Receiver<T>,
 ) -> Result<ChannelElement<T>, DequeueError> {
     match recv.dequeue(manager) {
-        Recv::Something(ce) => Ok(ce),
-        Recv::Closed => Err(DequeueError {}),
-        _ => panic!("Should only ever get something or closed on dequeue"),
+        DequeueResult::Something(ce) => Ok(ce),
+        DequeueResult::Closed => Err(DequeueError {}),
     }
 }
 
@@ -49,9 +48,8 @@ pub fn peek_next<T: DAMType>(
     recv: &mut Receiver<T>,
 ) -> Result<ChannelElement<T>, DequeueError> {
     match recv.peek_next(manager) {
-        Recv::Something(ce) => Ok(ce),
-        Recv::Closed => Err(DequeueError {}),
-        Recv::Unknown | Recv::Nothing(_) => unreachable!(),
+        DequeueResult::Something(ce) => Ok(ce),
+        DequeueResult::Closed => Err(DequeueError {}),
     }
 }
 
@@ -127,11 +125,10 @@ impl Peekable for EventTime {
 impl<T: DAMType> Peekable for Receiver<T> {
     fn next_event(&mut self) -> EventTime {
         match self.peek() {
-            Recv::Closed => EventTime::Closed,
-            Recv::Something(time) => EventTime::Ready(time.time),
-            Recv::Nothing(time) if time.is_infinite() => EventTime::Closed,
-            Recv::Nothing(time) => EventTime::Nothing(time),
-            Recv::Unknown => panic!("Can't get an Unknown on a peek!"),
+            PeekResult::Closed => EventTime::Closed,
+            PeekResult::Something(time) => EventTime::Ready(time.time),
+            PeekResult::Nothing(time) if time.is_infinite() => EventTime::Closed,
+            PeekResult::Nothing(time) => EventTime::Nothing(time),
         }
     }
 }

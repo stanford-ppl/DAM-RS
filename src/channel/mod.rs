@@ -28,6 +28,8 @@ use self::events::ReceiverEvent;
 use self::events::SendEvent;
 use self::handle::ChannelData;
 use self::handle::ChannelHandle;
+use self::receiver::terminated::TerminatedReceiver;
+
 use self::receiver::{ReceiverFlavor, ReceiverImpl};
 use dam_core::metric::LogProducer;
 
@@ -50,11 +52,28 @@ impl<T: Clone> ChannelElement<T> {
 }
 
 #[derive(Clone, Debug)]
-pub enum Recv<T> {
+pub enum PeekResult<T> {
     Something(ChannelElement<T>),
     Nothing(Time),
     Closed,
-    Unknown,
+}
+
+#[derive(Clone, Debug)]
+pub enum DequeueResult<T> {
+    Something(ChannelElement<T>),
+    Closed,
+}
+
+impl<T> TryInto<DequeueResult<T>> for PeekResult<T> {
+    type Error = ();
+
+    fn try_into(self) -> Result<DequeueResult<T>, Self::Error> {
+        match self {
+            PeekResult::Something(data) => Ok(DequeueResult::Something(data)),
+            PeekResult::Nothing(_) => Err(()),
+            PeekResult::Closed => Ok(DequeueResult::Closed),
+        }
+    }
 }
 
 #[log_producer]
@@ -123,21 +142,25 @@ impl<T: DAMType> Receiver<T> {
 
     pub fn attach_receiver(&self, receiver: &dyn Context) {
         Self::log(ReceiverEvent::AttachReceiver(self.id(), receiver.id()));
-        self.under().attach_receiver(receiver)
+        if let ReceiverImpl::Uninitialized(recv) = self.under() {
+            recv.attach_receiver(receiver);
+        } else {
+            panic!("Should not be able to attach a context to an initialized receiver")
+        }
     }
 
-    pub fn peek(&mut self) -> Recv<T> {
+    pub fn peek(&mut self) -> PeekResult<T> {
         Self::log(ReceiverEvent::Peek(self.id()));
         self.under().peek()
     }
-    pub fn peek_next(&mut self, manager: &mut TimeManager) -> Recv<T> {
+    pub fn peek_next(&mut self, manager: &mut TimeManager) -> DequeueResult<T> {
         Self::log(ReceiverEvent::PeekNextStart(self.id()));
         let result = self.under().peek_next(manager);
         Self::log(ReceiverEvent::PeekNextFinish(self.id()));
         result
     }
 
-    pub fn dequeue(&mut self, manager: &mut TimeManager) -> Recv<T> {
+    pub fn dequeue(&mut self, manager: &mut TimeManager) -> DequeueResult<T> {
         Self::log(ReceiverEvent::DequeueStart(self.id()));
         let result = self.under().dequeue(manager);
         Self::log(ReceiverEvent::DequeueFinish(self.id()));
@@ -147,8 +170,8 @@ impl<T: DAMType> Receiver<T> {
 
 impl<T: DAMType> Cleanable for Receiver<T> {
     fn cleanup(&mut self) {
-        self.under().cleanup();
         Self::log(ReceiverEvent::Cleanup(self.id()));
+        *self.under() = ReceiverImpl::Terminated(TerminatedReceiver {});
     }
 }
 
