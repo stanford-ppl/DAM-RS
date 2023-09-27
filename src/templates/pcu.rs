@@ -64,13 +64,6 @@ impl<ET: DAMType> PipelineStage<ET> {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default)]
-pub struct PipelineState {
-    // when did this value arrive?
-    time: Time,
-    valid: bool,
-}
-
 type InputChannelsType<ElementType> = Vec<Receiver<ElementType>>;
 type OutputChannelsType<ElementType> = Vec<Sender<ElementType>>;
 type IngressOpType<ElementType> = fn(

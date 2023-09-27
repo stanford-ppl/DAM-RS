@@ -10,10 +10,6 @@ pub struct RecvBundle<T: DAMType> {
     receivers: Vec<Receiver<T>>,
 }
 
-pub struct SendBundle<T: DAMType> {
-    senders: Vec<Sender<T>>,
-}
-
 impl<T: DAMType> Peekable for RecvBundle<T> {
     fn next_event(&mut self) -> EventTime {
         let events = self.receivers.iter_mut().map(|recv| recv.next_event());

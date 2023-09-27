@@ -1,4 +1,4 @@
-use crossbeam::channel::{self, TryRecvError};
+use crossbeam::channel::TryRecvError;
 
 use dam_core::{time::Time, TimeManager};
 
@@ -12,10 +12,6 @@ mod acyclic;
 mod cyclic;
 pub mod terminated;
 pub mod undefined;
-pub(super) enum ReceiverState<T> {
-    Open(channel::Receiver<T>),
-    Closed,
-}
 
 #[enum_dispatch(ReceiverImpl<T>)]
 pub(super) trait ReceiverFlavor<T> {
