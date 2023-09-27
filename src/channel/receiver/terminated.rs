@@ -1,10 +1,6 @@
-
-
 use dam_core::TimeManager;
 
-use crate::{
-    channel::{DequeueResult, PeekResult},
-};
+use crate::channel::{DequeueResult, PeekResult};
 
 use super::ReceiverFlavor;
 

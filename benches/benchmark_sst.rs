@@ -48,7 +48,6 @@ impl<T: DAMType + std::cmp::Ord> Context for MergeUnit<T> {
                     self.output.enqueue(&mut self.time, ce_b).unwrap();
                 }
                 (DequeueResult::Closed, DequeueResult::Closed) => return,
-                _ => panic!(),
             }
             self.time.incr_cycles(1);
         }

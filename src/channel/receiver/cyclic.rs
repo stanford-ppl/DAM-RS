@@ -24,9 +24,9 @@ pub(super) trait CyclicReceiver<T: Clone>: ReceiverCommon<T> {
             DequeueResult::Something(data) => {
                 self.register_recv(data.time);
                 self.data().head = None;
-                return DequeueResult::Something(data);
+                DequeueResult::Something(data)
             }
-            DequeueResult::Closed => return result,
+            DequeueResult::Closed => result,
         }
     }
 }
