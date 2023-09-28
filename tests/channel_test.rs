@@ -2,36 +2,81 @@
 mod tests {
 
     use dam_rs::{
-        context::{function_context::FunctionContext, generator_context::GeneratorContext},
-        simulation::Program,
+        channel::ChannelElement, context::function_context::FunctionContext, simulation::Program,
     };
+    use rand::Rng;
+
+    // The tests will take TEST_SIZE * MAX_MS_SLEEP / 2 on average.
+    const TEST_SIZE: i32 = 1 << 8;
+    const MAX_MS_SLEEP: u64 = 100;
 
     #[test]
-    fn test_channel() {
-        let test_size = 5;
-        let mut parent = Program::default();
-        let (snd, mut rcv) = parent.bounded(2);
-        let sender = GeneratorContext::new(move || (0..test_size), snd);
-        let mut recv_ctx = FunctionContext::new();
-        rcv.attach_receiver(&recv_ctx);
-        recv_ctx.set_run(move |time| {
+    fn test_channel_bounded_noinfer() {
+        run_channel_test(TEST_SIZE, false, Some(16));
+    }
+
+    #[test]
+    fn test_channel_bounded_infer() {
+        run_channel_test(TEST_SIZE, true, Some(16));
+    }
+
+    #[test]
+    fn test_channel_unbounded_noinfer() {
+        run_channel_test(TEST_SIZE, false, None);
+    }
+
+    #[test]
+    fn test_channel_unbounded_infer() {
+        run_channel_test(TEST_SIZE, true, None);
+    }
+
+    fn run_channel_test(test_size: i32, flavor_inference: bool, capacity: Option<usize>) {
+        let mut ctx = Program::default();
+
+        let (mut snd, mut rcv) = match capacity {
+            Some(cap) => ctx.bounded(cap),
+            None => ctx.unbounded(),
+        };
+
+        let mut sender = FunctionContext::default();
+        snd.attach_sender(&sender);
+        sender.set_run(move |time| {
+            let mut rng = rand::thread_rng();
             for iter in 0..test_size {
-                // for _ in 0..test_size {
-                //     rcv.peek_next(time);
-                // }
-                // rcv.peek_next(time);
-                time.incr_cycles(u64::try_from(iter).unwrap());
-                let res = match rcv.dequeue(time) {
-                    dam_rs::channel::DequeueResult::Something(x) => x.data,
-                    _ => panic!("This shouldn't happen!"),
-                };
-                assert_eq!(res, iter);
+                // sleep for some random amount of time
+                std::thread::sleep(std::time::Duration::from_millis(
+                    rng.gen_range(0..=MAX_MS_SLEEP),
+                ));
+                let cur_time = time.tick();
+                snd.enqueue(time, ChannelElement::new(cur_time + (iter as u64), iter))
+                    .unwrap();
+
+                time.incr_cycles(1);
             }
         });
-        parent.add_child(sender);
-        parent.add_child(recv_ctx);
-        parent.init();
-        parent.run();
-        parent.print_graph();
+        ctx.add_child(sender);
+
+        let mut receiver = FunctionContext::default();
+        rcv.attach_receiver(&receiver);
+        receiver.set_run(move |time| {
+            let mut rng = rand::thread_rng();
+            for iter in 0..test_size {
+                std::thread::sleep(std::time::Duration::from_millis(rng.gen_range(0..=100)));
+                match rcv.dequeue(time) {
+                    dam_rs::channel::DequeueResult::Something(ChannelElement { time: _, data }) => {
+                        assert_eq!(data, iter);
+                    }
+                    dam_rs::channel::DequeueResult::Closed => {
+                        panic!("Premature termination of channel")
+                    }
+                }
+                time.incr_cycles(1);
+            }
+        });
+        ctx.add_child(receiver);
+
+        ctx.set_inference(flavor_inference);
+        ctx.init();
+        ctx.run();
     }
 }
