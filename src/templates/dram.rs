@@ -3,7 +3,7 @@ use std::collections::VecDeque;
 use crate::{
     channel::{
         utils::{dequeue, enqueue, EventTime, Peekable},
-        ChannelElement, Receiver, Recv, Sender,
+        ChannelElement, DequeueResult, Receiver, Sender,
     },
     context::Context,
     types::{Cleanable, DAMType, IndexLike},
@@ -210,11 +210,11 @@ impl<IType: IndexLike, T: DAMType, AT: DAMType> Context for DRAM<IType, T, AT> {
                 ) {
                     // This should be the only matched case since we waited for the events to show up.
                     (
-                        Recv::Something(ChannelElement {
+                        DequeueResult::Something(ChannelElement {
                             time: t1,
                             data: address,
                         }),
-                        Recv::Something(ChannelElement {
+                        DequeueResult::Something(ChannelElement {
                             time: t2,
                             data: write_size,
                         }),
@@ -275,11 +275,11 @@ impl<IType: IndexLike, T: DAMType, AT: DAMType> Context for DRAM<IType, T, AT> {
                     req_size.dequeue(&mut self.time),
                 ) {
                     (
-                        Recv::Something(ChannelElement {
+                        DequeueResult::Something(ChannelElement {
                             time: _,
                             data: address,
                         }),
-                        Recv::Something(ChannelElement {
+                        DequeueResult::Something(ChannelElement {
                             time: _,
                             data: size,
                         }),
