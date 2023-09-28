@@ -19,11 +19,11 @@ impl<T> SenderFlavor<T> for UninitializedSender<T> {
         _manager: &mut TimeManager,
         _data: ChannelElement<T>,
     ) -> Result<(), EnqueueError> {
-        panic!();
+        panic!("Calling enqueue on an uninitialized sender");
     }
 
     fn wait_until_available(&mut self, _manager: &mut TimeManager) -> Result<(), EnqueueError> {
-        panic!();
+        panic!("Calling wait_until_available on an uninitialized sender");
     }
 }
 

@@ -4,20 +4,21 @@ use crate::channel::{DequeueResult, PeekResult};
 
 use super::ReceiverFlavor;
 
+#[derive(Default)]
 pub struct TerminatedReceiver {}
 
 impl TerminatedReceiver {}
 
 impl<T> ReceiverFlavor<T> for TerminatedReceiver {
     fn peek(&mut self) -> PeekResult<T> {
-        panic!();
+        panic!("Calling peek on a terminated receiver");
     }
 
     fn peek_next(&mut self, _manager: &mut TimeManager) -> DequeueResult<T> {
-        panic!();
+        panic!("Calling peek_next on a terminated receiver");
     }
 
     fn dequeue(&mut self, _manager: &mut TimeManager) -> DequeueResult<T> {
-        panic!();
+        panic!("Calling dequeue on a terminated receiver");
     }
 }

@@ -34,6 +34,12 @@ pub(super) enum ReceiverImpl<T: Clone> {
     CyclicInfinite(InfiniteCyclicReceiver<T>),
 }
 
+impl<T: Clone> Default for ReceiverImpl<T> {
+    fn default() -> Self {
+        terminated::TerminatedReceiver::default().into()
+    }
+}
+
 macro_rules! RegisterReceiver {
     ($name: ident, $receiver_mode: ident) => {
         impl<T> DataProvider<T> for $name<T> {

@@ -15,11 +15,11 @@ impl<T> SenderFlavor<T> for TerminatedSender<T> {
         _manager: &mut TimeManager,
         _data: ChannelElement<T>,
     ) -> Result<(), EnqueueError> {
-        panic!();
+        panic!("Attempting to enqueue to a terminated sender.");
     }
 
     fn wait_until_available(&mut self, _manager: &mut TimeManager) -> Result<(), EnqueueError> {
-        panic!();
+        panic!("Attempting to wait for a terminated sender.");
     }
 }
 

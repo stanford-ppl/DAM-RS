@@ -21,15 +21,15 @@ impl UninitializedReceiver {
 
 impl<T> ReceiverFlavor<T> for UninitializedReceiver {
     fn peek(&mut self) -> PeekResult<T> {
-        panic!();
+        panic!("Calling peek on an uninitialized receiver");
     }
 
     fn peek_next(&mut self, _manager: &mut TimeManager) -> DequeueResult<T> {
-        panic!();
+        panic!("Calling peek_next on an uninitialized receiver");
     }
 
     fn dequeue(&mut self, _manager: &mut TimeManager) -> DequeueResult<T> {
-        panic!();
+        panic!("Calling dequeue on an uninitialized receiver");
     }
 }
 
