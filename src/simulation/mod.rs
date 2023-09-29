@@ -12,7 +12,7 @@ use crate::{
     },
     context::Context,
 };
-use dam_core::{identifier::Identifier, log_graph::with_log_scope, time::Time, ContextView};
+use dam_core::{identifier::Identifier, time::Time, ContextView};
 use petgraph::{dot::Dot, prelude::DiGraph};
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -333,10 +333,8 @@ impl<'a> Program<'a> {
 
                 builder
                     .spawn_scoped_careless(s, || {
-                        with_log_scope(child.id(), child.name(), || {
-                            child.run();
-                            child.cleanup();
-                        });
+                        child.run();
+                        child.cleanup();
                     })
                     .unwrap_or_else(|_| panic!("Failed to spawn child {name:?} {id:?}"));
             });
