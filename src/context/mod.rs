@@ -1,11 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
-use dam_core::{
-    identifier::{Identifiable, Identifier},
-    TimeViewable,
-};
-
 use crate::channel::ChannelID;
+use dam_core::prelude::*;
 
 pub mod approx_checker_context;
 pub mod broadcast_context;
@@ -13,14 +9,12 @@ pub mod checker_context;
 pub mod consumer_context;
 pub mod function_context;
 pub mod generator_context;
-pub mod parent;
 
 pub type ExplicitConnections = HashMap<Identifier, Vec<(HashSet<ChannelID>, HashSet<ChannelID>)>>;
 
 pub trait Context: Send + Sync + TimeViewable + Identifiable {
     fn init(&mut self);
     fn run(&mut self);
-    fn cleanup(&mut self);
 
     fn child_ids(&self) -> HashMap<Identifier, HashSet<Identifier>> {
         HashMap::from([(self.id(), HashSet::new())])

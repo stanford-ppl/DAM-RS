@@ -1,4 +1,4 @@
-use crate::time::Time;
+use crate::datastructures::Time;
 
 use super::{ContextView, TimeView};
 

@@ -1,10 +1,9 @@
-use dam_core::{identifier::Identifier, TimeManager};
-use dam_macros::{cleanup, identifiable, time_managed};
+use dam_core::prelude::*;
+use dam_macros::context;
 
 use super::Context;
 
-#[identifiable]
-#[time_managed]
+#[context]
 pub struct FunctionContext<RT> {
     run_fn: Option<RT>,
 }
@@ -22,9 +21,6 @@ where
             panic!("Called run twice!");
         }
     }
-
-    #[cleanup(time_managed)]
-    fn cleanup(&mut self) {}
 }
 impl<RT> FunctionContext<RT>
 where
@@ -33,8 +29,7 @@ where
     pub fn new() -> Self {
         Self {
             run_fn: Default::default(),
-            identifier: Identifier::new(),
-            time: Default::default(),
+            context_info: Default::default(),
         }
     }
 

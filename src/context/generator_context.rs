@@ -1,5 +1,5 @@
-use dam_core::identifier::Identifier;
-use dam_macros::{cleanup, identifiable, time_managed};
+use dam_core::prelude::*;
+use dam_macros::context;
 
 use crate::{
     channel::{utils::enqueue, ChannelElement, Sender},
@@ -8,8 +8,7 @@ use crate::{
 
 use super::Context;
 
-#[identifiable]
-#[time_managed]
+#[context]
 pub struct GeneratorContext<T: Clone, IType, FType>
 where
     IType: Iterator<Item = T>,
@@ -30,22 +29,14 @@ where
         if let Some(func) = self.iterator.take() {
             for val in (func)() {
                 let current_time = self.time.tick();
-                enqueue(
-                    &mut self.time,
-                    &mut self.output,
-                    ChannelElement::new(current_time, val),
-                )
-                .unwrap();
+                self.output
+                    .enqueue(&self.time, ChannelElement::new(current_time, val))
+                    .unwrap();
                 self.time.incr_cycles(1);
             }
         } else {
             panic!("Can't run a generator twice!");
         }
-    }
-
-    #[cleanup(time_managed)]
-    fn cleanup(&mut self) {
-        self.output.cleanup();
     }
 }
 
@@ -58,8 +49,7 @@ where
         let gc = GeneratorContext {
             iterator: Some(iterator),
             output,
-            identifier: Identifier::new(),
-            time: Default::default(),
+            context_info: Default::default(),
         };
         gc.output.attach_sender(&gc);
         gc

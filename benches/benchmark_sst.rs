@@ -10,8 +10,7 @@ use dam_rs::context::Context;
 use dam_rs::simulation::Program;
 use dam_rs::types::{Cleanable, DAMType};
 
-#[identifiable]
-#[time_managed]
+#[context]
 struct MergeUnit<T: DAMType> {
     input_a: Receiver<T>,
     input_b: Receiver<T>,
@@ -23,33 +22,33 @@ impl<T: DAMType + std::cmp::Ord> Context for MergeUnit<T> {
 
     fn run(&mut self) {
         loop {
-            let a = self.input_a.peek_next(&mut self.time);
-            let b = self.input_b.peek_next(&mut self.time);
+            let a = self.input_a.peek_next(&mut time);
+            let b = self.input_b.peek_next(&mut time);
             match (a, b) {
                 (DequeueResult::Something(ce_a), DequeueResult::Something(ce_b)) => {
                     let min = std::cmp::min(ce_a.data.clone(), ce_b.data.clone());
                     if ce_a.data == min {
-                        self.input_a.dequeue(&mut self.time);
+                        self.input_a.dequeue(&mut time);
                     }
                     if ce_b.data == min {
-                        self.input_b.dequeue(&mut self.time);
+                        self.input_b.dequeue(&mut time);
                     }
-                    let time = self.time.tick() + 1;
+                    let time = &mut time.tick() + 1;
                     self.output
-                        .enqueue(&mut self.time, ChannelElement::new(time, min))
+                        .enqueue(&mut time, ChannelElement::new(time, min))
                         .unwrap();
                 }
                 (DequeueResult::Something(ce_a), DequeueResult::Closed) => {
-                    self.input_a.dequeue(&mut self.time);
-                    self.output.enqueue(&mut self.time, ce_a).unwrap();
+                    self.input_a.dequeue(&mut time);
+                    self.output.enqueue(&mut time, ce_a).unwrap();
                 }
                 (DequeueResult::Closed, DequeueResult::Something(ce_b)) => {
-                    self.input_b.dequeue(&mut self.time);
-                    self.output.enqueue(&mut self.time, ce_b).unwrap();
+                    self.input_b.dequeue(&mut time);
+                    self.output.enqueue(&mut time, ce_b).unwrap();
                 }
                 (DequeueResult::Closed, DequeueResult::Closed) => return,
             }
-            self.time.incr_cycles(1);
+            &mut time.incr_cycles(1);
         }
     }
 
@@ -57,7 +56,7 @@ impl<T: DAMType + std::cmp::Ord> Context for MergeUnit<T> {
         self.input_a.cleanup();
         self.input_b.cleanup();
         self.output.cleanup();
-        self.time.cleanup();
+        &mut time.cleanup();
     }
 }
 
@@ -119,8 +118,7 @@ pub fn merge_benchmark(c: &mut Criterion) {
     group.finish();
 }
 
-#[identifiable]
-#[time_managed]
+#[context]
 struct AddUnit<T: DAMType> {
     input_a: Receiver<T>,
     input_b: Receiver<T>,
@@ -135,22 +133,19 @@ where
 
     fn run(&mut self) {
         loop {
-            let a = self.input_a.dequeue(&mut self.time);
-            let b = self.input_b.dequeue(&mut self.time);
+            let a = self.input_a.dequeue(&mut time);
+            let b = self.input_b.dequeue(&mut time);
             match (a, b) {
                 (DequeueResult::Something(ce_a), DequeueResult::Something(ce_b)) => {
-                    let time = self.time.tick() + 1;
+                    let time = &mut time.tick() + 1;
                     self.output
-                        .enqueue(
-                            &mut self.time,
-                            ChannelElement::new(time, ce_a.data + ce_b.data),
-                        )
+                        .enqueue(&mut time, ChannelElement::new(time, ce_a.data + ce_b.data))
                         .unwrap();
                 }
                 (DequeueResult::Closed, DequeueResult::Closed) => return,
                 _ => panic!(),
             }
-            self.time.incr_cycles(1);
+            &mut time.incr_cycles(1);
         }
     }
 
@@ -158,7 +153,7 @@ where
         self.input_a.cleanup();
         self.input_b.cleanup();
         self.output.cleanup();
-        self.time.cleanup();
+        &mut time.cleanup();
     }
 }
 

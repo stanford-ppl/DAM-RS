@@ -19,9 +19,8 @@ use std::sync::Arc;
 use crate::context::Context;
 use crate::types::Cleanable;
 use crate::types::DAMType;
-use dam_core::*;
 
-use dam_core::time::Time;
+use dam_core::prelude::*;
 use dam_macros::log_producer;
 
 use self::events::ReceiverEvent;

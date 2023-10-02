@@ -1,18 +1,14 @@
-use dam_core::identifier::Identifier;
-use dam_macros::{cleanup, identifiable, time_managed};
+use dam_macros::context;
 
 use crate::{
-    channel::{
-        utils::{dequeue, enqueue},
-        Receiver, Sender,
-    },
+    channel::{DequeueResult, Receiver, Sender},
     types::{Cleanable, DAMType},
 };
+use dam_core::prelude::*;
 
 use super::Context;
 
-#[time_managed]
-#[identifiable]
+#[context]
 pub struct BroadcastContext<T: Clone> {
     receiver: Receiver<T>,
     targets: Vec<Sender<T>>,
@@ -23,24 +19,18 @@ impl<T: DAMType> Context for BroadcastContext<T> {
 
     fn run(&mut self) {
         loop {
-            let value = dequeue(&mut self.time, &mut self.receiver);
+            let value = self.receiver.dequeue(&mut self.time);
             match value {
-                Ok(mut data) => {
+                DequeueResult::Something(mut data) => {
                     data.time = self.time.tick() + 1;
                     self.targets.iter_mut().for_each(|target| {
-                        enqueue(&mut self.time, target, data.clone()).unwrap();
+                        target.enqueue(&mut self.time, data.clone()).unwrap();
                     });
-                    self.time.incr_cycles(1);
+                    &mut self.time.incr_cycles(1);
                 }
-                Err(_) => return,
+                DequeueResult::Closed => return,
             }
         }
-    }
-
-    #[cleanup(time_managed)]
-    fn cleanup(&mut self) {
-        self.receiver.cleanup();
-        self.targets.iter_mut().for_each(|target| target.cleanup());
     }
 }
 
@@ -49,9 +39,7 @@ impl<T: DAMType> BroadcastContext<T> {
         let x = Self {
             receiver,
             targets: vec![],
-
-            identifier: Identifier::new(),
-            time: Default::default(),
+            context_info: Default::default(),
         };
         x.receiver.attach_receiver(&x);
         x
@@ -89,7 +77,7 @@ mod tests {
             .map(|_| {
                 let (send, recv) = parent.bounded(8);
                 broadcast.add_target(send);
-                
+
                 CheckerContext::new(move || 0..test_size, recv)
             })
             .collect();

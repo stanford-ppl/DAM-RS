@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use dam_core::TimeManager;
+use dam_core::prelude::*;
 
 use crate::channel::{ChannelElement, EnqueueError};
 

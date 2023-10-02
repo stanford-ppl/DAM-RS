@@ -5,7 +5,7 @@ pub use basic::BasicContextView;
 pub use basic::TimeManager;
 pub use parent::ParentView;
 
-use crate::datastructures::time::Time;
+use crate::datastructures::Time;
 
 #[enum_delegate::register]
 pub trait ContextView {
@@ -22,9 +22,4 @@ pub enum TimeView {
 
 pub trait TimeViewable {
     fn view(&self) -> TimeView;
-}
-
-pub trait TimeManaged {
-    fn time_manager_mut(&mut self) -> &mut TimeManager;
-    fn time_manager(&self) -> &TimeManager;
 }

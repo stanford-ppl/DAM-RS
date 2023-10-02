@@ -4,9 +4,8 @@ use linkme::distributed_slice;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    identifier::Identifier,
+    datastructures::*,
     metric::{LogProducer, METRICS},
-    time::{AtomicTime, Time},
 };
 
 use super::ContextView;
@@ -38,6 +37,12 @@ impl TimeManager {
     }
 }
 
+impl Drop for TimeManager {
+    fn drop(&mut self) {
+        self.cleanup();
+    }
+}
+
 impl LogProducer for TimeManager {
     const LOG_NAME: &'static str = "TimeManager";
 }
@@ -46,20 +51,20 @@ impl LogProducer for TimeManager {
 static TIMEMANAGER_NAME: &'static str = "TimeManager";
 
 impl TimeManager {
-    pub fn incr_cycles(&mut self, incr: u64) {
+    pub fn incr_cycles(&self, incr: u64) {
         Self::log(TimeEvent::Incr(incr));
         self.underlying.time.incr_cycles(incr);
         self.scan_and_write_signals();
     }
 
-    pub fn advance(&mut self, new: Time) {
+    pub fn advance(&self, new: Time) {
         if self.underlying.time.try_advance(new) {
             Self::log(TimeEvent::Advance(new));
             self.scan_and_write_signals();
         }
     }
 
-    fn scan_and_write_signals(&mut self) {
+    fn scan_and_write_signals(&self) {
         let mut signal_buffer = self.underlying.signal_buffer.lock().unwrap();
         let tlb = self.underlying.time.load();
         #[cfg(logging)]

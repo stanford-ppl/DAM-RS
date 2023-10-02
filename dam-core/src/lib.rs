@@ -1,8 +1,8 @@
-pub mod config;
-mod datastructures;
-mod log_config;
+pub mod datastructures;
 pub mod metric;
-mod view;
+pub mod view;
 
-pub use datastructures::*;
-pub use view::*;
+pub mod prelude {
+    pub use crate::datastructures::*;
+    pub use crate::view::*;
+}

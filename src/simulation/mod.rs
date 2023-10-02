@@ -12,7 +12,7 @@ use crate::{
     },
     context::Context,
 };
-use dam_core::{identifier::Identifier, time::Time, ContextView};
+use dam_core::prelude::*;
 use petgraph::{dot::Dot, prelude::DiGraph};
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -320,7 +320,7 @@ impl<'a> Program<'a> {
         // println!("Priority: {priority:?}, Policy: {policy:?}");
 
         std::thread::scope(|s| {
-            self.nodes.iter_mut().for_each(|child| {
+            self.nodes.into_iter().for_each(|child| {
                 let id = child.id();
                 let name = child.name();
                 let builder = thread_priority::ThreadBuilder::default().name(format!(
@@ -334,7 +334,7 @@ impl<'a> Program<'a> {
                 builder
                     .spawn_scoped_careless(s, || {
                         child.run();
-                        child.cleanup();
+                        drop(child);
                     })
                     .unwrap_or_else(|_| panic!("Failed to spawn child {name:?} {id:?}"));
             });

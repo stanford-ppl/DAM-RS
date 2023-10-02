@@ -8,8 +8,8 @@ use crate::{
 };
 
 use super::ops::{ALUOp, PipelineRegister};
-use dam_core::{identifier::Identifier, time::Time, TimeManager};
-use dam_macros::{cleanup, identifiable, time_managed};
+use dam_core::prelude::*;
+use dam_macros::context;
 
 #[derive(Debug)]
 pub struct PCUConfig {
@@ -79,8 +79,7 @@ type EgressOpType<ElementType> = fn(
     &mut TimeManager,
 );
 
-#[time_managed]
-#[identifiable]
+#[context]
 pub struct PCU<ElementType: Clone> {
     configuration: PCUConfig,
     registers: Vec<Vec<PipelineRegister<ElementType>>>,
@@ -117,8 +116,7 @@ impl<ElementType: DAMType> PCU<ElementType> {
             output_channels: vec![],
             ingress_op,
             egress_op,
-            time: Default::default(),
-            identifier: Identifier::new(),
+            context_info: Default::default(),
         }
     }
 
@@ -202,16 +200,6 @@ impl<ElementType: DAMType> Context for PCU<ElementType> {
             );
             self.time.incr_cycles(1);
         }
-    }
-
-    #[cleanup(time_managed)]
-    fn cleanup(&mut self) {
-        self.input_channels.iter_mut().for_each(|chan| {
-            chan.cleanup();
-        });
-        self.output_channels.iter_mut().for_each(|chan| {
-            chan.cleanup();
-        });
     }
 }
 

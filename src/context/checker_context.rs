@@ -1,15 +1,14 @@
-use dam_core::identifier::Identifier;
-use dam_macros::{cleanup, identifiable, time_managed};
+use dam_core::prelude::*;
+use dam_macros::context;
 
 use crate::{
-    channel::{utils::dequeue, ChannelElement, Receiver},
+    channel::{ChannelElement, DequeueResult, Receiver},
     types::DAMType,
 };
 
 use super::Context;
 
-#[time_managed]
-#[identifiable]
+#[context]
 pub struct CheckerContext<T: Clone, IType, FType>
 where
     IType: Iterator<Item = T>,
@@ -29,12 +28,12 @@ where
     fn run(&mut self) {
         if let Some(iter) = self.iterator.take() {
             for (ind, val) in iter().enumerate() {
-                match dequeue(&mut self.time, &mut self.input) {
-                    Ok(ChannelElement { time, data }) if data != val => {
+                match self.input.dequeue(&mut self.time) {
+                    DequeueResult::Something(ChannelElement { time, data }) if data != val => {
                         panic!("Mismatch on iteration {ind} at time {time:?}: Expected {val:?} but found {data:?}")
                     }
-                    Ok(_) => {}
-                    Err(_) => {
+                    DequeueResult::Something(_) => {}
+                    DequeueResult::Closed => {
                         panic!("Ran out of things to read on iteration {ind}, expected {val:?}")
                     }
                 }
@@ -43,9 +42,6 @@ where
             panic!("Cannot run a Checker twice!");
         }
     }
-
-    #[cleanup(time_managed)]
-    fn cleanup(&mut self) {}
 }
 
 impl<T: DAMType, IType, FType> CheckerContext<T, IType, FType>
@@ -57,8 +53,7 @@ where
         let gc = CheckerContext {
             iterator: Some(iterator),
             input,
-            time: Default::default(),
-            identifier: Identifier::new(),
+            context_info: Default::default(),
         };
         gc.input.attach_receiver(&gc);
         gc

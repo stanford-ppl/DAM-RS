@@ -1,4 +1,4 @@
-use dam_core::identifier::Identifier;
+use dam_core::prelude::*;
 use serde::{Deserialize, Serialize};
 
 use super::ChannelID;

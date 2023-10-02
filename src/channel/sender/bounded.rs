@@ -1,7 +1,6 @@
-use crossbeam::channel;
-use dam_core::{time::Time, TimeManager};
-
 use crate::channel::{ChannelElement, EnqueueError};
+use crossbeam::channel;
+use dam_core::prelude::*;
 
 use super::{BoundedProvider, DataProvider, SenderCommon, SenderData, SenderFlavor};
 

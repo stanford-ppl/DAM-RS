@@ -1,6 +1,6 @@
 use crossbeam::channel::TryRecvError;
 
-use dam_core::{time::Time, TimeManager};
+use dam_core::prelude::*;
 
 use enum_dispatch::enum_dispatch;
 

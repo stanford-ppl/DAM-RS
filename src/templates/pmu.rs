@@ -13,20 +13,15 @@ use crate::{
     types::{DAMType, IndexLike},
 };
 
-use dam_core::{
-    identifier::{Identifiable, Identifier},
-    metric::NODE,
-    time::Time,
-    ContextView, ParentView, TimeManaged, TimeView, TimeViewable,
-};
-use dam_macros::{cleanup, identifiable, time_managed};
+use dam_core::prelude::*;
+use dam_macros::context;
 
 use super::datastore::{self, Behavior, Datastore};
 
-#[identifiable]
 pub struct PMU<T: DAMType, IT: IndexLike, AT: DAMType> {
     reader: ReadPipeline<T, IT>,
     writer: WritePipeline<T, IT, AT>,
+    identifier: Identifier,
 }
 
 impl<T: DAMType, IT: IndexLike, AT: DAMType> Context for PMU<T, IT, AT> {
@@ -39,16 +34,14 @@ impl<T: DAMType, IT: IndexLike, AT: DAMType> Context for PMU<T, IT, AT> {
         std::thread::scope(|s| {
             s.spawn(|| {
                 self.reader.run();
-                self.reader.cleanup();
+                drop(self.reader);
             });
             s.spawn(|| {
                 self.writer.run();
-                self.writer.cleanup();
+                drop(self.writer);
             });
         });
     }
-
-    fn cleanup(&mut self) {} // No-op
 
     fn child_ids(&self) -> HashMap<Identifier, HashSet<Identifier>> {
         let mut base: HashMap<Identifier, HashSet<Identifier>> =
@@ -75,6 +68,16 @@ impl<T: DAMType, IT: IndexLike, AT: DAMType> Context for PMU<T, IT, AT> {
     }
 }
 
+impl<T: DAMType, IT: IndexLike, AT: DAMType> Identifiable for PMU<T, IT, AT> {
+    fn id(&self) -> Identifier {
+        self.identifier
+    }
+
+    fn name(&self) -> String {
+        "PMU".to_string()
+    }
+}
+
 impl<T: DAMType, IT: IndexLike, AT: DAMType> TimeViewable for PMU<T, IT, AT> {
     fn view(&self) -> TimeView {
         (ParentView {
@@ -93,14 +96,12 @@ impl<T: DAMType, IT: IndexLike, AT: DAMType> PMU<T, IT, AT> {
                 readers: Default::default(),
                 datastore: datastore.clone(),
                 writer_view: None,
-                identifier: Identifier::new(),
-                time: Default::default(),
+                context_info: Default::default(),
             },
             writer: WritePipeline {
                 writers: Default::default(),
                 datastore,
-                identifier: Identifier::new(),
-                time: Default::default(),
+                context_info: Default::default(),
             },
             identifier: Identifier::new(),
         };
@@ -129,8 +130,7 @@ pub struct PMUWriteBundle<T: Clone, IT: Clone, AT: Clone> {
     pub ack: Sender<AT>,
 }
 
-#[identifiable]
-#[time_managed]
+#[context]
 struct ReadPipeline<T, IT>
 where
     T: DAMType,
@@ -182,9 +182,9 @@ impl<T: DAMType, IT: IndexLike> Context for ReadPipeline<T, IT> {
                 Some((ind, time)) => (ind, time),
             };
             match event_time {
-                EventTime::Ready(time) => self.time_manager_mut().advance(*time),
+                EventTime::Ready(time) => self.time.advance(*time),
                 EventTime::Nothing(time) => {
-                    self.time_manager_mut().advance(*time + 1);
+                    self.time.advance(*time + 1);
                     continue;
                 }
                 EventTime::Closed => unreachable!(),
@@ -205,18 +205,12 @@ impl<T: DAMType, IT: IndexLike> Context for ReadPipeline<T, IT> {
                 ChannelElement::new(cur_time, rv),
             )
             .unwrap();
-            self.time_manager_mut().incr_cycles(1);
+            self.time.incr_cycles(1);
         }
-    }
-
-    #[cleanup(time_managed)]
-    fn cleanup(&mut self) {
-        self.readers.clear();
     }
 }
 
-#[identifiable]
-#[time_managed]
+#[context]
 struct WritePipeline<T: DAMType, IT: DAMType, AT: DAMType> {
     writers: Vec<PMUWriteBundle<T, IT, AT>>,
     datastore: Arc<Datastore<T>>,
@@ -284,11 +278,6 @@ impl<T: DAMType, IT: IndexLike, AT: DAMType> Context for WritePipeline<T, IT, AT
 
             self.time.incr_cycles(1);
         }
-    }
-
-    #[cleanup(time_managed)]
-    fn cleanup(&mut self) {
-        self.writers.clear();
     }
 }
 

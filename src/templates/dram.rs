@@ -9,8 +9,8 @@ use crate::{
     types::{Cleanable, DAMType, IndexLike},
 };
 
-use dam_core::{identifier::Identifier, time::Time};
-use dam_macros::{cleanup, identifiable, time_managed};
+use dam_core::prelude::*;
+use dam_macros::context;
 
 use super::datastore::{Behavior, Datastore};
 
@@ -28,14 +28,6 @@ pub struct DRAMReadBundle<IT: Clone, DT: Clone> {
     data: Sender<DT>,
 }
 
-impl<IT: DAMType, DT: DAMType> Cleanable for DRAMReadBundle<IT, DT> {
-    fn cleanup(&mut self) {
-        self.addr.cleanup();
-        self.req_size.cleanup();
-        self.data.cleanup();
-    }
-}
-
 impl<IT: DAMType, DT: Clone> Peekable for DRAMReadBundle<IT, DT> {
     fn next_event(&mut self) -> crate::channel::utils::EventTime {
         [self.addr.next_event(), self.req_size.next_event()]
@@ -50,15 +42,6 @@ pub struct DRAMWriteBundle<IT: DAMType, DT: DAMType, AT: Clone> {
     request_size: Receiver<IT>,
     data: Receiver<DT>,
     ack: Sender<AT>,
-}
-
-impl<IT: DAMType, DT: DAMType, AT: Clone> Cleanable for DRAMWriteBundle<IT, DT, AT> {
-    fn cleanup(&mut self) {
-        self.addr.cleanup();
-        self.data.cleanup();
-        self.request_size.cleanup();
-        self.ack.cleanup();
-    }
 }
 
 impl<IT: DAMType, DT: DAMType, AT: Clone> Peekable for DRAMWriteBundle<IT, DT, AT> {
@@ -88,18 +71,8 @@ impl<IT: DAMType, DT: DAMType, AT: Clone> Peekable for AccessBundle<IT, DT, AT> 
     }
 }
 
-impl<IT: DAMType, DT: DAMType, AT: Clone> Cleanable for AccessBundle<IT, DT, AT> {
-    fn cleanup(&mut self) {
-        match self {
-            AccessBundle::Write(wr) => wr.cleanup(),
-            AccessBundle::Read(rd) => rd.cleanup(),
-        }
-    }
-}
-
 // The basic DRAM handles scalar addressing
-#[identifiable]
-#[time_managed]
+#[context]
 pub struct DRAM<IType: DAMType, T: DAMType, AT: DAMType> {
     config: DRAMConfig,
     datastore: Datastore<T>,
@@ -115,8 +88,7 @@ impl<IType: DAMType, T: DAMType, AT: DAMType> DRAM<IType, T, AT> {
             datastore: Datastore::new(config.capacity, datastore_behavior),
             request_windows: VecDeque::<Time>::with_capacity(config.num_simultaneous_requests),
             bundles: vec![],
-            identifier: Identifier::new(),
-            time: Default::default(),
+            context_info: Default::default(),
         }
     }
 
@@ -165,7 +137,7 @@ impl<IType: IndexLike, T: DAMType, AT: DAMType> Context for DRAM<IType, T, AT> {
             if self.request_windows.len() == self.config.num_simultaneous_requests {
                 // pop off the oldest time and advance to it.
                 if let Some(next_time) = self.request_windows.pop_front() {
-                    self.time.advance(next_time);
+                    &mut self.time.advance(next_time);
                 }
             }
 
@@ -192,7 +164,7 @@ impl<IType: IndexLike, T: DAMType, AT: DAMType> Context for DRAM<IType, T, AT> {
                     continue;
                 }
                 Some((ind, EventTime::Ready(time))) => {
-                    self.time.advance(*time);
+                    &mut self.time.advance(*time);
                     ind
                 }
                 None => unreachable!(), // This case should have been caught by the init!
@@ -219,7 +191,7 @@ impl<IType: IndexLike, T: DAMType, AT: DAMType> Context for DRAM<IType, T, AT> {
                             data: write_size,
                         }),
                     ) => {
-                        self.time.advance(std::cmp::max(t1, t2));
+                        &mut self.time.advance(std::cmp::max(t1, t2));
                         let start = address.to_usize();
                         let size = write_size.to_usize();
 
@@ -314,11 +286,6 @@ impl<IType: IndexLike, T: DAMType, AT: DAMType> Context for DRAM<IType, T, AT> {
             }
         }
     }
-
-    #[cleanup(time_managed)]
-    fn cleanup(&mut self) {
-        self.bundles.iter_mut().for_each(|x| x.cleanup());
-    }
 }
 
 #[cfg(test)]
@@ -340,7 +307,7 @@ pub mod tests {
         },
     };
 
-    use dam_core::time::Time;
+    use dam_core::prelude::*;
 
     #[test]
     fn test_dram_rw() {

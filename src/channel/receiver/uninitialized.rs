@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use dam_core::TimeManager;
+use dam_core::prelude::*;
 
 use crate::{
     channel::{channel_spec::ChannelSpec, DequeueResult, PeekResult},
