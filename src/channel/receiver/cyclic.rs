@@ -5,7 +5,7 @@ use crate::channel::{DequeueResult, PeekResult};
 use super::ReceiverCommon;
 
 pub(super) trait CyclicReceiver<T: Clone>: ReceiverCommon<T> {
-    fn peek_next(&mut self, manager: &mut TimeManager) -> DequeueResult<T> {
+    fn peek_next(&mut self, manager: &TimeManager) -> DequeueResult<T> {
         loop {
             match self.peek() {
                 PeekResult::Nothing(time) => manager.advance(time + 1), // Nothing here, so tick forward until there might be
@@ -18,7 +18,7 @@ pub(super) trait CyclicReceiver<T: Clone>: ReceiverCommon<T> {
         }
     }
 
-    fn dequeue(&mut self, manager: &mut TimeManager) -> DequeueResult<T> {
+    fn dequeue(&mut self, manager: &TimeManager) -> DequeueResult<T> {
         let result = self.peek_next(manager);
         match result {
             DequeueResult::Something(data) => {

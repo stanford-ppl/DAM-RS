@@ -14,11 +14,11 @@ impl<T> ReceiverFlavor<T> for TerminatedReceiver {
         panic!("Calling peek on a terminated receiver");
     }
 
-    fn peek_next(&mut self, _manager: &mut TimeManager) -> DequeueResult<T> {
+    fn peek_next(&mut self, _manager: &TimeManager) -> DequeueResult<T> {
         panic!("Calling peek_next on a terminated receiver");
     }
 
-    fn dequeue(&mut self, _manager: &mut TimeManager) -> DequeueResult<T> {
+    fn dequeue(&mut self, _manager: &TimeManager) -> DequeueResult<T> {
         panic!("Calling dequeue on a terminated receiver");
     }
 }

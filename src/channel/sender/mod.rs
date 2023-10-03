@@ -17,11 +17,11 @@ pub(super) mod void;
 
 #[enum_dispatch(SenderImpl<T>)]
 pub trait SenderFlavor<T> {
-    fn wait_until_available(&mut self, manager: &mut TimeManager) -> Result<(), EnqueueError>;
+    fn wait_until_available(&mut self, manager: &TimeManager) -> Result<(), EnqueueError>;
 
     fn enqueue(
         &mut self,
-        manager: &mut TimeManager,
+        manager: &TimeManager,
         data: ChannelElement<T>,
     ) -> Result<(), EnqueueError>;
 }
@@ -56,13 +56,13 @@ trait DataProvider<T> {
 
 trait BoundedProvider {
     fn register_send(&mut self);
-    fn wait_until_available(&mut self, manager: &mut TimeManager) -> Result<(), EnqueueError>;
+    fn wait_until_available(&mut self, manager: &TimeManager) -> Result<(), EnqueueError>;
 }
 
 trait SenderCommon<T>: DataProvider<T> + BoundedProvider {
     fn enqueue(
         &mut self,
-        manager: &mut TimeManager,
+        manager: &TimeManager,
         mut data: ChannelElement<T>,
     ) -> Result<(), EnqueueError> {
         if let err @ Err(_) = self.wait_until_available(manager) {

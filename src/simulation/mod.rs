@@ -320,7 +320,7 @@ impl<'a> Program<'a> {
         // println!("Priority: {priority:?}, Policy: {policy:?}");
 
         std::thread::scope(|s| {
-            self.nodes.into_iter().for_each(|child| {
+            self.nodes.drain(..).for_each(|mut child| {
                 let id = child.id();
                 let name = child.name();
                 let builder = thread_priority::ThreadBuilder::default().name(format!(

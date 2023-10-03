@@ -16,13 +16,13 @@ pub struct UninitializedSender<T> {
 impl<T> SenderFlavor<T> for UninitializedSender<T> {
     fn enqueue(
         &mut self,
-        _manager: &mut TimeManager,
+        _manager: &TimeManager,
         _data: ChannelElement<T>,
     ) -> Result<(), EnqueueError> {
         panic!("Calling enqueue on an uninitialized sender");
     }
 
-    fn wait_until_available(&mut self, _manager: &mut TimeManager) -> Result<(), EnqueueError> {
+    fn wait_until_available(&mut self, _manager: &TimeManager) -> Result<(), EnqueueError> {
         panic!("Calling wait_until_available on an uninitialized sender");
     }
 }

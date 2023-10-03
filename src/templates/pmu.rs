@@ -34,11 +34,9 @@ impl<T: DAMType, IT: IndexLike, AT: DAMType> Context for PMU<T, IT, AT> {
         std::thread::scope(|s| {
             s.spawn(|| {
                 self.reader.run();
-                drop(self.reader);
             });
             s.spawn(|| {
                 self.writer.run();
-                drop(self.writer);
             });
         });
     }
@@ -154,7 +152,7 @@ where
 
     fn await_writer(&mut self) -> Time {
         self.writer_view
-            .as_mut()
+            .as_ref()
             .unwrap()
             .wait_until(self.time.tick())
     }
@@ -193,18 +191,16 @@ impl<T: DAMType, IT: IndexLike> Context for ReadPipeline<T, IT> {
             // so the subsequent dequeue shouldn't actually change the tick time.
             let _ = self.await_writer();
             // At this point, we have advanced to the time of the ready!
-            let deq_reader = self.readers.get_mut(event_ind).unwrap();
-            let elem = dequeue(&mut self.time, &mut deq_reader.addr).unwrap();
+            let deq_reader = self.readers.get(event_ind).unwrap();
+            let elem = deq_reader.addr.dequeue(&self.time).unwrap();
 
             let addr: usize = elem.data.to_usize();
             let cur_time = self.time.tick();
             let rv = self.datastore.read(addr, cur_time);
-            enqueue(
-                &mut self.time,
-                &mut deq_reader.resp,
-                ChannelElement::new(cur_time, rv),
-            )
-            .unwrap();
+            deq_reader
+                .resp
+                .enqueue(&self.time, ChannelElement::new(cur_time, rv))
+                .unwrap();
             self.time.incr_cycles(1);
         }
     }
@@ -262,19 +258,17 @@ impl<T: DAMType, IT: IndexLike, AT: DAMType> Context for WritePipeline<T, IT, AT
                 EventTime::Closed => unreachable!(),
             }
 
-            let deq_writer = self.writers.get_mut(event_ind).unwrap();
-            let addr_elem = dequeue(&mut self.time, &mut deq_writer.addr).unwrap();
-            let data_elem = dequeue(&mut self.time, &mut deq_writer.data).unwrap();
+            let deq_writer = self.writers.get(event_ind).unwrap();
+            let addr_elem = deq_writer.addr.dequeue(&self.time).unwrap();
+            let data_elem = deq_writer.data.dequeue(&self.time).unwrap();
 
             let addr: usize = addr_elem.data.to_usize();
             let cur_time = self.time.tick();
             self.datastore.write(addr, data_elem.data, self.time.tick());
-            enqueue(
-                &mut self.time,
-                &mut deq_writer.ack,
-                ChannelElement::new(cur_time, AT::default()),
-            )
-            .unwrap();
+            deq_writer
+                .ack
+                .enqueue(&self.time, ChannelElement::new(cur_time, AT::default()))
+                .unwrap();
 
             self.time.incr_cycles(1);
         }

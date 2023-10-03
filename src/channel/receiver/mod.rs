@@ -16,8 +16,8 @@ pub mod uninitialized;
 #[enum_dispatch(ReceiverImpl<T>)]
 pub(super) trait ReceiverFlavor<T> {
     fn peek(&mut self) -> PeekResult<T>;
-    fn peek_next(&mut self, manager: &mut TimeManager) -> DequeueResult<T>;
-    fn dequeue(&mut self, manager: &mut TimeManager) -> DequeueResult<T>;
+    fn peek_next(&mut self, manager: &TimeManager) -> DequeueResult<T>;
+    fn dequeue(&mut self, manager: &TimeManager) -> DequeueResult<T>;
 }
 
 #[enum_dispatch]
@@ -55,11 +55,11 @@ macro_rules! RegisterReceiver {
                 ReceiverCommon::peek(self)
             }
 
-            fn peek_next(&mut self, manager: &mut TimeManager) -> DequeueResult<T> {
+            fn peek_next(&mut self, manager: &TimeManager) -> DequeueResult<T> {
                 $receiver_mode::peek_next(self, manager)
             }
 
-            fn dequeue(&mut self, manager: &mut TimeManager) -> DequeueResult<T> {
+            fn dequeue(&mut self, manager: &TimeManager) -> DequeueResult<T> {
                 $receiver_mode::dequeue(self, manager)
             }
         }

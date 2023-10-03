@@ -18,7 +18,7 @@ enum TimeEvent {
     Finish(Time),
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct TimeManager {
     underlying: Arc<TimeInfo>,
 }

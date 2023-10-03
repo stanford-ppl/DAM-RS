@@ -1,14 +1,16 @@
 use std::collections::VecDeque;
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use dam_macros::{identifiable, time_managed};
+use dam_macros::context;
 use dam_rs::channel::*;
 use dam_rs::context::checker_context::CheckerContext;
 use dam_rs::context::consumer_context::ConsumerContext;
 use dam_rs::context::generator_context::GeneratorContext;
 use dam_rs::context::Context;
 use dam_rs::simulation::Program;
-use dam_rs::types::{Cleanable, DAMType};
+use dam_rs::types::DAMType;
+
+use dam_core::prelude::*;
 
 #[context]
 struct MergeUnit<T: DAMType> {
@@ -22,41 +24,34 @@ impl<T: DAMType + std::cmp::Ord> Context for MergeUnit<T> {
 
     fn run(&mut self) {
         loop {
-            let a = self.input_a.peek_next(&mut time);
-            let b = self.input_b.peek_next(&mut time);
+            let a = self.input_a.peek_next(&self.time);
+            let b = self.input_b.peek_next(&self.time);
             match (a, b) {
                 (DequeueResult::Something(ce_a), DequeueResult::Something(ce_b)) => {
                     let min = std::cmp::min(ce_a.data.clone(), ce_b.data.clone());
                     if ce_a.data == min {
-                        self.input_a.dequeue(&mut time);
+                        self.input_a.dequeue(&self.time);
                     }
                     if ce_b.data == min {
-                        self.input_b.dequeue(&mut time);
+                        self.input_b.dequeue(&self.time);
                     }
-                    let time = &mut time.tick() + 1;
+                    let time = self.time.tick() + 1;
                     self.output
-                        .enqueue(&mut time, ChannelElement::new(time, min))
+                        .enqueue(&self.time, ChannelElement::new(time, min))
                         .unwrap();
                 }
                 (DequeueResult::Something(ce_a), DequeueResult::Closed) => {
-                    self.input_a.dequeue(&mut time);
-                    self.output.enqueue(&mut time, ce_a).unwrap();
+                    self.input_a.dequeue(&self.time);
+                    self.output.enqueue(&self.time, ce_a).unwrap();
                 }
                 (DequeueResult::Closed, DequeueResult::Something(ce_b)) => {
-                    self.input_b.dequeue(&mut time);
-                    self.output.enqueue(&mut time, ce_b).unwrap();
+                    self.input_b.dequeue(&self.time);
+                    self.output.enqueue(&self.time, ce_b).unwrap();
                 }
                 (DequeueResult::Closed, DequeueResult::Closed) => return,
             }
-            &mut time.incr_cycles(1);
+            self.time.incr_cycles(1);
         }
-    }
-
-    fn cleanup(&mut self) {
-        self.input_a.cleanup();
-        self.input_b.cleanup();
-        self.output.cleanup();
-        &mut time.cleanup();
     }
 }
 
@@ -66,8 +61,7 @@ impl<T: DAMType + Ord> MergeUnit<T> {
             input_a: a,
             input_b: b,
             output: out,
-            identifier: Default::default(),
-            time: Default::default(),
+            context_info: Default::default(),
         };
         mu.input_a.attach_receiver(&mu);
         mu.input_b.attach_receiver(&mu);
@@ -133,27 +127,20 @@ where
 
     fn run(&mut self) {
         loop {
-            let a = self.input_a.dequeue(&mut time);
-            let b = self.input_b.dequeue(&mut time);
+            let a = self.input_a.dequeue(&self.time);
+            let b = self.input_b.dequeue(&self.time);
             match (a, b) {
                 (DequeueResult::Something(ce_a), DequeueResult::Something(ce_b)) => {
-                    let time = &mut time.tick() + 1;
+                    let time = self.time.tick() + 1;
                     self.output
-                        .enqueue(&mut time, ChannelElement::new(time, ce_a.data + ce_b.data))
+                        .enqueue(&self.time, ChannelElement::new(time, ce_a.data + ce_b.data))
                         .unwrap();
                 }
                 (DequeueResult::Closed, DequeueResult::Closed) => return,
                 _ => panic!(),
             }
-            &mut time.incr_cycles(1);
+            self.time.incr_cycles(1);
         }
-    }
-
-    fn cleanup(&mut self) {
-        self.input_a.cleanup();
-        self.input_b.cleanup();
-        self.output.cleanup();
-        &mut time.cleanup();
     }
 }
 
@@ -166,8 +153,7 @@ where
             input_a: a,
             input_b: b,
             output: out,
-            identifier: Default::default(),
-            time: Default::default(),
+            context_info: Default::default(),
         };
         mu.input_a.attach_receiver(&mu);
         mu.input_b.attach_receiver(&mu);

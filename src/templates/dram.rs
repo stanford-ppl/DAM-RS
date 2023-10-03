@@ -170,16 +170,13 @@ impl<IType: IndexLike, T: DAMType, AT: DAMType> Context for DRAM<IType, T, AT> {
                 None => unreachable!(), // This case should have been caught by the init!
             };
             let prev_transfer_time = self.last_transfer_end_time();
-            match &mut self.bundles[event_id] {
+            match &self.bundles[event_id] {
                 AccessBundle::Write(DRAMWriteBundle {
                     addr,
                     request_size,
                     data,
                     ack,
-                }) => match (
-                    addr.dequeue(&mut self.time),
-                    request_size.dequeue(&mut self.time),
-                ) {
+                }) => match (addr.dequeue(&self.time), request_size.dequeue(&self.time)) {
                     // This should be the only matched case since we waited for the events to show up.
                     (
                         DequeueResult::Something(ChannelElement {
@@ -200,7 +197,7 @@ impl<IType: IndexLike, T: DAMType, AT: DAMType> Context for DRAM<IType, T, AT> {
                         // DRAM.
                         let mut write_buffer = Vec::<T>::with_capacity(size);
                         for _ in 0..size {
-                            write_buffer.push(dequeue(&mut self.time, data).unwrap().data);
+                            write_buffer.push(data.dequeue(&self.time).unwrap().data);
                         }
 
                         // We can't start this transfer until after the previous transfer finished
@@ -222,9 +219,8 @@ impl<IType: IndexLike, T: DAMType, AT: DAMType> Context for DRAM<IType, T, AT> {
                                 self.datastore.write(start + offset, data, write_time);
                             });
 
-                        enqueue(
-                            &mut self.time,
-                            ack,
+                        ack.enqueue(
+                            &self.time,
                             ChannelElement {
                                 time: write_time + 1,
                                 data: AT::default(),
@@ -242,10 +238,7 @@ impl<IType: IndexLike, T: DAMType, AT: DAMType> Context for DRAM<IType, T, AT> {
                     addr,
                     req_size,
                     data,
-                }) => match (
-                    addr.dequeue(&mut self.time),
-                    req_size.dequeue(&mut self.time),
-                ) {
+                }) => match (addr.dequeue(&self.time), req_size.dequeue(&self.time)) {
                     (
                         DequeueResult::Something(ChannelElement {
                             time: _,
@@ -275,7 +268,7 @@ impl<IType: IndexLike, T: DAMType, AT: DAMType> Context for DRAM<IType, T, AT> {
 
                         for out in read_vals {
                             result_time = std::cmp::max(self.time.tick() + 1, result_time + 1);
-                            enqueue(&mut self.time, data, ChannelElement::new(result_time, out))
+                            data.enqueue(&self.time, ChannelElement::new(result_time, out))
                                 .unwrap();
                         }
 

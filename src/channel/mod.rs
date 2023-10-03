@@ -66,6 +66,15 @@ pub enum DequeueResult<T> {
     Closed,
 }
 
+impl<T> DequeueResult<T> {
+    pub fn unwrap(self) -> ChannelElement<T> {
+        match self {
+            DequeueResult::Something(result) => result,
+            DequeueResult::Closed => panic!("Called DequeueResult::unwrap on a Closed value"),
+        }
+    }
+}
+
 impl<T> TryInto<DequeueResult<T>> for PeekResult<T> {
     type Error = ();
 
@@ -97,8 +106,8 @@ impl<T: DAMType> Sender<T> {
         }
     }
     pub fn enqueue(
-        &mut self,
-        manager: &mut TimeManager,
+        &self,
+        manager: &TimeManager,
         data: ChannelElement<T>,
     ) -> Result<(), EnqueueError> {
         Self::log(SendEvent::EnqueueStart(self.id()));
@@ -115,18 +124,6 @@ impl<T: DAMType> Sender<T> {
 impl<T: Clone> Sender<T> {
     fn under(&self) -> &mut SenderImpl<T> {
         self.underlying.sender()
-    }
-}
-
-impl<T: Clone> Cleanable for Sender<T> {
-    fn cleanup(&mut self) {
-        *self.under() = TerminatedSender::default().into()
-        // Self::log(SendEvent::Cleanup(self.id));
-    }
-}
-impl<T: Clone> Drop for Sender<T> {
-    fn drop(&mut self) {
-        self.cleanup();
     }
 }
 
@@ -149,29 +146,22 @@ impl<T: DAMType> Receiver<T> {
         }
     }
 
-    pub fn peek(&mut self) -> PeekResult<T> {
+    pub fn peek(&self) -> PeekResult<T> {
         Self::log(ReceiverEvent::Peek(self.id()));
         self.under().peek()
     }
-    pub fn peek_next(&mut self, manager: &mut TimeManager) -> DequeueResult<T> {
+    pub fn peek_next(&self, manager: &TimeManager) -> DequeueResult<T> {
         Self::log(ReceiverEvent::PeekNextStart(self.id()));
         let result = self.under().peek_next(manager);
         Self::log(ReceiverEvent::PeekNextFinish(self.id()));
         result
     }
 
-    pub fn dequeue(&mut self, manager: &mut TimeManager) -> DequeueResult<T> {
+    pub fn dequeue(&self, manager: &TimeManager) -> DequeueResult<T> {
         Self::log(ReceiverEvent::DequeueStart(self.id()));
         let result = self.under().dequeue(manager);
         Self::log(ReceiverEvent::DequeueFinish(self.id()));
         result
-    }
-}
-
-impl<T: DAMType> Cleanable for Receiver<T> {
-    fn cleanup(&mut self) {
-        Self::log(ReceiverEvent::Cleanup(self.id()));
-        *self.under() = ReceiverImpl::Terminated(TerminatedReceiver {});
     }
 }
 

@@ -67,17 +67,13 @@ impl<ET: DAMType> PipelineStage<ET> {
 type InputChannelsType<ElementType> = Vec<Receiver<ElementType>>;
 type OutputChannelsType<ElementType> = Vec<Sender<ElementType>>;
 type IngressOpType<ElementType> = fn(
-    &mut InputChannelsType<ElementType>,
+    &InputChannelsType<ElementType>,
     &mut Vec<PipelineRegister<ElementType>>,
-    &mut TimeManager,
+    &TimeManager,
 ) -> bool;
 
-type EgressOpType<ElementType> = fn(
-    &mut OutputChannelsType<ElementType>,
-    &Vec<PipelineRegister<ElementType>>,
-    Time,
-    &mut TimeManager,
-);
+type EgressOpType<ElementType> =
+    fn(&OutputChannelsType<ElementType>, &Vec<PipelineRegister<ElementType>>, Time, &TimeManager);
 
 #[context]
 pub struct PCU<ElementType: Clone> {
@@ -121,29 +117,29 @@ impl<ElementType: DAMType> PCU<ElementType> {
     }
 
     pub const READ_ALL_INPUTS: IngressOpType<ElementType> = |ics, regs, time| {
-        let mut reads: Vec<_> = ics.iter_mut().map(|recv| dequeue(time, recv)).collect();
+        let reads: Vec<_> = ics.iter().map(|recv| recv.dequeue(time)).collect();
 
-        for (ind, read) in reads.iter_mut().enumerate() {
-            if read.is_err() {
-                return false;
+        for (ind, read) in reads.into_iter().enumerate() {
+            match read {
+                crate::channel::DequeueResult::Something(data) => regs[ind].data = data.data,
+                crate::channel::DequeueResult::Closed => return false,
             }
-            regs[ind].data = read.as_ref().unwrap().data.clone();
         }
 
         true
     };
 
     pub const WRITE_ALL_RESULTS: EgressOpType<ElementType> = |ocs, regs, out_time, manager| {
-        ocs.iter_mut().enumerate().for_each(|(ind, out_chan)| {
-            enqueue(
-                manager,
-                out_chan,
-                ChannelElement {
-                    time: out_time,
-                    data: regs[ind].data.clone(),
-                },
-            )
-            .unwrap();
+        ocs.iter().enumerate().for_each(|(ind, out_chan)| {
+            out_chan
+                .enqueue(
+                    manager,
+                    ChannelElement {
+                        time: out_time,
+                        data: regs[ind].data.clone(),
+                    },
+                )
+                .unwrap();
         });
     };
 
@@ -169,13 +165,13 @@ impl<ElementType: DAMType> Context for PCU<ElementType> {
     fn run(&mut self) {
         loop {
             // Run the entire pipeline from front to back
-            if !(self.ingress_op)(
-                &mut self.input_channels,
-                &mut self.registers[0],
-                &mut self.time,
-            ) {
+
+            // We temporarily move the first registers out to avoid a mutable/immutable borrow conflict on self.
+            let mut tmp_regs = std::mem::take(&mut self.registers[0]);
+            if !(self.ingress_op)(&self.input_channels, &mut tmp_regs, &self.time) {
                 return;
             }
+            std::mem::replace(&mut self.registers[0], tmp_regs);
 
             for stage_index in 0..self.configuration.pipeline_depth {
                 match self.stages.get(stage_index) {
@@ -193,10 +189,10 @@ impl<ElementType: DAMType> Context for PCU<ElementType> {
 
             // Need to provide a notion of time as to when this result is ready.
             (self.egress_op)(
-                &mut self.output_channels,
-                &mut self.registers[self.configuration.pipeline_depth],
+                &self.output_channels,
+                &self.registers[self.configuration.pipeline_depth],
                 self.time.tick() + Time::new(latency),
-                &mut self.time,
+                &self.time,
             );
             self.time.incr_cycles(1);
         }

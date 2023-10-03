@@ -5,7 +5,7 @@ use crate::channel::{DequeueResult, PeekResult};
 use super::ReceiverCommon;
 
 pub(super) trait AcyclicReceiver<T: Clone>: ReceiverCommon<T> {
-    fn peek_next(&mut self, manager: &mut TimeManager) -> DequeueResult<T> {
+    fn peek_next(&mut self, manager: &TimeManager) -> DequeueResult<T> {
         match &self.data().head {
             Some(PeekResult::Closed) => return DequeueResult::Closed,
             None | Some(PeekResult::Nothing(_)) => {}
@@ -22,7 +22,7 @@ pub(super) trait AcyclicReceiver<T: Clone>: ReceiverCommon<T> {
         self.data().head.clone().unwrap().try_into().unwrap()
     }
 
-    fn dequeue(&mut self, manager: &mut TimeManager) -> DequeueResult<T> {
+    fn dequeue(&mut self, manager: &TimeManager) -> DequeueResult<T> {
         match &self.data().head {
             Some(PeekResult::Closed) => return DequeueResult::Closed,
             Some(PeekResult::Something(element)) => {

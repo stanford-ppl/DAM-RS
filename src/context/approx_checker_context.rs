@@ -31,7 +31,7 @@ where
     fn run(&mut self) {
         if let Some(iter) = self.iterator.take() {
             for (ind, val) in iter().enumerate() {
-                match self.input.dequeue(&mut self.time) {
+                match self.input.dequeue(&self.time) {
                     DequeueResult::Something(ChannelElement { time, data })
                         if !(self.checker)(&val, &data) =>
                     {

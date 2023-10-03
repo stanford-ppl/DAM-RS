@@ -19,12 +19,12 @@ impl<T: DAMType> Context for BroadcastContext<T> {
 
     fn run(&mut self) {
         loop {
-            let value = self.receiver.dequeue(&mut self.time);
+            let value = self.receiver.dequeue(&self.time);
             match value {
                 DequeueResult::Something(mut data) => {
                     data.time = self.time.tick() + 1;
-                    self.targets.iter_mut().for_each(|target| {
-                        target.enqueue(&mut self.time, data.clone()).unwrap();
+                    self.targets.iter().for_each(|target| {
+                        target.enqueue(&self.time, data.clone()).unwrap();
                     });
                     &mut self.time.incr_cycles(1);
                 }

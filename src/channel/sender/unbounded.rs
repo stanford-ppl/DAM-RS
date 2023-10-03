@@ -17,7 +17,7 @@ impl<T> DataProvider<T> for UnboundedSender<T> {
 impl<T> BoundedProvider for UnboundedSender<T> {
     fn register_send(&mut self) {}
 
-    fn wait_until_available(&mut self, _manager: &mut TimeManager) -> Result<(), EnqueueError> {
+    fn wait_until_available(&mut self, _manager: &TimeManager) -> Result<(), EnqueueError> {
         Ok(())
     }
 }
@@ -25,13 +25,13 @@ impl<T> BoundedProvider for UnboundedSender<T> {
 impl<T> SenderCommon<T> for UnboundedSender<T> {}
 
 impl<T> SenderFlavor<T> for UnboundedSender<T> {
-    fn wait_until_available(&mut self, manager: &mut TimeManager) -> Result<(), EnqueueError> {
+    fn wait_until_available(&mut self, manager: &TimeManager) -> Result<(), EnqueueError> {
         BoundedProvider::wait_until_available(self, manager)
     }
 
     fn enqueue(
         &mut self,
-        manager: &mut TimeManager,
+        manager: &TimeManager,
         data: ChannelElement<T>,
     ) -> Result<(), EnqueueError> {
         SenderCommon::enqueue(self, manager, data)

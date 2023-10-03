@@ -12,13 +12,13 @@ pub struct TerminatedSender<T> {
 impl<T> SenderFlavor<T> for TerminatedSender<T> {
     fn enqueue(
         &mut self,
-        _manager: &mut TimeManager,
+        _manager: &TimeManager,
         _data: ChannelElement<T>,
     ) -> Result<(), EnqueueError> {
         panic!("Attempting to enqueue to a terminated sender.");
     }
 
-    fn wait_until_available(&mut self, _manager: &mut TimeManager) -> Result<(), EnqueueError> {
+    fn wait_until_available(&mut self, _manager: &TimeManager) -> Result<(), EnqueueError> {
         panic!("Attempting to wait for a terminated sender.");
     }
 }
