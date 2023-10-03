@@ -17,7 +17,7 @@ pub(crate) mod handle;
 use std::sync::Arc;
 
 use crate::context::Context;
-use crate::types::Cleanable;
+
 use crate::types::DAMType;
 
 use dam_core::prelude::*;
@@ -27,10 +27,10 @@ use self::events::ReceiverEvent;
 use self::events::SendEvent;
 use self::handle::ChannelData;
 use self::handle::ChannelHandle;
-use self::receiver::terminated::TerminatedReceiver;
+
 
 use self::receiver::{ReceiverFlavor, ReceiverImpl};
-use self::sender::terminated::TerminatedSender;
+
 use dam_core::metric::LogProducer;
 
 use self::sender::{SenderFlavor, SenderImpl};

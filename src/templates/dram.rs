@@ -2,11 +2,11 @@ use std::collections::VecDeque;
 
 use crate::{
     channel::{
-        utils::{dequeue, enqueue, EventTime, Peekable},
+        utils::{EventTime, Peekable},
         ChannelElement, DequeueResult, Receiver, Sender,
     },
     context::Context,
-    types::{Cleanable, DAMType, IndexLike},
+    types::{DAMType, IndexLike},
 };
 
 use dam_core::prelude::*;
@@ -137,7 +137,7 @@ impl<IType: IndexLike, T: DAMType, AT: DAMType> Context for DRAM<IType, T, AT> {
             if self.request_windows.len() == self.config.num_simultaneous_requests {
                 // pop off the oldest time and advance to it.
                 if let Some(next_time) = self.request_windows.pop_front() {
-                    &mut self.time.advance(next_time);
+                    self.time.advance(next_time);
                 }
             }
 
@@ -164,7 +164,7 @@ impl<IType: IndexLike, T: DAMType, AT: DAMType> Context for DRAM<IType, T, AT> {
                     continue;
                 }
                 Some((ind, EventTime::Ready(time))) => {
-                    &mut self.time.advance(*time);
+                    self.time.advance(*time);
                     ind
                 }
                 None => unreachable!(), // This case should have been caught by the init!
@@ -188,7 +188,7 @@ impl<IType: IndexLike, T: DAMType, AT: DAMType> Context for DRAM<IType, T, AT> {
                             data: write_size,
                         }),
                     ) => {
-                        &mut self.time.advance(std::cmp::max(t1, t2));
+                        self.time.advance(std::cmp::max(t1, t2));
                         let start = address.to_usize();
                         let size = write_size.to_usize();
 

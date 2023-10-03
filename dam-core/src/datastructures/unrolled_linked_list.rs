@@ -1,3 +1,4 @@
+#[allow(unused)]
 use std::{collections::LinkedList, mem::MaybeUninit};
 
 //TODO: After generic constants (https://github.com/rust-lang/rust/issues/76560) gets resolved, should change to bytes-per-block instead.

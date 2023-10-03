@@ -6,7 +6,7 @@ use std::{
 
 use crate::{
     channel::{
-        utils::{dequeue, enqueue, EventTime, Peekable},
+        utils::{EventTime, Peekable},
         ChannelElement, ChannelID, Receiver, Sender,
     },
     context::{self, Context, ExplicitConnections},

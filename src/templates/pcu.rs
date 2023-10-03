@@ -1,10 +1,7 @@
 use crate::{
-    channel::{
-        utils::{dequeue, enqueue},
-        ChannelElement, Receiver, Sender,
-    },
+    channel::{ChannelElement, Receiver, Sender},
     context::Context,
-    types::{Cleanable, DAMType},
+    types::DAMType,
 };
 
 use super::ops::{ALUOp, PipelineRegister};
@@ -171,7 +168,7 @@ impl<ElementType: DAMType> Context for PCU<ElementType> {
             if !(self.ingress_op)(&self.input_channels, &mut tmp_regs, &self.time) {
                 return;
             }
-            std::mem::replace(&mut self.registers[0], tmp_regs);
+            self.registers[0] = tmp_regs;
 
             for stage_index in 0..self.configuration.pipeline_depth {
                 match self.stages.get(stage_index) {

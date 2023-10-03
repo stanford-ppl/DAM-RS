@@ -2,8 +2,8 @@ use dam_core::prelude::*;
 use dam_macros::context;
 
 use crate::{
-    channel::{utils::enqueue, ChannelElement, Sender},
-    types::{Cleanable, DAMType},
+    channel::{ChannelElement, Sender},
+    types::{DAMType},
 };
 
 use super::Context;

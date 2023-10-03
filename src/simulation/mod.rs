@@ -317,27 +317,27 @@ impl<'a> Program<'a> {
             }
         };
 
-        // println!("Priority: {priority:?}, Policy: {policy:?}");
-
         std::thread::scope(|s| {
-            self.nodes.drain(..).for_each(|mut child| {
-                let id = child.id();
-                let name = child.name();
-                let builder = thread_priority::ThreadBuilder::default().name(format!(
-                    "{}({})",
-                    child.id(),
-                    child.name()
-                ));
+            std::mem::take(&mut self.nodes)
+                .into_iter()
+                .for_each(|mut child| {
+                    let id = child.id();
+                    let name = child.name();
+                    let builder = thread_priority::ThreadBuilder::default().name(format!(
+                        "{}({})",
+                        child.id(),
+                        child.name()
+                    ));
 
-                let builder = builder.priority(priority).policy(policy);
+                    let builder = builder.priority(priority).policy(policy);
 
-                builder
-                    .spawn_scoped_careless(s, || {
-                        child.run();
-                        drop(child);
-                    })
-                    .unwrap_or_else(|_| panic!("Failed to spawn child {name:?} {id:?}"));
-            });
+                    builder
+                        .spawn_scoped_careless(s, move || {
+                            child.run();
+                            println!("Child Finished: {:?} {:?}", child.id(), child.name());
+                        })
+                        .unwrap_or_else(|_| panic!("Failed to spawn child {name:?} {id:?}"));
+                });
         });
     }
 

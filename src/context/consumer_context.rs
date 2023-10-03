@@ -2,7 +2,7 @@ use dam_macros::context;
 
 use crate::{
     channel::Receiver,
-    types::{Cleanable, DAMType},
+    types::{DAMType},
 };
 use dam_core::prelude::*;
 
@@ -51,7 +51,7 @@ impl<T: DAMType> Context for PrinterContext<T> {
                 crate::channel::DequeueResult::Something(x) => println!("{:?}", x),
                 crate::channel::DequeueResult::Closed => return,
             }
-            &mut &mut self.time.incr_cycles(1);
+            self.time.incr_cycles(1);
         }
     }
 }

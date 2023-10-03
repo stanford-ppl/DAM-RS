@@ -33,7 +33,7 @@ mod tests {
     fn run_channel_test(test_size: i32, flavor_inference: bool, capacity: Option<usize>) {
         let mut ctx = Program::default();
 
-        let (mut snd, mut rcv) = match capacity {
+        let (snd, rcv) = match capacity {
             Some(cap) => ctx.bounded(cap),
             None => ctx.unbounded(),
         };

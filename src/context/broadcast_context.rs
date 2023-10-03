@@ -2,7 +2,7 @@ use dam_macros::context;
 
 use crate::{
     channel::{DequeueResult, Receiver, Sender},
-    types::{Cleanable, DAMType},
+    types::DAMType,
 };
 use dam_core::prelude::*;
 
@@ -26,7 +26,7 @@ impl<T: DAMType> Context for BroadcastContext<T> {
                     self.targets.iter().for_each(|target| {
                         target.enqueue(&self.time, data.clone()).unwrap();
                     });
-                    &mut self.time.incr_cycles(1);
+                    self.time.incr_cycles(1);
                 }
                 DequeueResult::Closed => return,
             }
