@@ -28,8 +28,9 @@ use self::events::SendEvent;
 use self::handle::ChannelData;
 use self::handle::ChannelHandle;
 
-
+use self::receiver::terminated::TerminatedReceiver;
 use self::receiver::{ReceiverFlavor, ReceiverImpl};
+use self::sender::terminated::TerminatedSender;
 
 use dam_core::metric::LogProducer;
 
@@ -121,6 +122,12 @@ impl<T: DAMType> Sender<T> {
     }
 }
 
+impl<T: Clone> Drop for Sender<T> {
+    fn drop(&mut self) {
+        *self.under() = TerminatedSender::default().into();
+    }
+}
+
 impl<T: Clone> Sender<T> {
     fn under(&self) -> &mut SenderImpl<T> {
         self.underlying.sender()
@@ -165,9 +172,15 @@ impl<T: DAMType> Receiver<T> {
     }
 }
 
-impl<T: DAMType> Receiver<T> {
+impl<T: Clone> Receiver<T> {
     fn under(&self) -> &mut ReceiverImpl<T> {
         self.underlying.receiver()
+    }
+}
+
+impl<T: Clone> Drop for Receiver<T> {
+    fn drop(&mut self) {
+        *self.under() = TerminatedReceiver::default().into();
     }
 }
 

@@ -201,7 +201,7 @@ mod tests {
 
     use crate::{
         context::{checker_context::CheckerContext, generator_context::GeneratorContext},
-        simulation::Program,
+        simulation::*,
         templates::ops::*,
     };
 
@@ -210,7 +210,7 @@ mod tests {
     #[test]
     fn pcu_test() {
         // two-stage PCU on scalars, with the third stage a no-op.
-        let mut parent = Program::default();
+        let mut parent = ProgramBuilder::default();
 
         const CHAN_SIZE: usize = 8;
         let ingress_op = PCU::<u16>::READ_ALL_INPUTS;
@@ -269,7 +269,9 @@ mod tests {
         parent.add_child(gen3);
         parent.add_child(pcu);
         parent.add_child(checker);
-        parent.init();
-        parent.run();
+        parent
+            .initialize(InitializationOptions::default())
+            .unwrap()
+            .run(RunMode::Simple);
     }
 }

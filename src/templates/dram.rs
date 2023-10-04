@@ -293,7 +293,7 @@ pub mod tests {
             checker_context::CheckerContext, function_context::FunctionContext,
             generator_context::GeneratorContext,
         },
-        simulation::Program,
+        simulation::{InitializationOptions, ProgramBuilder, RunMode},
         templates::{
             datastore::Behavior,
             dram::{DRAMConfig, DRAMReadBundle, DRAMWriteBundle, DRAM},
@@ -321,7 +321,7 @@ pub mod tests {
             },
         );
 
-        let mut parent = Program::default();
+        let mut parent = ProgramBuilder::default();
         let mut ack_channels = Vec::<Receiver<bool>>::with_capacity(NUM_WRITERS);
 
         (0..NUM_WRITERS).for_each(|split_ind| {
@@ -402,8 +402,9 @@ pub mod tests {
 
         dbg!("Finished Setup!");
 
-        parent.init();
-        dbg!("Finished Init!");
-        parent.run();
+        parent
+            .initialize(InitializationOptions::default())
+            .unwrap()
+            .run(RunMode::Simple);
     }
 }

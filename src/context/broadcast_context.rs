@@ -58,14 +58,14 @@ mod tests {
 
     use crate::{
         context::{checker_context::CheckerContext, generator_context::GeneratorContext},
-        simulation::Program,
+        simulation::{InitializationOptions, ProgramBuilder, RunMode},
     };
 
     #[test]
     fn test_broadcast() {
         let test_size = 32;
         let num_checkers = 256;
-        let mut parent = Program::default();
+        let mut parent = ProgramBuilder::default();
         let (init_send, init_recv) = parent.bounded(8);
 
         let generator = GeneratorContext::new(move || (0..test_size), init_send);
@@ -87,7 +87,11 @@ mod tests {
             .for_each(|checker| parent.add_child(checker));
         parent.add_child(broadcast);
 
-        parent.init();
-        parent.run();
+        parent
+            .initialize(InitializationOptions {
+                run_flavor_inference: false,
+            })
+            .unwrap()
+            .run(RunMode::Simple);
     }
 }

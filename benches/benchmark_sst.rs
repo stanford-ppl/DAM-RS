@@ -7,7 +7,7 @@ use dam_rs::context::checker_context::CheckerContext;
 use dam_rs::context::consumer_context::ConsumerContext;
 use dam_rs::context::generator_context::GeneratorContext;
 use dam_rs::context::Context;
-use dam_rs::simulation::Program;
+use dam_rs::simulation::*;
 use dam_rs::types::DAMType;
 
 use dam_core::prelude::*;
@@ -84,7 +84,7 @@ pub fn merge_benchmark(c: &mut Criterion) {
             |b, &copies| {
                 b.iter_with_large_drop(|| {
                     // two-stage PCU on scalars, with the third stage a no-op.
-                    let mut parent = Program::default();
+                    let mut parent = ProgramBuilder::default();
 
                     for _ in 0..copies {
                         let (a_send, a_recv) = parent.bounded(CHAN_SIZE);
@@ -100,11 +100,12 @@ pub fn merge_benchmark(c: &mut Criterion) {
                         parent.add_child(checker);
                     }
 
-                    parent.set_inference(true);
-                    parent.set_mode(dam_rs::simulation::RunMode::FIFO);
-                    parent.init();
-                    parent.run();
                     parent
+                        .initialize(InitializationOptions {
+                            run_flavor_inference: true,
+                        })
+                        .unwrap()
+                        .run(RunMode::FIFO);
                 })
             },
         );
@@ -173,7 +174,7 @@ pub fn add_benchmark(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::from_parameter(width), &width, |b, &width| {
             b.iter_with_large_drop(|| {
                 // two-stage PCU on scalars, with the third stage a no-op.
-                let mut parent = Program::default();
+                let mut parent = ProgramBuilder::default();
 
                 let mut cur_inputs: VecDeque<Receiver<i32>> = VecDeque::with_capacity(width);
                 for _ in 0..width {
@@ -205,11 +206,12 @@ pub fn add_benchmark(c: &mut Criterion) {
                 let cap = ConsumerContext::new(last);
                 parent.add_child(cap);
 
-                parent.set_inference(true);
-                parent.set_mode(dam_rs::simulation::RunMode::FIFO);
-                parent.init();
-                parent.run();
                 parent
+                    .initialize(InitializationOptions {
+                        run_flavor_inference: true,
+                    })
+                    .unwrap()
+                    .run(RunMode::FIFO);
             })
         });
     }

@@ -2,7 +2,7 @@ use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use dam_rs::context::checker_context::CheckerContext;
 use dam_rs::context::generator_context::GeneratorContext;
 use dam_rs::templates::ops::*;
-use dam_rs::{simulation::Program, templates::pcu::*};
+use dam_rs::{simulation::*, templates::pcu::*};
 
 pub fn pcu_benchmark(c: &mut Criterion) {
     let mut group = c.benchmark_group("PCU_MulAdd");
@@ -12,7 +12,7 @@ pub fn pcu_benchmark(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::from_parameter(size), &size, |b, &size| {
             b.iter_with_large_drop(|| {
                 // two-stage PCU on scalars, with the third stage a no-op.
-                let mut parent = Program::default();
+                let mut parent = ProgramBuilder::default();
 
                 const CHAN_SIZE: usize = 8;
                 let ingress_op = PCU::READ_ALL_INPUTS;
@@ -66,9 +66,10 @@ pub fn pcu_benchmark(c: &mut Criterion) {
                 parent.add_child(gen3);
                 parent.add_child(pcu);
                 parent.add_child(checker);
-                parent.init();
-                parent.run();
                 parent
+                    .initialize(InitializationOptions::default())
+                    .unwrap()
+                    .run(RunMode::Simple);
             })
         });
     }

@@ -26,8 +26,21 @@ impl std::fmt::Display for Identifier {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct VerboseIdentifier {
+    pub id: Identifier,
+    pub name: String,
+}
+
 pub trait Identifiable {
     fn id(&self) -> Identifier;
 
     fn name(&self) -> String;
+
+    fn verbose(&self) -> VerboseIdentifier {
+        VerboseIdentifier {
+            id: self.id(),
+            name: self.name(),
+        }
+    }
 }

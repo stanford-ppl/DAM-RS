@@ -5,8 +5,7 @@ pub mod sync_unsafe;
 mod time;
 mod unrolled_linked_list;
 
-pub use identifier::Identifiable;
-pub use identifier::Identifier;
+pub use identifier::*;
 pub use time::AtomicTime;
 pub use time::Time;
 

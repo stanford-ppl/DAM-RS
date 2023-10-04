@@ -9,8 +9,8 @@ use crate::{
         utils::{EventTime, Peekable},
         ChannelElement, ChannelID, Receiver, Sender,
     },
-    context::{self, Context, ExplicitConnections},
-    types::{DAMType, IndexLike},
+    context::{self, Context, ExplicitConnections, ProxyContext},
+    types::{Cleanable, DAMType, IndexLike},
 };
 
 use dam_core::prelude::*;
@@ -19,8 +19,8 @@ use dam_macros::context;
 use super::datastore::{self, Behavior, Datastore};
 
 pub struct PMU<T: DAMType, IT: IndexLike, AT: DAMType> {
-    reader: ReadPipeline<T, IT>,
-    writer: WritePipeline<T, IT, AT>,
+    reader: ProxyContext<ReadPipeline<T, IT>>,
+    writer: ProxyContext<WritePipeline<T, IT, AT>>,
     identifier: Identifier,
 }
 
@@ -34,16 +34,21 @@ impl<T: DAMType, IT: IndexLike, AT: DAMType> Context for PMU<T, IT, AT> {
         std::thread::scope(|s| {
             s.spawn(|| {
                 self.reader.run();
+                self.reader.cleanup();
             });
             s.spawn(|| {
                 self.writer.run();
+                self.writer.cleanup();
             });
         });
     }
 
-    fn child_ids(&self) -> HashMap<Identifier, HashSet<Identifier>> {
-        let mut base: HashMap<Identifier, HashSet<Identifier>> =
-            [(self.id(), [self.reader.id(), self.writer.id()].into())].into();
+    fn child_ids(&self) -> HashMap<VerboseIdentifier, HashSet<VerboseIdentifier>> {
+        let mut base: HashMap<_, _> = [(
+            self.verbose(),
+            [self.reader.verbose(), self.writer.verbose()].into(),
+        )]
+        .into();
         base.extend(self.reader.child_ids());
         base.extend(self.writer.child_ids());
         base
@@ -95,15 +100,20 @@ impl<T: DAMType, IT: IndexLike, AT: DAMType> PMU<T, IT, AT> {
                 datastore: datastore.clone(),
                 writer_view: None,
                 context_info: Default::default(),
-            },
+            }
+            .into(),
             writer: WritePipeline {
                 writers: Default::default(),
                 datastore,
                 context_info: Default::default(),
-            },
+            }
+            .into(),
             identifier: Identifier::new(),
         };
         pmu.reader.writer_view = Some(pmu.writer.view());
+        dbg!(pmu.id());
+        dbg!(pmu.reader.id());
+        dbg!(pmu.writer.id());
 
         pmu
     }
@@ -287,7 +297,7 @@ mod tests {
             checker_context::CheckerContext, function_context::FunctionContext,
             generator_context::GeneratorContext,
         },
-        simulation::Program,
+        simulation::*,
         templates::{
             datastore::Behavior,
             pmu::{PMUReadBundle, PMUWriteBundle},
@@ -299,7 +309,7 @@ mod tests {
     #[test]
     fn simple_pmu_test() {
         const TEST_SIZE: usize = 1024 * 64;
-        let mut parent = Program::default();
+        let mut parent = ProgramBuilder::default();
         const CHAN_SIZE: usize = TEST_SIZE;
 
         let mut pmu = PMU::<u16, u16, bool>::new(
@@ -368,11 +378,11 @@ mod tests {
         parent.add_child(checker);
 
         parent.add_child(pmu);
-        parent.init();
-        parent.run();
-        parent.print_graph();
-        let finish_time = parent.elapsed_cycles();
-        dbg!(finish_time);
+        let summary = parent
+            .initialize(InitializationOptions::default())
+            .unwrap()
+            .run(RunMode::Simple);
+        dbg!(summary.elapsed_cycles());
         // dbg!(finish_time);
         // assert!(finish_time.is_infinite());
         // assert_eq!(finish_time.time(), u64::try_from(TEST_SIZE).unwrap() + 1);

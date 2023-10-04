@@ -2,7 +2,7 @@
 mod tests {
 
     use dam_rs::{
-        channel::ChannelElement, context::function_context::FunctionContext, simulation::Program,
+        channel::ChannelElement, context::function_context::FunctionContext, simulation::*,
     };
     use rand::Rng;
 
@@ -31,7 +31,7 @@ mod tests {
     }
 
     fn run_channel_test(test_size: i32, flavor_inference: bool, capacity: Option<usize>) {
-        let mut ctx = Program::default();
+        let mut ctx = ProgramBuilder::default();
 
         let (snd, rcv) = match capacity {
             Some(cap) => ctx.bounded(cap),
@@ -74,9 +74,10 @@ mod tests {
             }
         });
         ctx.add_child(receiver);
-
-        ctx.set_inference(flavor_inference);
-        ctx.init();
-        ctx.run();
+        ctx.initialize(InitializationOptions {
+            run_flavor_inference: flavor_inference,
+        })
+        .unwrap()
+        .run(RunMode::Simple);
     }
 }
