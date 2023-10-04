@@ -1,7 +1,7 @@
 use dam_core::prelude::*;
 use dam_macros::context;
 
-use super::Context;
+use crate::context::Context;
 
 #[context]
 pub struct FunctionContext<RT> {

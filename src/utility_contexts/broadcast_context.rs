@@ -6,7 +6,7 @@ use crate::{
 };
 use dam_core::prelude::*;
 
-use super::Context;
+use crate::context::Context;
 
 #[context]
 pub struct BroadcastContext<T: Clone> {
@@ -57,8 +57,8 @@ mod tests {
     use super::BroadcastContext;
 
     use crate::{
-        context::{checker_context::CheckerContext, generator_context::GeneratorContext},
         simulation::{InitializationOptions, ProgramBuilder, RunMode},
+        utility_contexts::{CheckerContext, GeneratorContext},
     };
 
     #[test]

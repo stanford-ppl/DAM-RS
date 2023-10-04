@@ -301,15 +301,12 @@ mod tests {
             utils::{dequeue, enqueue},
             ChannelElement,
         },
-        context::{
-            checker_context::CheckerContext, function_context::FunctionContext,
-            generator_context::GeneratorContext,
-        },
         simulation::*,
         templates::{
             datastore::Behavior,
             pmu::{PMUReadBundle, PMUWriteBundle},
         },
+        utility_contexts::*,
     };
 
     use super::PMU;

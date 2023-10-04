@@ -202,11 +202,7 @@ impl<ElementType: DAMType> Context for PCU<ElementType> {
 #[cfg(test)]
 mod tests {
 
-    use crate::{
-        context::{checker_context::CheckerContext, generator_context::GeneratorContext},
-        simulation::*,
-        templates::ops::*,
-    };
+    use crate::{simulation::*, templates::ops::*, utility_contexts::*};
 
     use super::PCU;
 

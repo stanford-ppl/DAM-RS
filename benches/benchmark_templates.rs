@@ -1,7 +1,6 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use dam_rs::context::checker_context::CheckerContext;
-use dam_rs::context::generator_context::GeneratorContext;
 use dam_rs::templates::ops::*;
+use dam_rs::utility_contexts::*;
 use dam_rs::{simulation::*, templates::pcu::*};
 
 pub fn pcu_benchmark(c: &mut Criterion) {

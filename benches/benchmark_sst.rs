@@ -3,12 +3,10 @@ use std::collections::VecDeque;
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use dam_macros::context;
 use dam_rs::channel::*;
-use dam_rs::context::checker_context::CheckerContext;
-use dam_rs::context::consumer_context::ConsumerContext;
-use dam_rs::context::generator_context::GeneratorContext;
 use dam_rs::context::Context;
 use dam_rs::simulation::*;
 use dam_rs::types::DAMType;
+use dam_rs::utility_contexts::*;
 
 use dam_core::prelude::*;
 

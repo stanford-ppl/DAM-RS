@@ -1,12 +1,9 @@
 use dam_macros::context;
 
-use crate::{
-    channel::Receiver,
-    types::{DAMType},
-};
+use crate::{channel::Receiver, types::DAMType};
 use dam_core::prelude::*;
 
-use super::Context;
+use crate::context::Context;
 
 #[context]
 pub struct ConsumerContext<T: DAMType> {

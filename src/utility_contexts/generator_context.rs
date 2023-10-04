@@ -6,7 +6,7 @@ use crate::{
     types::DAMType,
 };
 
-use super::Context;
+use crate::context::Context;
 
 #[context]
 pub struct GeneratorContext<T: Clone, IType, FType>

@@ -289,15 +289,12 @@ pub mod tests {
             utils::{dequeue, enqueue},
             ChannelElement, Receiver,
         },
-        context::{
-            checker_context::CheckerContext, function_context::FunctionContext,
-            generator_context::GeneratorContext,
-        },
         simulation::{InitializationOptions, ProgramBuilder, RunMode},
         templates::{
             datastore::Behavior,
             dram::{DRAMConfig, DRAMReadBundle, DRAMWriteBundle, DRAM},
         },
+        utility_contexts::*,
     };
 
     use dam_core::prelude::*;

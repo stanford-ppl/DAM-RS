@@ -3,12 +3,6 @@ use std::collections::{HashMap, HashSet};
 use crate::channel::ChannelID;
 use dam_core::prelude::*;
 
-pub mod approx_checker_context;
-pub mod broadcast_context;
-pub mod checker_context;
-pub mod consumer_context;
-pub mod function_context;
-pub mod generator_context;
 mod proxy;
 
 mod summary;

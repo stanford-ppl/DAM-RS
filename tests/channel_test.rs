@@ -1,9 +1,7 @@
 #[cfg(test)]
 mod tests {
 
-    use dam_rs::{
-        channel::ChannelElement, context::function_context::FunctionContext, simulation::*,
-    };
+    use dam_rs::{channel::ChannelElement, simulation::*, utility_contexts::FunctionContext};
     use rand::Rng;
 
     // The tests will take TEST_SIZE * MAX_MS_SLEEP / 2 on average.
