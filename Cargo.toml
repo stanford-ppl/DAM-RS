@@ -46,10 +46,6 @@ opt-level = 3
 debug = 1
 
 [[bench]]
-name = "benchmark_examples"
-harness = false
-
-[[bench]]
 name = "benchmark_templates"
 harness = false
 
