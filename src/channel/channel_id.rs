@@ -25,3 +25,9 @@ impl Default for ChannelID {
         Self::new()
     }
 }
+
+impl std::fmt::Display for ChannelID {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Channel({})", self.id)
+    }
+}

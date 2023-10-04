@@ -20,7 +20,15 @@ pub struct InitializationOptions {
 
 // A Program consists of all of its nodes and all of its edges.
 
-pub trait ProgramState {}
+trait ProgramHelper {
+    fn context_id_to_name(id: Identifier) -> String {
+        format!("Node_{}", id.id)
+    }
+}
+
+pub trait ProgramState {
+    fn to_dot(&self) -> graphviz_rust::dot_structures::Graph;
+}
 
 #[derive(Error, Debug)]
 pub enum InitializationError {

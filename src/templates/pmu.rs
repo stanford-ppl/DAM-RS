@@ -9,7 +9,7 @@ use crate::{
         utils::{EventTime, Peekable},
         ChannelElement, ChannelID, Receiver, Sender,
     },
-    context::{self, Context, ExplicitConnections, ProxyContext},
+    context::{self, Context, ContextSummary, ExplicitConnections, ProxyContext},
     types::{Cleanable, DAMType, IndexLike},
 };
 
@@ -68,6 +68,14 @@ impl<T: DAMType, IT: IndexLike, AT: DAMType> Context for PMU<T, IT, AT> {
             result.insert(self.writer.id(), vec![(srcs.into(), dsts.into())]);
         }
         Some(result)
+    }
+
+    fn summarize(&self) -> context::ContextSummary {
+        ContextSummary {
+            id: self.verbose(),
+            time: self.view(),
+            children: vec![self.reader.summarize(), self.writer.summarize()],
+        }
     }
 }
 
@@ -288,6 +296,8 @@ impl<T: DAMType, IT: IndexLike, AT: DAMType> Context for WritePipeline<T, IT, AT
 #[cfg(test)]
 mod tests {
 
+    use graphviz_rust::printer::{DotPrinter, PrinterContext};
+
     use crate::{
         channel::{
             utils::{dequeue, enqueue},
@@ -383,8 +393,7 @@ mod tests {
             .unwrap()
             .run(RunMode::Simple);
         dbg!(summary.elapsed_cycles());
-        // dbg!(finish_time);
-        // assert!(finish_time.is_infinite());
-        // assert_eq!(finish_time.time(), u64::try_from(TEST_SIZE).unwrap() + 1);
+        let graph = summary.to_dot();
+        println!("{}", graph.print(&mut PrinterContext::default()));
     }
 }

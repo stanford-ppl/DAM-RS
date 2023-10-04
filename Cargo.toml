@@ -25,6 +25,7 @@ thread-priority = "0.13.1"
 # For running tests
 rand = "0.8.5"
 thiserror = "1.0.49"
+graphviz-rust = "0.6.6"
 
 [dev-dependencies]
 criterion = "0.5.1"
@@ -35,10 +36,10 @@ debug = 1
 lto = "thin"
 codegen-units = 1
 
-# [profile.dev.build-override]
-# codegen-units = 1
-# opt-level = 3
-# debug = 1
+[profile.dev.build-override]
+codegen-units = 1
+opt-level = 3
+debug = 1
 
 [[bench]]
 name = "benchmark_examples"

@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Copy, Serialize, Deserialize)]
 pub struct Identifier {
-    id: usize,
+    pub id: usize,
 }
 static COUNTER: AtomicUsize = AtomicUsize::new(0);
 impl Identifier {

@@ -3,7 +3,7 @@ use dam_macros::context;
 
 use crate::{
     channel::{ChannelElement, Sender},
-    types::{DAMType},
+    types::DAMType,
 };
 
 use super::Context;
@@ -28,9 +28,9 @@ where
     fn run(&mut self) {
         if let Some(func) = self.iterator.take() {
             for val in (func)() {
-                let current_time = self.time.tick();
+                let current_time: Time = self.time.tick();
                 self.output
-                    .enqueue(&self.time, ChannelElement::new(current_time, val))
+                    .enqueue(&self.time, ChannelElement::new(current_time + 1, val))
                     .unwrap();
                 self.time.incr_cycles(1);
             }

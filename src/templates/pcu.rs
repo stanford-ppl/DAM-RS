@@ -114,6 +114,9 @@ impl<ElementType: DAMType> PCU<ElementType> {
     }
 
     pub const READ_ALL_INPUTS: IngressOpType<ElementType> = |ics, regs, time| {
+        ics.iter().for_each(|recv| {
+            recv.peek_next(time);
+        });
         let reads: Vec<_> = ics.iter().map(|recv| recv.dequeue(time)).collect();
 
         for (ind, read) in reads.into_iter().enumerate() {
@@ -199,6 +202,8 @@ impl<ElementType: DAMType> Context for PCU<ElementType> {
 #[cfg(test)]
 mod tests {
 
+    use graphviz_rust::printer::{DotPrinter, PrinterContext};
+
     use crate::{
         context::{checker_context::CheckerContext, generator_context::GeneratorContext},
         simulation::*,
@@ -252,13 +257,13 @@ mod tests {
         pcu.add_output_channel(pcu_out_send);
 
         let gen1 = GeneratorContext::new(|| (0u16..32), arg1_send);
-        let gen2 = GeneratorContext::new(|| (33u16..64), arg2_send);
-        let gen3 = GeneratorContext::new(|| (65u16..96), arg3_send);
+        let gen2 = GeneratorContext::new(|| (32u16..64), arg2_send);
+        let gen3 = GeneratorContext::new(|| (64u16..96), arg3_send);
         let checker = CheckerContext::new(
             || {
                 (0u16..32)
-                    .zip(33u16..64)
-                    .zip(65u16..96)
+                    .zip(32u16..64)
+                    .zip(64u16..96)
                     .map(|((a, b), c)| (a * b) + c)
             },
             pcu_out_recv,
@@ -269,9 +274,13 @@ mod tests {
         parent.add_child(gen3);
         parent.add_child(pcu);
         parent.add_child(checker);
-        parent
-            .initialize(InitializationOptions::default())
+        let summary = parent
+            .initialize(InitializationOptions {
+                run_flavor_inference: true,
+            })
             .unwrap()
             .run(RunMode::Simple);
+        let graph = summary.to_dot();
+        println!("{}", graph.print(&mut PrinterContext::default()));
     }
 }

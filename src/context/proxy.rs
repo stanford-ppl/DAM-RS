@@ -53,3 +53,12 @@ impl<T: Context> TimeViewable for ProxyContext<T> {
         }
     }
 }
+
+impl<T: Context> ProxyContext<T> {
+    pub fn summarize(&self) -> ContextSummary {
+        match self {
+            ProxyContext::Running(_) => panic!("Attempting to summarize a running node!"),
+            ProxyContext::Cleaned(summary) => summary.clone(),
+        }
+    }
+}

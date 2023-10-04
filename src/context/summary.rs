@@ -1,5 +1,6 @@
 use dam_core::{prelude::*, view::TimeView};
 
+#[derive(Clone)]
 pub struct ContextSummary {
     pub id: VerboseIdentifier,
     pub time: TimeView,

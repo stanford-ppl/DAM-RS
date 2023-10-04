@@ -68,7 +68,10 @@ trait SenderCommon<T>: DataProvider<T> + BoundedProvider {
         if let err @ Err(_) = self.wait_until_available(manager) {
             return err;
         }
-        data.update_time(manager.tick() + self.data().spec.send_latency);
+        let min_time = manager.tick() + self.data().spec.send_latency;
+        if data.time < min_time {
+            data.update_time(min_time);
+        }
         self.data().underlying.send(data).unwrap();
         self.register_send();
         Ok(())

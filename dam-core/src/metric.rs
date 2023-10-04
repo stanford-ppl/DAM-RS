@@ -4,7 +4,7 @@ pub trait LogProducer {
     // This should be a simple name consisting only of [a-zA-Z] and "-" characters.
     const LOG_NAME: &'static str;
 
-    fn log<T: serde::Serialize + std::fmt::Debug>(value: T) {}
+    fn log<T: serde::Serialize + std::fmt::Debug>(_value: T) {}
 }
 
 pub fn validate_name<'a>(name: &'a str) -> bool {
