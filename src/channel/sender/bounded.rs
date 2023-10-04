@@ -34,7 +34,7 @@ impl<T> BoundedProvider for BoundedAcyclicSender<T> {
                 manager.advance(time);
                 Ok(())
             }
-            Err(_) => Err(EnqueueError {}),
+            Err(_) => Err(EnqueueError::Closed),
         }
     }
 }
@@ -118,7 +118,7 @@ impl<T> BoundedProvider for BoundedCyclicSender<T> {
                     return Ok(());
                 }
                 Some(SendOptions::Never) => {
-                    return Err(EnqueueError {});
+                    return Err(EnqueueError::Closed);
                 }
                 Some(SendOptions::CheckBackAt(time)) => {
                     manager.advance(time);

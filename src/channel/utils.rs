@@ -33,7 +33,7 @@ pub fn dequeue<T: DAMType>(
 ) -> Result<ChannelElement<T>, DequeueError> {
     match recv.dequeue(manager) {
         DequeueResult::Something(ce) => Ok(ce),
-        DequeueResult::Closed => Err(DequeueError {}),
+        DequeueResult::Closed => Err(DequeueError::Closed),
     }
 }
 
@@ -43,7 +43,7 @@ pub fn peek_next<T: DAMType>(
 ) -> Result<ChannelElement<T>, DequeueError> {
     match recv.peek_next(manager) {
         DequeueResult::Something(ce) => Ok(ce),
-        DequeueResult::Closed => Err(DequeueError {}),
+        DequeueResult::Closed => Err(DequeueError::Closed),
     }
 }
 
@@ -65,7 +65,7 @@ pub fn dequeue_bundle<T: DAMType>(
             }
             Ok((result, ind))
         }
-        None => Err(DequeueError {}),
+        None => Err(DequeueError::Closed),
     }
 }
 

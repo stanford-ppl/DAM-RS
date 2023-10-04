@@ -15,6 +15,7 @@ mod sender;
 pub(crate) mod handle;
 
 use std::sync::Arc;
+use thiserror::Error;
 
 use crate::context::Context;
 
@@ -184,23 +185,14 @@ impl<T: Clone> Drop for Receiver<T> {
     }
 }
 
-#[derive(Debug)]
-pub struct DequeueError {}
-
-impl std::error::Error for DequeueError {}
-
-impl std::fmt::Display for DequeueError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Attempted to dequeue from simulation-closed channel!")
-    }
+#[derive(Error, Debug)]
+pub enum DequeueError {
+    #[error("Dequeued from a simulation-closed channel!")]
+    Closed,
 }
 
-#[derive(Debug)]
-pub struct EnqueueError {}
-impl std::error::Error for EnqueueError {}
-
-impl std::fmt::Display for EnqueueError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Attempted to enqueue to a simulation-closed channel!")
-    }
+#[derive(Error, Debug)]
+pub enum EnqueueError {
+    #[error("Enqueued to a simulation-closed channel!")]
+    Closed,
 }
