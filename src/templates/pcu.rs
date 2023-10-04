@@ -202,8 +202,6 @@ impl<ElementType: DAMType> Context for PCU<ElementType> {
 #[cfg(test)]
 mod tests {
 
-    use graphviz_rust::printer::{DotPrinter, PrinterContext};
-
     use crate::{
         context::{checker_context::CheckerContext, generator_context::GeneratorContext},
         simulation::*,
@@ -274,13 +272,11 @@ mod tests {
         parent.add_child(gen3);
         parent.add_child(pcu);
         parent.add_child(checker);
-        let summary = parent
+        parent
             .initialize(InitializationOptions {
                 run_flavor_inference: true,
             })
             .unwrap()
             .run(RunMode::Simple);
-        let graph = summary.to_dot();
-        println!("{}", graph.print(&mut PrinterContext::default()));
     }
 }

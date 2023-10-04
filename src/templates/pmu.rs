@@ -296,8 +296,6 @@ impl<T: DAMType, IT: IndexLike, AT: DAMType> Context for WritePipeline<T, IT, AT
 #[cfg(test)]
 mod tests {
 
-    use graphviz_rust::printer::{DotPrinter, PrinterContext};
-
     use crate::{
         channel::{
             utils::{dequeue, enqueue},
@@ -393,7 +391,5 @@ mod tests {
             .unwrap()
             .run(RunMode::Simple);
         dbg!(summary.elapsed_cycles());
-        let graph = summary.to_dot();
-        println!("{}", graph.print(&mut PrinterContext::default()));
     }
 }

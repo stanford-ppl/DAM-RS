@@ -11,6 +11,7 @@ pub struct Executed<'a> {
     pub(super) edges: Vec<Arc<dyn ChannelHandle + 'a>>,
 }
 
+#[cfg(feature = "dot")]
 use graphviz_rust::{dot_generator::*, dot_structures::*};
 
 impl Executed<'_> {
@@ -18,6 +19,7 @@ impl Executed<'_> {
         self.nodes.iter().map(|node| node.max_time()).max()
     }
 
+    #[cfg(feature = "dot")]
     fn add_node(summary: &ContextSummary, stmts: &mut Vec<Stmt>) {
         let label_string = format!("{}({})", summary.id.name, summary.id.id);
         if summary.children.is_empty() {
@@ -61,6 +63,7 @@ impl Executed<'_> {
 impl ProgramHelper for Executed<'_> {}
 
 impl ProgramState for Executed<'_> {
+    #[cfg(feature = "dot")]
     fn to_dot(&self) -> Graph {
         let mut stmts = vec![];
 
