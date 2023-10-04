@@ -2,6 +2,7 @@
 mod tests {
 
     use dam_rs::{channel::ChannelElement, simulation::*, utility_contexts::FunctionContext};
+
     use rand::Rng;
 
     // The tests will take TEST_SIZE * MAX_MS_SLEEP / 2 on average.
@@ -72,10 +73,20 @@ mod tests {
             }
         });
         ctx.add_child(receiver);
-        ctx.initialize(InitializationOptions {
-            run_flavor_inference: flavor_inference,
-        })
-        .unwrap()
-        .run(RunMode::Simple);
+
+        #[allow(unused)]
+        let summary = ctx
+            .initialize(InitializationOptions {
+                run_flavor_inference: flavor_inference,
+            })
+            .unwrap()
+            .run(RunMode::Simple);
+
+        #[cfg(feature = "dot")]
+        {
+            use graphviz_rust::printer::DotPrinter;
+            use graphviz_rust::printer::PrinterContext;
+            println!("{}", summary.to_dot().print(&mut PrinterContext::default()));
+        }
     }
 }

@@ -3,6 +3,12 @@ mod executed;
 mod initialized;
 mod programdata;
 
+#[cfg(feature = "dot")]
+mod dot;
+
+#[cfg(feature = "dot")]
+pub use dot::DotConvertible;
+
 // Export all of the program states
 pub use building::ProgramBuilder;
 pub use executed::Executed;
@@ -22,20 +28,6 @@ pub enum RunMode {
 #[derive(Default)]
 pub struct InitializationOptions {
     pub run_flavor_inference: bool,
-}
-
-// A Program consists of all of its nodes and all of its edges.
-
-trait ProgramHelper {
-    #[cfg(feature = "dot")]
-    fn context_id_to_name(id: Identifier) -> String {
-        format!("Node_{}", id.id)
-    }
-}
-
-pub trait ProgramState {
-    #[cfg(feature = "dot")]
-    fn to_dot(&self) -> graphviz_rust::dot_structures::Graph;
 }
 
 #[derive(Error, Debug)]

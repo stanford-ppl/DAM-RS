@@ -4,22 +4,28 @@ use dam_core::prelude::*;
 
 use crate::{channel::handle::ChannelHandle, context::ContextSummary};
 
-use super::{ProgramHelper, ProgramState};
-
 pub struct Executed<'a> {
     pub(super) nodes: Vec<ContextSummary>,
+
+    // Edges might not be used if the dot cfg isn't enabled.
+    #[allow(unused)]
     pub(super) edges: Vec<Arc<dyn ChannelHandle + 'a>>,
 }
 
 #[cfg(feature = "dot")]
 use graphviz_rust::{dot_generator::*, dot_structures::*};
 
+#[cfg(feature = "dot")]
+use super::dot::DotConvertibleHelper;
+
 impl Executed<'_> {
     pub fn elapsed_cycles(&self) -> Option<Time> {
         self.nodes.iter().map(|node| node.max_time()).max()
     }
+}
 
-    #[cfg(feature = "dot")]
+#[cfg(feature = "dot")]
+impl Executed<'_> {
     fn add_node(summary: &ContextSummary, stmts: &mut Vec<Stmt>) {
         let label_string = format!("{}({})", summary.id.name, summary.id.id);
         if summary.children.is_empty() {
@@ -60,57 +66,21 @@ impl Executed<'_> {
     }
 }
 
-impl ProgramHelper for Executed<'_> {}
-
-impl ProgramState for Executed<'_> {
-    #[cfg(feature = "dot")]
-    fn to_dot(&self) -> Graph {
+#[cfg(feature = "dot")]
+impl DotConvertibleHelper for Executed<'_> {
+    fn add_nodes(&self) -> Vec<Stmt> {
         let mut stmts = vec![];
-
         for summary in &self.nodes {
             Self::add_node(summary, &mut stmts);
         }
+        stmts
+    }
 
-        for edge in &self.edges {
-            match (edge.sender(), edge.receiver()) {
-                (None, _) => unreachable!("Should not have edges with no sender"),
-                (Some(sender), None) => {
-                    // Handle a void edge
-                    let void_id = node_id!(edge.id());
-                    stmts.push(Node::new(void_id.clone(), vec![attr!("label", esc "void")]).into());
-                    stmts.push(
-                        Edge {
-                            ty: EdgeTy::Pair(
-                                node_id!(Self::context_id_to_name(sender)).into(),
-                                void_id.into(),
-                            ),
-                            attributes: vec![attr!("style", esc "dotted")],
-                        }
-                        .into(),
-                    );
-                }
-                (Some(sender), Some(receiver)) => {
-                    stmts.push(
-                        Edge {
-                            ty: EdgeTy::Pair(
-                                node_id!(Self::context_id_to_name(sender)).into(),
-                                node_id!(Self::context_id_to_name(receiver)).into(),
-                            ),
-                            attributes: vec![
-                                attr!("label", esc edge.id()),
-                                attr!("tooltip", esc format!("Capacity: {:?}\\nLatency: {}\\nRespLatency: {}", edge.spec().capacity(), edge.spec().latency(), edge.spec().resp_latency())),
-                            ],
-                        }
-                        .into(),
-                    );
-                }
-            }
-        }
-
-        Graph::DiGraph {
-            id: Id::Plain("ProgramGraph".to_string()),
-            strict: false,
-            stmts,
-        }
+    fn generate_edges(&self) -> Vec<Stmt> {
+        self.edges
+            .iter()
+            .map(|edge| Self::generate_edge(edge.clone()))
+            .flatten()
+            .collect()
     }
 }

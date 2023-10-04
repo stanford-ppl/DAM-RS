@@ -3,7 +3,6 @@ use crate::view::TimeManager;
 mod identifier;
 pub mod sync_unsafe;
 mod time;
-mod unrolled_linked_list;
 
 pub use identifier::*;
 pub use time::AtomicTime;
