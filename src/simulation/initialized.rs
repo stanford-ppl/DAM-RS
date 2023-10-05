@@ -56,41 +56,89 @@ impl<'a> Initialized<'a> {
 }
 
 #[cfg(feature = "dot")]
-use super::dot::DotConvertibleHelper;
+mod inner {
+    use std::collections::HashMap;
+    use std::collections::HashSet;
 
-#[cfg(feature = "dot")]
-impl DotConvertibleHelper for Initialized<'_> {
-    fn add_nodes(&self) -> Vec<graphviz_rust::dot_structures::Stmt> {
-        use graphviz_rust::dot_generator::*;
-        use graphviz_rust::dot_structures::*;
-        self.data.nodes.iter().for_each(|node| {
-            let ids = node.ids();
-            if node.ids()
-        });
+    use dam_core::prelude::Identifier;
+    use dam_core::prelude::VerboseIdentifier;
+    use graphviz_rust::dot_generator::*;
+    use graphviz_rust::dot_structures::*;
+    use rustc_hash::FxHashSet;
 
-        self.data
-            .node_identifiers()
-            .iter()
-            .map(|(ident, name)| {
-                let label_string = format!("{}({})", name, ident);
-                Node::new(
-                    node_id!(Self::context_id_to_name(*ident)),
-                    vec![
-                        attr!("shape", esc "rectangle"),
-                        attr!("label", esc label_string),
-                    ],
-                )
-                .into()
-            })
-            .collect()
+    use crate::simulation::dot::DotConvertibleHelper;
+
+    impl super::Initialized<'_> {
+        fn emit_node(
+            node: &VerboseIdentifier,
+            visited: &mut FxHashSet<Identifier>,
+            node_graph: &HashMap<VerboseIdentifier, HashSet<VerboseIdentifier>>,
+        ) -> Vec<Stmt> {
+            let mut result = vec![];
+            if visited.contains(&node.id) {
+                return result;
+            }
+            visited.insert(node.id);
+
+            let label_string = format!("{}({})", node.name, node.id);
+            let children = &node_graph[node];
+
+            // Leaf node
+            if children.is_empty() {
+                result.push(
+                    Node::new(
+                        node_id!(Self::context_id_to_name(node.id)),
+                        vec![
+                            attr!("shape", esc "rectangle"),
+                            attr!("label", esc label_string),
+                        ],
+                    )
+                    .into(),
+                );
+            } else {
+                let mut inner_stmts = vec![stmt!(attr!("label", esc label_string))];
+
+                for child in children {
+                    inner_stmts.extend(Self::emit_node(child, visited, node_graph))
+                }
+
+                result.push(
+                    Subgraph {
+                        id: Id::Plain(format!("cluster_{}", Self::context_id_to_name(node.id))),
+                        stmts: inner_stmts,
+                    }
+                    .into(),
+                );
+            }
+            result
+        }
     }
 
-    fn generate_edges(&self) -> Vec<graphviz_rust::dot_structures::Stmt> {
-        self.data
-            .edges
-            .iter()
-            .map(|edge| Self::generate_edge(edge.clone()))
-            .flatten()
-            .collect()
+    impl DotConvertibleHelper for super::Initialized<'_> {
+        fn add_nodes(&self) -> Vec<Stmt> {
+            let node_graph: HashMap<_, _> = self
+                .data
+                .nodes
+                .iter()
+                .map(|node| node.ids())
+                .flatten()
+                .collect();
+
+            let mut stmts = vec![];
+            let mut visited = FxHashSet::default();
+            for node in &self.data.nodes {
+                stmts.extend(Self::emit_node(&node.verbose(), &mut visited, &node_graph))
+            }
+            stmts
+        }
+
+        fn generate_edges(&self) -> Vec<graphviz_rust::dot_structures::Stmt> {
+            self.data
+                .edges
+                .iter()
+                .map(|edge| Self::generate_edge(edge.clone()))
+                .flatten()
+                .collect()
+        }
     }
 }
