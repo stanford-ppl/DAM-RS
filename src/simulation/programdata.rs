@@ -18,7 +18,7 @@ impl ProgramData<'_> {
     pub(super) fn node_identifiers(&self) -> FxHashMap<Identifier, String> {
         self.nodes
             .iter()
-            .map(|node| node.child_ids())
+            .map(|node| node.ids())
             .flatten()
             .map(|(verbose, _)| (verbose.id, verbose.name))
             .collect()

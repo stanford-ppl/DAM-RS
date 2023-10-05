@@ -43,14 +43,14 @@ impl<T: DAMType, IT: IndexLike, AT: DAMType> Context for PMU<T, IT, AT> {
         });
     }
 
-    fn child_ids(&self) -> HashMap<VerboseIdentifier, HashSet<VerboseIdentifier>> {
+    fn ids(&self) -> HashMap<VerboseIdentifier, HashSet<VerboseIdentifier>> {
         let mut base: HashMap<_, _> = [(
             self.verbose(),
             [self.reader.verbose(), self.writer.verbose()].into(),
         )]
         .into();
-        base.extend(self.reader.child_ids());
-        base.extend(self.writer.child_ids());
+        base.extend(self.reader.ids());
+        base.extend(self.writer.ids());
         base
     }
 
@@ -383,10 +383,15 @@ mod tests {
         parent.add_child(checker);
 
         parent.add_child(pmu);
-        let summary = parent
-            .initialize(InitializationOptions::default())
-            .unwrap()
-            .run(RunMode::Simple);
+        let initialized = parent.initialize(InitializationOptions::default()).unwrap();
+        #[cfg(feature = "dot")]
+        println!("{}", initialized.to_dot_string());
+
+        let summary = initialized.run(RunMode::Simple);
         dbg!(summary.elapsed_cycles());
+        #[cfg(feature = "dot")]
+        {
+            println!("{}", summary.to_dot_string());
+        }
     }
 }

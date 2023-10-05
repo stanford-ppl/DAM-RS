@@ -54,3 +54,43 @@ impl<'a> Initialized<'a> {
         }
     }
 }
+
+#[cfg(feature = "dot")]
+use super::dot::DotConvertibleHelper;
+
+#[cfg(feature = "dot")]
+impl DotConvertibleHelper for Initialized<'_> {
+    fn add_nodes(&self) -> Vec<graphviz_rust::dot_structures::Stmt> {
+        use graphviz_rust::dot_generator::*;
+        use graphviz_rust::dot_structures::*;
+        self.data.nodes.iter().for_each(|node| {
+            let ids = node.ids();
+            if node.ids()
+        });
+
+        self.data
+            .node_identifiers()
+            .iter()
+            .map(|(ident, name)| {
+                let label_string = format!("{}({})", name, ident);
+                Node::new(
+                    node_id!(Self::context_id_to_name(*ident)),
+                    vec![
+                        attr!("shape", esc "rectangle"),
+                        attr!("label", esc label_string),
+                    ],
+                )
+                .into()
+            })
+            .collect()
+    }
+
+    fn generate_edges(&self) -> Vec<graphviz_rust::dot_structures::Stmt> {
+        self.data
+            .edges
+            .iter()
+            .map(|edge| Self::generate_edge(edge.clone()))
+            .flatten()
+            .collect()
+    }
+}

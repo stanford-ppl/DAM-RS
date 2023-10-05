@@ -1,12 +1,20 @@
 use std::sync::Arc;
 
 use dam_core::prelude::Identifier;
-use graphviz_rust::{dot_generator::*, dot_structures::*};
+use graphviz_rust::{
+    dot_generator::*,
+    dot_structures::*,
+    printer::{DotPrinter, PrinterContext},
+};
 
 use crate::channel::handle::ChannelHandle;
 
 pub trait DotConvertible {
     fn to_dot(&self) -> Graph;
+
+    fn to_dot_string(&self) -> String {
+        self.to_dot().print(&mut PrinterContext::default())
+    }
 }
 
 pub(super) trait DotConvertibleHelper {

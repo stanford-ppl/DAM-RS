@@ -16,7 +16,7 @@ pub trait Context: Send + Sync + TimeViewable + Identifiable {
     fn init(&mut self);
     fn run(&mut self);
 
-    fn child_ids(&self) -> HashMap<VerboseIdentifier, HashSet<VerboseIdentifier>> {
+    fn ids(&self) -> HashMap<VerboseIdentifier, HashSet<VerboseIdentifier>> {
         HashMap::from([(self.verbose(), HashSet::new())])
     }
 

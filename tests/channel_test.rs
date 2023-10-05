@@ -84,9 +84,7 @@ mod tests {
 
         #[cfg(feature = "dot")]
         {
-            use graphviz_rust::printer::DotPrinter;
-            use graphviz_rust::printer::PrinterContext;
-            println!("{}", summary.to_dot().print(&mut PrinterContext::default()));
+            println!("{}", summary.to_dot_string());
         }
     }
 }
