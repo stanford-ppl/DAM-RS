@@ -126,6 +126,33 @@ impl<T: DAMType, IT: IndexLike, AT: DAMType> PMU<T, IT, AT> {
         pmu
     }
 
+    pub fn new_init(capacity: usize, behavior: Behavior, init_val: Vec<T>) -> PMU<T, IT, AT> {
+        // This could probably somehow be embedded into the PMU instead of being an Arc.
+        let datastore = Arc::new(Datastore::new_init(capacity, behavior, init_val));
+        let mut pmu = PMU {
+            reader: ReadPipeline {
+                readers: Default::default(),
+                datastore: datastore.clone(),
+                writer_view: None,
+                context_info: Default::default(),
+            }
+            .into(),
+            writer: WritePipeline {
+                writers: Default::default(),
+                datastore,
+                context_info: Default::default(),
+            }
+            .into(),
+            identifier: Identifier::new(),
+        };
+        pmu.reader.writer_view = Some(pmu.writer.view());
+        dbg!(pmu.id());
+        dbg!(pmu.reader.id());
+        dbg!(pmu.writer.id());
+
+        pmu
+    }
+
     pub fn add_reader(&mut self, reader: PMUReadBundle<T, IT>) {
         self.reader.add_reader(reader);
     }
@@ -393,5 +420,47 @@ mod tests {
         {
             println!("{}", summary.to_dot_string());
         }
+    }
+
+    #[test]
+    fn init_pmu_test() {
+        const TEST_SIZE: usize = 64;
+        let mut parent = ProgramBuilder::default();
+        const CHAN_SIZE: usize = TEST_SIZE;
+
+        let mut pmu = PMU::<u16, u16, bool>::new_init(
+            TEST_SIZE,
+            Behavior {
+                mod_address: false,
+                use_default_value: false,
+            },
+            (0..(TEST_SIZE as u16)).collect(),
+        );
+
+        let (rd_addr_send, rd_addr_recv) = parent.bounded(CHAN_SIZE);
+        let (rd_data_send, rd_data_recv) = parent.bounded(CHAN_SIZE);
+        pmu.add_reader(PMUReadBundle {
+            addr: rd_addr_recv,
+            resp: rd_data_send,
+        });
+
+        let rd_addr_gen = GeneratorContext::new(
+            move || (0..TEST_SIZE).map(|x| u16::try_from(x).unwrap()),
+            rd_addr_send,
+        );
+
+        parent.add_child(rd_addr_gen);
+
+        let checker = CheckerContext::new(
+            || (0..TEST_SIZE).map(|x| u16::try_from(x).unwrap()),
+            rd_data_recv,
+        );
+        parent.add_child(checker);
+        parent.add_child(pmu);
+
+        let initialized = parent.initialize(InitializationOptions::default()).unwrap();
+
+        let summary = initialized.run(RunMode::Simple);
+        dbg!(summary.elapsed_cycles());
     }
 }

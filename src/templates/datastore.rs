@@ -33,6 +33,26 @@ impl<T: DAMType> Datastore<T> {
         ds
     }
 
+    pub fn new_init(capacity: usize, behavior: Behavior, init_val: Vec<T>) -> Datastore<T> {
+        let init_datastore: Vec<RwLock<Vec<StoreElement<T>>>> = init_val
+            .into_iter()
+            .map(|x| {
+                RwLock::new(vec![StoreElement::<T> {
+                    data: x,
+                    time: Time::new(0),
+                }])
+            })
+            .collect();
+        let mut ds = Datastore {
+            capacity,
+            behavior,
+            underlying: init_datastore,
+        };
+        ds.underlying
+            .resize_with(capacity, || RwLock::new(Vec::new()));
+        ds
+    }
+
     fn safe_addr(&self, addr: usize) -> usize {
         if addr >= self.capacity {
             if self.behavior.mod_address {
