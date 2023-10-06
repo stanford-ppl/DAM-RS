@@ -11,6 +11,7 @@ pub struct MongoLogger {
     database_name: String,
     db_options: mongodb::options::DatabaseOptions,
     collection_name: String,
+    collection_options: mongodb::options::CreateCollectionOptions,
     queue: crossbeam::channel::Receiver<LogEntry>,
 }
 
@@ -19,6 +20,12 @@ impl super::LogProcessor for MongoLogger {
         let database = self
             .client
             .database_with_options(self.database_name.as_str(), self.db_options.clone());
+        database
+            .create_collection(
+                &self.collection_name.as_str(),
+                self.collection_options.clone(),
+            )
+            .expect("Error setting collection options");
         let collection = database.collection::<LogEntry>(self.collection_name.as_str());
         let mut should_continue = true;
         while should_continue {
@@ -32,7 +39,6 @@ impl super::LogProcessor for MongoLogger {
                     }
                     Err(TryRecvError::Disconnected) => {
                         should_continue = false;
-                        println!("Logger Disconnected");
                         break;
                     }
                 }
@@ -40,8 +46,9 @@ impl super::LogProcessor for MongoLogger {
             if !batch.is_empty() {
                 collection.insert_many(batch, None).unwrap();
             }
+
+            std::thread::yield_now();
         }
         self.client.clone().shutdown();
-        println!("Finished with logging!")
     }
 }

@@ -9,6 +9,9 @@ pub struct MongoOptions {
     #[builder(default)]
     pub db_options: mongodb::options::DatabaseOptions,
 
+    #[builder(default)]
+    pub col_options: mongodb::options::CreateCollectionOptions,
+
     pub db: String,
 
     #[builder(default = "\"log\".to_string()")]

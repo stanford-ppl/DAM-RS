@@ -1,15 +1,8 @@
-use std::{
-    default,
-    sync::{Arc, Mutex, RwLock},
-};
+use std::sync::Arc;
 
 use crossbeam::queue::SegQueue;
-use dam_core::{
-    logging::{
-        destroy_log, initialize_log, mongodb, LogEntry, LogInterface, LogProcessor, MongoLogger,
-        NullProcessor,
-    },
-    prelude::Identifier,
+use dam_core::logging::{
+    initialize_log, mongodb, LogEntry, LogInterface, LogProcessor, MongoLogger,
 };
 
 use super::{executed::Executed, programdata::ProgramData, LoggingOptions, RunMode, RunOptions};
@@ -67,8 +60,6 @@ impl<'a> Initialized<'a> {
                         }
                         child.run();
                         summary_queue.push(child.summarize());
-                        println!("Child finished: {}", child.id());
-                        // destroy_log();
                     })
                     .unwrap_or_else(|_| panic!("Failed to spawn child {name:?} {id:?}"));
             });
@@ -99,6 +90,7 @@ impl<'a> Initialized<'a> {
                 mongo_opts.db,
                 mongo_opts.db_options,
                 mongo_opts.collection,
+                mongo_opts.col_options,
                 queue,
             ))),
         })

@@ -13,7 +13,10 @@ use crate::{
     types::{Cleanable, DAMType, IndexLike},
 };
 
-use dam_core::prelude::*;
+use dam_core::{
+    logging::{copy_log, initialize_log},
+    prelude::*,
+};
 use dam_macros::context;
 
 use super::datastore::{self, Behavior, Datastore};
@@ -31,12 +34,22 @@ impl<T: DAMType, IT: IndexLike, AT: DAMType> Context for PMU<T, IT, AT> {
     }
 
     fn run(&mut self) {
+        let read_log = copy_log();
+        let write_log = copy_log();
         std::thread::scope(|s| {
             s.spawn(|| {
+                if let Some(mut logger) = read_log {
+                    logger.id = self.reader.id();
+                    initialize_log(logger);
+                }
                 self.reader.run();
                 self.reader.cleanup();
             });
             s.spawn(|| {
+                if let Some(mut logger) = write_log {
+                    logger.id = self.writer.id();
+                    initialize_log(logger);
+                }
                 self.writer.run();
                 self.writer.cleanup();
             });

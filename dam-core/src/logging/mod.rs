@@ -45,9 +45,10 @@ pub struct LogEntry {
     pub event_data: Bson,
 }
 
+#[derive(Clone)]
 pub struct LogInterface {
     comm: Sender<LogEntry>,
-    id: Identifier,
+    pub id: Identifier,
     base_time: std::time::Instant,
 }
 
@@ -107,8 +108,6 @@ pub fn initialize_log(logger: LogInterface) {
     })
 }
 
-pub fn destroy_log() {
-    LOGGER.with(|cur_logger| {
-        cur_logger.take();
-    })
+pub fn copy_log() -> Option<LogInterface> {
+    LOGGER.with(|cur_logger| cur_logger.borrow().clone())
 }
