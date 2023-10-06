@@ -9,9 +9,10 @@ use dam_core::prelude::*;
 use dam_macros::context;
 
 #[derive(Debug)]
-pub struct PCUConfig {
+pub struct PCUConfig<ElementType> {
     pub pipeline_depth: usize,
     pub num_registers: usize,
+    pub counter: Option<ElementType>,
 }
 
 #[derive(Debug)]
@@ -67,6 +68,7 @@ type IngressOpType<ElementType> = fn(
     &InputChannelsType<ElementType>,
     &mut Vec<PipelineRegister<ElementType>>,
     &TimeManager,
+    &Option<ElementType>,
 ) -> bool;
 
 type EgressOpType<ElementType> =
@@ -74,7 +76,7 @@ type EgressOpType<ElementType> =
 
 #[context]
 pub struct PCU<ElementType: Clone> {
-    configuration: PCUConfig,
+    configuration: PCUConfig<ElementType>,
     registers: Vec<Vec<PipelineRegister<ElementType>>>,
 
     // The operation to run, and the pipeline registers to forward
@@ -90,7 +92,7 @@ pub struct PCU<ElementType: Clone> {
 
 impl<ElementType: DAMType> PCU<ElementType> {
     pub fn new(
-        configuration: PCUConfig,
+        configuration: PCUConfig<ElementType>,
         ingress_op: IngressOpType<ElementType>,
         egress_op: EgressOpType<ElementType>,
     ) -> PCU<ElementType> {
@@ -113,7 +115,7 @@ impl<ElementType: DAMType> PCU<ElementType> {
         }
     }
 
-    pub const READ_ALL_INPUTS: IngressOpType<ElementType> = |ics, regs, time| {
+    pub const READ_ALL_INPUTS: IngressOpType<ElementType> = |ics, regs, time, cntr| {
         ics.iter().for_each(|recv| {
             recv.peek_next(time);
         });
@@ -122,6 +124,27 @@ impl<ElementType: DAMType> PCU<ElementType> {
         for (ind, read) in reads.into_iter().enumerate() {
             match read {
                 crate::channel::DequeueResult::Something(data) => regs[ind].data = data.data,
+                crate::channel::DequeueResult::Closed => return false,
+            }
+        }
+
+        true
+    };
+
+    pub const READ_ALL_INPUTS_COUNTER: IngressOpType<ElementType> = |ics, regs, time, cntr| {
+        ics.iter().for_each(|recv| {
+            recv.peek_next(time);
+        });
+        let reads: Vec<_> = ics.iter().map(|recv| recv.dequeue(time)).collect();
+
+        match cntr {
+            Some(x) => regs[0].data = x.clone(),
+            None => return false,
+        }
+
+        for (ind, read) in reads.into_iter().enumerate() {
+            match read {
+                crate::channel::DequeueResult::Something(data) => regs[ind + 1].data = data.data,
                 crate::channel::DequeueResult::Closed => return false,
             }
         }
@@ -168,7 +191,12 @@ impl<ElementType: DAMType> Context for PCU<ElementType> {
 
             // We temporarily move the first registers out to avoid a mutable/immutable borrow conflict on self.
             let mut tmp_regs = std::mem::take(&mut self.registers[0]);
-            if !(self.ingress_op)(&self.input_channels, &mut tmp_regs, &self.time) {
+            if !(self.ingress_op)(
+                &self.input_channels,
+                &mut tmp_regs,
+                &self.time,
+                &self.configuration.counter,
+            ) {
                 return;
             }
             self.registers[0] = tmp_regs;
@@ -216,9 +244,10 @@ mod tests {
         let egress_op = PCU::<u16>::WRITE_ALL_RESULTS;
 
         let mut pcu = PCU::<u16>::new(
-            super::PCUConfig {
+            super::PCUConfig::<u16> {
                 pipeline_depth: 3,
                 num_registers: 3,
+                counter: None,
             },
             ingress_op,
             egress_op,

@@ -18,9 +18,10 @@ pub fn pcu_benchmark(c: &mut Criterion) {
                 let egress_op = PCU::WRITE_ALL_RESULTS;
 
                 let mut pcu = PCU::<u64>::new(
-                    PCUConfig {
+                    PCUConfig::<u64> {
                         pipeline_depth: 3,
                         num_registers: 3,
+                        counter: None,
                     },
                     ingress_op,
                     egress_op,
