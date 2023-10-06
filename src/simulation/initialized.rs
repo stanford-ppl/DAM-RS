@@ -1,9 +1,10 @@
 use std::sync::Arc;
 
 use crossbeam::queue::SegQueue;
-use dam_core::logging::{
-    initialize_log, mongodb, LogEntry, LogInterface, LogProcessor, MongoLogger,
-};
+use dam_core::logging::{initialize_log, LogEntry, LogInterface, LogProcessor};
+
+#[cfg(feature = "log-mongo")]
+use dam_core::logging::{mongodb, MongoLogger};
 
 use super::{executed::Executed, programdata::ProgramData, LoggingOptions, RunMode, RunOptions};
 
@@ -89,12 +90,14 @@ impl<'a> Initialized<'a> {
         }
     }
 
+    // The queue is sometimes unused when no logger is set.
     fn make_logger(
-        queue: crossbeam::channel::Receiver<LogEntry>,
+        #[allow(unused)] queue: crossbeam::channel::Receiver<LogEntry>,
         options: LoggingOptions,
     ) -> Result<Option<Box<dyn LogProcessor>>, ()> {
         Ok(match options {
             super::LoggingOptions::None => None,
+            #[cfg(feature = "log-mongo")]
             super::LoggingOptions::Mongo(mongo_opts) => Some(Box::new(MongoLogger::new(
                 mongodb::sync::Client::with_uri_str(mongo_opts.uri).map_err(|_| ())?,
                 mongo_opts.db,

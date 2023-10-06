@@ -37,9 +37,8 @@ pub enum LogError {
     )]
     InvalidFilter(Vec<String>),
 
-    #[cfg(feature = "log-mongo")]
     #[error("Serialization Error")]
-    SerializationError(mongodb::bson::ser::Error),
+    SerializationError(bson::ser::Error),
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

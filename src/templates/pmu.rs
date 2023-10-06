@@ -314,7 +314,7 @@ mod tests {
             utils::{dequeue, enqueue},
             ChannelElement,
         },
-        simulation::{mongo::MongoOptionsBuilder, *},
+        simulation::*,
         templates::{
             datastore::Behavior,
             pmu::{PMUReadBundle, PMUWriteBundle},
@@ -400,18 +400,20 @@ mod tests {
         #[cfg(feature = "dot")]
         println!("{}", initialized.to_dot_string());
 
-        let summary = initialized.run(
-            RunOptionsBuilder::default()
-                .logging(LoggingOptions::Mongo(
-                    MongoOptionsBuilder::default()
+        let run_options = RunOptionsBuilder::default();
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "log-mongo")] {
+                let run_options = run_options.logging(LoggingOptions::Mongo(
+                    mongo::MongoOptionsBuilder::default()
                         .db("pmu_log".to_string())
                         .uri("mongodb://127.0.0.1:27017".to_string())
                         .build()
                         .unwrap(),
-                ))
-                .build()
-                .unwrap(),
-        );
+                ));
+            }
+        }
+
+        let summary = initialized.run(run_options.build().unwrap());
         dbg!(summary.elapsed_cycles());
         #[cfg(feature = "dot")]
         {
