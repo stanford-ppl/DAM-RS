@@ -6,6 +6,7 @@ mod programdata;
 #[cfg(feature = "dot")]
 mod dot;
 
+use derive_builder::Builder;
 #[cfg(feature = "dot")]
 pub use dot::DotConvertible;
 
@@ -25,9 +26,17 @@ pub enum RunMode {
     FIFO,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug, Clone)]
+pub enum LoggingOptions {
+    #[default]
+    None,
+    Mongodb(String),
+}
+
+#[derive(Default, Debug, Builder, Clone)]
 pub struct InitializationOptions {
-    pub run_flavor_inference: bool,
+    pub(super) run_flavor_inference: bool,
+    pub(super) logging: LoggingOptions,
 }
 
 #[derive(Error, Debug)]

@@ -88,9 +88,7 @@ mod tests {
         parent.add_child(broadcast);
 
         parent
-            .initialize(InitializationOptions {
-                run_flavor_inference: false,
-            })
+            .initialize(InitializationOptions::default())
             .unwrap()
             .run(RunMode::Simple);
     }

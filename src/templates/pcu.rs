@@ -269,9 +269,7 @@ mod tests {
         parent.add_child(pcu);
         parent.add_child(checker);
         parent
-            .initialize(InitializationOptions {
-                run_flavor_inference: true,
-            })
+            .initialize(InitializationOptionsBuilder::default().build().unwrap())
             .unwrap()
             .run(RunMode::Simple);
     }

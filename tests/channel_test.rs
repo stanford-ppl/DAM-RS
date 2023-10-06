@@ -76,9 +76,12 @@ mod tests {
 
         #[allow(unused)]
         let summary = ctx
-            .initialize(InitializationOptions {
-                run_flavor_inference: flavor_inference,
-            })
+            .initialize(
+                InitializationOptionsBuilder::default()
+                    .run_flavor_inference(flavor_inference)
+                    .build()
+                    .unwrap(),
+            )
             .unwrap()
             .run(RunMode::Simple);
 

@@ -99,9 +99,12 @@ pub fn merge_benchmark(c: &mut Criterion) {
                     }
 
                     parent
-                        .initialize(InitializationOptions {
-                            run_flavor_inference: true,
-                        })
+                        .initialize(
+                            InitializationOptionsBuilder::default()
+                                .run_flavor_inference(true)
+                                .build()
+                                .unwrap(),
+                        )
                         .unwrap()
                         .run(RunMode::FIFO);
                 })
@@ -205,9 +208,12 @@ pub fn add_benchmark(c: &mut Criterion) {
                 parent.add_child(cap);
 
                 parent
-                    .initialize(InitializationOptions {
-                        run_flavor_inference: true,
-                    })
+                    .initialize(
+                        InitializationOptionsBuilder::default()
+                            .run_flavor_inference(true)
+                            .build()
+                            .unwrap(),
+                    )
                     .unwrap()
                     .run(RunMode::FIFO);
             })

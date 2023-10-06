@@ -13,9 +13,7 @@ use crate::{
     context::Context,
 };
 
-use super::{
-    programdata::ProgramData, InitializationError, InitializationOptions, Initialized,
-};
+use super::{programdata::ProgramData, InitializationError, InitializationOptions, Initialized};
 
 #[derive(Copy, Clone, Eq, Debug, PartialEq, Hash)]
 enum ChannelOrContext {
