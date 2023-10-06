@@ -51,12 +51,22 @@ impl<'a> Initialized<'a> {
                     .clone()
                     .name(format!("{}({})", child.id(), child.name()));
                 let summary_queue = summaries.clone();
+                let filter_copy = options.log_filter.clone();
 
                 let sender = log_sender.clone();
                 builder
                     .spawn_scoped_careless(s, move || {
                         if has_logger {
-                            initialize_log(LogInterface::new(child.id(), base_time, sender));
+                            let active_filter = match filter_copy {
+                                super::LogFilterKind::Blanket(filter) => filter,
+                                super::LogFilterKind::PerChild(func) => func(child.id()),
+                            };
+                            initialize_log(LogInterface::new(
+                                sender,
+                                child.id(),
+                                base_time,
+                                active_filter,
+                            ));
                         }
                         child.run();
                         summary_queue.push(child.summarize());

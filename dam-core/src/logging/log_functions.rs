@@ -14,7 +14,8 @@ where
     F: FnOnce() -> T,
 {
     LOGGER.with(|logger| match &*logger.borrow() {
-        Some(interface) => interface.log(&callback()),
+        Some(interface) if interface.log_filter.enabled::<T>() => interface.log(&callback()),
+        Some(_) => Ok(()),
         None => Ok(()),
     })
 }
@@ -22,7 +23,8 @@ where
 #[inline]
 pub fn log_event<T: LogEvent>(event: &T) -> Result<(), LogError> {
     LOGGER.with(|logger| match &*logger.borrow() {
-        Some(interface) => interface.log(event),
+        Some(interface) if interface.log_filter.enabled::<T>() => interface.log(event),
+        Some(_) => Ok(()),
         None => Ok(()),
     })
 }

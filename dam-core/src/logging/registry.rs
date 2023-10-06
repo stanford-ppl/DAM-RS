@@ -3,3 +3,9 @@ pub use linkme::distributed_slice;
 
 #[distributed_slice]
 pub static METRICS: [&'static str] = [..];
+
+// This function is used to get the list of metrics for printing.
+// Otherwise, you should just use the METRICS distributed slice.
+pub fn get_metrics_vec() -> Vec<&'static str> {
+    METRICS.iter().map(|x| *x).collect()
+}

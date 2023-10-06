@@ -1,4 +1,5 @@
 use bson::Bson;
+use rustc_hash::FxHashSet;
 use serde::{Deserialize, Serialize};
 use std::num::TryFromIntError;
 use thiserror::Error;
@@ -18,6 +19,8 @@ pub use log_interface::LogInterface;
 mod log_functions;
 pub use log_functions::*;
 
+use self::registry::{get_metrics_vec, METRICS};
+
 pub mod registry;
 
 #[derive(Error, Debug)]
@@ -27,6 +30,12 @@ pub enum LogError {
 
     #[error("Could not send event! Were LogProcessors registered?")]
     SendError,
+
+    #[error(
+        "Invalid Log Filter Defined: {0:?} were not registered filters! Options: {:?}",
+        get_metrics_vec()
+    )]
+    InvalidFilter(Vec<String>),
 
     #[cfg(feature = "log-mongo")]
     #[error("Serialization Error")]
@@ -55,4 +64,39 @@ pub trait LogEvent: Serialize {
 // Log Processors actually run and write the logs somewhere.
 pub trait LogProcessor: Send {
     fn spawn(&mut self);
+}
+
+#[derive(Debug, Default, Clone)]
+pub enum LogFilter {
+    #[default]
+    AllowAll,
+    Some(FxHashSet<String>),
+}
+
+impl LogFilter {
+    pub fn check(&self) -> Result<(), LogError> {
+        match self {
+            LogFilter::AllowAll => Ok(()),
+            LogFilter::Some(set) => {
+                let invalids: Vec<_> = set
+                    .clone()
+                    .into_iter()
+                    .filter(|key| !METRICS.contains(&key.as_str()))
+                    .collect();
+                if invalids.is_empty() {
+                    Ok(())
+                } else {
+                    Err(LogError::InvalidFilter(invalids))
+                }
+            }
+        }
+    }
+
+    pub fn enabled<T: LogEvent>(&self) -> bool {
+        match self {
+            LogFilter::AllowAll => true,
+            LogFilter::Some(filter) if filter.contains(T::NAME) => true,
+            LogFilter::Some(_) => false,
+        }
+    }
 }

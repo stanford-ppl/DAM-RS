@@ -1,25 +1,18 @@
 use crossbeam::channel::Sender;
 
+use super::{LogEntry, LogError, LogEvent, LogFilter};
 use crate::datastructures::Identifier;
+use derive_more::Constructor;
 
-use super::{LogEntry, LogError, LogEvent};
-
-#[derive(Clone)]
+#[derive(Clone, Constructor)]
 pub struct LogInterface {
     comm: Sender<LogEntry>,
     pub id: Identifier,
     base_time: std::time::Instant,
+    pub log_filter: LogFilter,
 }
 
 impl LogInterface {
-    pub fn new(id: Identifier, base_time: std::time::Instant, comm: Sender<LogEntry>) -> Self {
-        Self {
-            id,
-            comm,
-            base_time,
-        }
-    }
-
     pub fn log<T: LogEvent>(&self, event: &T) -> Result<(), LogError> {
         self.comm
             .send(LogEntry {

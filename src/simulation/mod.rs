@@ -19,7 +19,7 @@ pub use executed::Executed;
 pub use initialized::Initialized;
 
 use crate::channel::ChannelID;
-use dam_core::prelude::*;
+use dam_core::{logging::LogFilter, prelude::*};
 use thiserror::Error;
 
 #[derive(Builder, Default)]
@@ -30,6 +30,21 @@ pub struct RunOptions {
 
     #[builder(setter(into), default)]
     logging: LoggingOptions,
+
+    #[builder(setter(custom), default)]
+    log_filter: LogFilterKind,
+}
+
+#[derive(Clone)]
+pub enum LogFilterKind {
+    Blanket(LogFilter),
+    PerChild(fn(Identifier) -> LogFilter),
+}
+
+impl Default for LogFilterKind {
+    fn default() -> Self {
+        Self::Blanket(LogFilter::default()).into()
+    }
 }
 
 #[derive(Debug, Default, Clone, Copy)]
