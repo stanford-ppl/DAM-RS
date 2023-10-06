@@ -60,29 +60,14 @@ pub enum PeekResult<T> {
     Closed,
 }
 
-#[derive(Clone, Debug)]
-pub enum DequeueResult<T> {
-    Something(ChannelElement<T>),
-    Closed,
-}
-
-impl<T> DequeueResult<T> {
-    pub fn unwrap(self) -> ChannelElement<T> {
-        match self {
-            DequeueResult::Something(result) => result,
-            DequeueResult::Closed => panic!("Called DequeueResult::unwrap on a Closed value"),
-        }
-    }
-}
-
-impl<T> TryInto<DequeueResult<T>> for PeekResult<T> {
+impl<T> TryInto<Result<ChannelElement<T>, DequeueError>> for PeekResult<T> {
     type Error = ();
 
-    fn try_into(self) -> Result<DequeueResult<T>, Self::Error> {
+    fn try_into(self) -> Result<Result<ChannelElement<T>, DequeueError>, Self::Error> {
         match self {
-            PeekResult::Something(data) => Ok(DequeueResult::Something(data)),
+            PeekResult::Something(data) => Ok(Ok(data)),
             PeekResult::Nothing(_) => Err(()),
-            PeekResult::Closed => Ok(DequeueResult::Closed),
+            PeekResult::Closed => Ok(Err(DequeueError::Closed)),
         }
     }
 }
@@ -154,14 +139,14 @@ impl<T: DAMType> Receiver<T> {
         log_event(&ReceiverEvent::Peek(self.id())).unwrap();
         self.under().peek()
     }
-    pub fn peek_next(&self, manager: &TimeManager) -> DequeueResult<T> {
+    pub fn peek_next(&self, manager: &TimeManager) -> Result<ChannelElement<T>, DequeueError> {
         log_event(&ReceiverEvent::PeekNextStart(self.id())).unwrap();
         let result = self.under().peek_next(manager);
         log_event(&ReceiverEvent::PeekNextFinish(self.id())).unwrap();
         result
     }
 
-    pub fn dequeue(&self, manager: &TimeManager) -> DequeueResult<T> {
+    pub fn dequeue(&self, manager: &TimeManager) -> Result<ChannelElement<T>, DequeueError> {
         log_event(&ReceiverEvent::DequeueStart(self.id())).unwrap();
         let result = self.under().dequeue(manager);
         log_event(&ReceiverEvent::DequeueFinish(self.id())).unwrap();

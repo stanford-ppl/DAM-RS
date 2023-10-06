@@ -6,7 +6,7 @@ use enum_dispatch::enum_dispatch;
 
 use self::{acyclic::AcyclicReceiver, cyclic::CyclicReceiver};
 
-use super::{channel_spec::InlineSpec, ChannelElement, DequeueResult, PeekResult};
+use super::{channel_spec::InlineSpec, ChannelElement, DequeueError, PeekResult};
 
 mod acyclic;
 mod cyclic;
@@ -16,8 +16,8 @@ pub mod uninitialized;
 #[enum_dispatch(ReceiverImpl<T>)]
 pub(super) trait ReceiverFlavor<T> {
     fn peek(&mut self) -> PeekResult<T>;
-    fn peek_next(&mut self, manager: &TimeManager) -> DequeueResult<T>;
-    fn dequeue(&mut self, manager: &TimeManager) -> DequeueResult<T>;
+    fn peek_next(&mut self, manager: &TimeManager) -> Result<ChannelElement<T>, DequeueError>;
+    fn dequeue(&mut self, manager: &TimeManager) -> Result<ChannelElement<T>, DequeueError>;
 }
 
 #[enum_dispatch]
@@ -55,11 +55,17 @@ macro_rules! RegisterReceiver {
                 ReceiverCommon::peek(self)
             }
 
-            fn peek_next(&mut self, manager: &TimeManager) -> DequeueResult<T> {
+            fn peek_next(
+                &mut self,
+                manager: &TimeManager,
+            ) -> Result<ChannelElement<T>, DequeueError> {
                 $receiver_mode::peek_next(self, manager)
             }
 
-            fn dequeue(&mut self, manager: &TimeManager) -> DequeueResult<T> {
+            fn dequeue(
+                &mut self,
+                manager: &TimeManager,
+            ) -> Result<ChannelElement<T>, DequeueError> {
                 $receiver_mode::dequeue(self, manager)
             }
         }

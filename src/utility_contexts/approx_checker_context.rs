@@ -2,7 +2,7 @@ use dam_macros::context;
 
 use crate::context::Context;
 use crate::{
-    channel::{ChannelElement, DequeueResult, Receiver},
+    channel::{ChannelElement, Receiver},
     types::DAMType,
 };
 use dam_core::prelude::*;
@@ -32,13 +32,11 @@ where
         if let Some(iter) = self.iterator.take() {
             for (ind, val) in iter().enumerate() {
                 match self.input.dequeue(&self.time) {
-                    DequeueResult::Something(ChannelElement { time, data })
-                        if !(self.checker)(&val, &data) =>
-                    {
+                    Ok(ChannelElement { time, data }) if !(self.checker)(&val, &data) => {
                         panic!("Mismatch on iteration {ind} at time {time:?}: Expected {val:?} but found {data:?}")
                     }
-                    DequeueResult::Something(_) => {}
-                    DequeueResult::Closed => {
+                    Ok(_) => {}
+                    Err(_) => {
                         panic!("Ran out of things to read on iteration {ind}, expected {val:?}")
                     }
                 }

@@ -31,20 +31,14 @@ pub fn dequeue<T: DAMType>(
     manager: &mut TimeManager,
     recv: &mut Receiver<T>,
 ) -> Result<ChannelElement<T>, DequeueError> {
-    match recv.dequeue(manager) {
-        DequeueResult::Something(ce) => Ok(ce),
-        DequeueResult::Closed => Err(DequeueError::Closed),
-    }
+    recv.dequeue(manager)
 }
 
 pub fn peek_next<T: DAMType>(
     manager: &mut TimeManager,
     recv: &mut Receiver<T>,
 ) -> Result<ChannelElement<T>, DequeueError> {
-    match recv.peek_next(manager) {
-        DequeueResult::Something(ce) => Ok(ce),
-        DequeueResult::Closed => Err(DequeueError::Closed),
-    }
+    recv.peek_next(manager)
 }
 
 pub fn dequeue_bundle<T: DAMType>(

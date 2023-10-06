@@ -115,14 +115,14 @@ impl<ElementType: DAMType> PCU<ElementType> {
 
     pub const READ_ALL_INPUTS: IngressOpType<ElementType> = |ics, regs, time| {
         ics.iter().for_each(|recv| {
-            recv.peek_next(time);
+            let _ = recv.peek_next(time);
         });
         let reads: Vec<_> = ics.iter().map(|recv| recv.dequeue(time)).collect();
 
         for (ind, read) in reads.into_iter().enumerate() {
             match read {
-                crate::channel::DequeueResult::Something(data) => regs[ind].data = data.data,
-                crate::channel::DequeueResult::Closed => return false,
+                Ok(data) => regs[ind].data = data.data,
+                Err(_) => return false,
             }
         }
 

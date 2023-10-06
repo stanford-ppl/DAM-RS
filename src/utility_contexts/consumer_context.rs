@@ -15,7 +15,7 @@ impl<T: DAMType> Context for ConsumerContext<T> {
 
     fn run(&mut self) {
         loop {
-            if let crate::channel::DequeueResult::Closed = self.chan.dequeue(&self.time) {
+            if self.chan.dequeue(&self.time).is_err() {
                 return;
             }
             self.time.incr_cycles(1);
@@ -45,8 +45,8 @@ impl<T: DAMType> Context for PrinterContext<T> {
     fn run(&mut self) {
         loop {
             match self.chan.dequeue(&self.time) {
-                crate::channel::DequeueResult::Something(x) => println!("{:?}", x),
-                crate::channel::DequeueResult::Closed => return,
+                Ok(x) => println!("{:?}", x),
+                Err(_) => return,
             }
             self.time.incr_cycles(1);
         }

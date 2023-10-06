@@ -1,7 +1,7 @@
 use dam_macros::context;
 
 use crate::{
-    channel::{DequeueResult, Receiver, Sender},
+    channel::{Receiver, Sender},
     types::DAMType,
 };
 use dam_core::prelude::*;
@@ -21,14 +21,14 @@ impl<T: DAMType> Context for BroadcastContext<T> {
         loop {
             let value = self.receiver.dequeue(&self.time);
             match value {
-                DequeueResult::Something(mut data) => {
+                Ok(mut data) => {
                     data.time = self.time.tick() + 1;
                     self.targets.iter().for_each(|target| {
                         target.enqueue(&self.time, data.clone()).unwrap();
                     });
                     self.time.incr_cycles(1);
                 }
-                DequeueResult::Closed => return,
+                Err(_) => return,
             }
         }
     }

@@ -25,28 +25,28 @@ impl<T: DAMType + std::cmp::Ord> Context for MergeUnit<T> {
             let a = self.input_a.peek_next(&self.time);
             let b = self.input_b.peek_next(&self.time);
             match (a, b) {
-                (DequeueResult::Something(ce_a), DequeueResult::Something(ce_b)) => {
+                (Ok(ce_a), Ok(ce_b)) => {
                     let min = std::cmp::min(ce_a.data.clone(), ce_b.data.clone());
                     if ce_a.data == min {
-                        self.input_a.dequeue(&self.time);
+                        self.input_a.dequeue(&self.time).unwrap();
                     }
                     if ce_b.data == min {
-                        self.input_b.dequeue(&self.time);
+                        self.input_b.dequeue(&self.time).unwrap();
                     }
                     let time = self.time.tick() + 1;
                     self.output
                         .enqueue(&self.time, ChannelElement::new(time, min))
                         .unwrap();
                 }
-                (DequeueResult::Something(ce_a), DequeueResult::Closed) => {
-                    self.input_a.dequeue(&self.time);
+                (Ok(ce_a), Err(_)) => {
+                    self.input_a.dequeue(&self.time).unwrap();
                     self.output.enqueue(&self.time, ce_a).unwrap();
                 }
-                (DequeueResult::Closed, DequeueResult::Something(ce_b)) => {
-                    self.input_b.dequeue(&self.time);
+                (Err(_), Ok(ce_b)) => {
+                    self.input_b.dequeue(&self.time).unwrap();
                     self.output.enqueue(&self.time, ce_b).unwrap();
                 }
-                (DequeueResult::Closed, DequeueResult::Closed) => return,
+                (Err(_), Err(_)) => return,
             }
             self.time.incr_cycles(1);
         }
@@ -137,13 +137,13 @@ where
             let a = self.input_a.dequeue(&self.time);
             let b = self.input_b.dequeue(&self.time);
             match (a, b) {
-                (DequeueResult::Something(ce_a), DequeueResult::Something(ce_b)) => {
+                (Ok(ce_a), Ok(ce_b)) => {
                     let time = self.time.tick() + 1;
                     self.output
                         .enqueue(&self.time, ChannelElement::new(time, ce_a.data + ce_b.data))
                         .unwrap();
                 }
-                (DequeueResult::Closed, DequeueResult::Closed) => return,
+                (Err(_), Err(_)) => return,
                 _ => panic!(),
             }
             self.time.incr_cycles(1);

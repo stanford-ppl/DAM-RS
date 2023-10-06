@@ -62,10 +62,10 @@ mod tests {
             for iter in 0..test_size {
                 std::thread::sleep(std::time::Duration::from_millis(rng.gen_range(0..=100)));
                 match rcv.dequeue(time) {
-                    dam_rs::channel::DequeueResult::Something(ChannelElement { time: _, data }) => {
+                    Ok(ChannelElement { time: _, data }) => {
                         assert_eq!(data, iter);
                     }
-                    dam_rs::channel::DequeueResult::Closed => {
+                    Err(_) => {
                         panic!("Premature termination of channel")
                     }
                 }

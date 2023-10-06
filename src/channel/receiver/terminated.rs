@@ -1,6 +1,6 @@
 use dam_core::prelude::*;
 
-use crate::channel::{DequeueResult, PeekResult};
+use crate::channel::{ChannelElement, DequeueError, PeekResult};
 
 use super::ReceiverFlavor;
 
@@ -14,11 +14,11 @@ impl<T> ReceiverFlavor<T> for TerminatedReceiver {
         panic!("Calling peek on a terminated receiver");
     }
 
-    fn peek_next(&mut self, _manager: &TimeManager) -> DequeueResult<T> {
+    fn peek_next(&mut self, _manager: &TimeManager) -> Result<ChannelElement<T>, DequeueError> {
         panic!("Calling peek_next on a terminated receiver");
     }
 
-    fn dequeue(&mut self, _manager: &TimeManager) -> DequeueResult<T> {
+    fn dequeue(&mut self, _manager: &TimeManager) -> Result<ChannelElement<T>, DequeueError> {
         panic!("Calling dequeue on a terminated receiver");
     }
 }
