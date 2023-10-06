@@ -444,17 +444,11 @@ mod tests {
             resp: rd_data_send,
         });
 
-        let rd_addr_gen = GeneratorContext::new(
-            move || (0..TEST_SIZE).map(|x| u16::try_from(x).unwrap()),
-            rd_addr_send,
-        );
+        let rd_addr_gen = GeneratorContext::new(|| (0..TEST_SIZE).map(|x| x as u16), rd_addr_send);
 
         parent.add_child(rd_addr_gen);
 
-        let checker = CheckerContext::new(
-            || (0..TEST_SIZE).map(|x| u16::try_from(x).unwrap()),
-            rd_data_recv,
-        );
+        let checker = CheckerContext::new(|| (0..TEST_SIZE).map(|x| x as u16), rd_data_recv);
         parent.add_child(checker);
         parent.add_child(pmu);
 
