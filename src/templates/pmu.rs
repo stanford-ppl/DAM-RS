@@ -387,7 +387,7 @@ mod tests {
         #[cfg(feature = "dot")]
         println!("{}", initialized.to_dot_string());
 
-        let summary = initialized.run(RunMode::Simple);
+        let summary = initialized.run(RunOptions::default());
         dbg!(summary.elapsed_cycles());
         #[cfg(feature = "dot")]
         {

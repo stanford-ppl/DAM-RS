@@ -1,16 +1,20 @@
-use std::sync::Arc;
+use std::{
+    default,
+    sync::{Arc, Mutex, RwLock},
+};
 
 use crossbeam::queue::SegQueue;
+use dam_core::logging::{initialize_log, Logger};
 
-use super::{executed::Executed, programdata::ProgramData, RunMode};
+use super::{executed::Executed, programdata::ProgramData, RunMode, RunOptions};
 
 pub struct Initialized<'a> {
     pub(super) data: ProgramData<'a>,
 }
 
 impl<'a> Initialized<'a> {
-    pub fn run(mut self, mode: RunMode) -> Executed<'a> {
-        let (priority, policy) = match mode {
+    pub fn run(mut self, options: RunOptions) -> Executed<'a> {
+        let (priority, policy) = match options.mode {
             RunMode::Simple => (
                 thread_priority::get_current_thread_priority().unwrap(),
                 thread_priority::thread_schedule_policy().unwrap(),
@@ -25,23 +29,50 @@ impl<'a> Initialized<'a> {
             }
         };
 
+        let runtime = match options.logging {
+            super::LoggingOptions::None => None,
+            super::LoggingOptions::Mongodb(_) => Some(Arc::new(
+                tokio::runtime::Builder::new_current_thread()
+                    .worker_threads(2)
+                    .on_thread_start(move || {
+                        thread_priority::set_current_thread_priority(priority)
+                            .expect("Tokio worker thread priority failed!");
+                    })
+                    .build()
+                    .unwrap(),
+            )),
+        };
+
         let summaries = Arc::new(SegQueue::new());
 
+        let start_time = std::time::Instant::now();
+
         std::thread::scope(|s| {
+            let builder = thread_priority::ThreadBuilder::default()
+                .priority(priority)
+                .policy(policy);
+
             self.data.nodes.drain(..).for_each(|mut child| {
                 let id = child.id();
                 let name = child.name();
-                let builder = thread_priority::ThreadBuilder::default().name(format!(
-                    "{}({})",
-                    child.id(),
-                    child.name()
-                ));
-
-                let builder = builder.priority(priority).policy(policy);
+                let builder = builder
+                    .clone()
+                    .name(format!("{}({})", child.id(), child.name()));
                 let summary_queue = summaries.clone();
 
+                let rt_clone = runtime.clone();
+                let log_options = options.logging.clone();
                 builder
                     .spawn_scoped_careless(s, move || {
+                        match log_options {
+                            super::LoggingOptions::None => {}
+                            super::LoggingOptions::Mongodb(mongo) => initialize_log(Logger::new(
+                                rt_clone.unwrap(),
+                                start_time,
+                                mongo,
+                                child.id(),
+                            )),
+                        }
                         child.run();
                         summary_queue.push(child.summarize());
                     })

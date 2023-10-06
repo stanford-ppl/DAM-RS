@@ -271,6 +271,6 @@ mod tests {
         parent
             .initialize(InitializationOptionsBuilder::default().build().unwrap())
             .unwrap()
-            .run(RunMode::Simple);
+            .run(RunOptions::default());
     }
 }

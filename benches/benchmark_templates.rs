@@ -68,7 +68,12 @@ pub fn pcu_benchmark(c: &mut Criterion) {
                 parent
                     .initialize(InitializationOptions::default())
                     .unwrap()
-                    .run(RunMode::Simple);
+                    .run(
+                        RunOptionsBuilder::default()
+                            .mode(RunMode::FIFO)
+                            .build()
+                            .unwrap(),
+                    );
             })
         });
     }

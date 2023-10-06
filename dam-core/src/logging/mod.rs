@@ -1,35 +1,19 @@
-use std::{num::TryFromIntError, sync::Arc};
+use std::{cell::RefCell, num::TryFromIntError, sync::Arc};
 
 use mongodb::{
     bson::{self, Bson},
-    Collection,
+    Client, Collection,
 };
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
+
+mod logger;
+pub use logger::*;
 
 // Mongodb logging structure
 // A programgraph -> one Database
 // A thread -> one collection
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct LogEntry {
-    // Time in microseconds since start of simulation
-    pub timestamp: i64,
-
-    // String name of the logging event type
-    pub event_type: String,
-
-    // The actual data of the event
-    pub event_data: Bson,
-}
-
-// We'll make one logger and pass it around.
-#[derive(Debug, Clone)]
-pub struct Logger {
-    collection: Collection<LogEntry>,
-    base: std::time::Instant,
-    runtime: Arc<tokio::runtime::Runtime>,
-}
+use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum LogError {
@@ -38,29 +22,48 @@ pub enum LogError {
 
     #[error("Error converting time into i64. Did we run out of time?")]
     TimeConversionError(TryFromIntError),
+
+    #[error("Uninitialized logger!")]
+    Uninitialized,
 }
 
-impl Logger {
-    pub fn log<T: Serialize>(&self, obj: T) -> Result<(), LogError> {
-        let serialized = bson::to_bson(&obj).map_err(|err| LogError::SerializationError(err))?;
-        let entry = LogEntry {
-            timestamp: self
-                .base
-                .elapsed()
-                .as_micros()
-                .try_into()
-                .map_err(|err| LogError::TimeConversionError(err))?,
-            event_type: std::any::type_name::<T>().to_string(),
-            event_data: serialized,
-        };
+#[derive(Debug, Default, Clone)]
+pub enum LogState {
+    #[default]
+    Disabled,
+    Active(Logger),
+}
 
-        let col = self.collection.clone();
+#[derive(Debug, Clone)]
+pub struct MongoLoggingOptions {
+    pub client: Client,
+    pub database: String,
+    pub max_size: Option<u64>,
+}
 
-        self.runtime
-            .spawn(async move { col.insert_one(entry, None).await.unwrap() });
+thread_local! {
+    pub static LOGGER: RefCell<LogState> = RefCell::default();
+}
 
-        Ok(())
-    }
+#[inline]
+pub fn log_event<T: Serialize, F>(callback: F) -> Result<(), LogError>
+where
+    F: FnOnce() -> T,
+{
+    LOGGER.with(|logger| match &*logger.borrow() {
+        LogState::Disabled => {
+            // If we're disabled, then don't do anything.
+            Ok(())
+        }
+        LogState::Active(log) => log.log(callback()),
+    })
+}
+
+pub fn initialize_log(logger: Logger) {
+    LOGGER.with(|cur_logger| {
+        let old = cur_logger.replace(LogState::Active(logger));
+        assert!(matches!(old, LogState::Disabled));
+    })
 }
 
 #[cfg(test)]
@@ -108,6 +111,7 @@ mod tests {
 
         let mapped = docs.into_iter().map(|book| LogEntry {
             timestamp: 0,
+            context: 0,
             event_type: "book".to_string(),
             event_data: bson::to_bson(&book).unwrap(),
         });

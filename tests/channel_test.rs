@@ -83,7 +83,7 @@ mod tests {
                     .unwrap(),
             )
             .unwrap()
-            .run(RunMode::Simple);
+            .run(RunOptions::default());
 
         #[cfg(feature = "dot")]
         {

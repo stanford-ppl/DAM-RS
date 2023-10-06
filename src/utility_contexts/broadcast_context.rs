@@ -57,7 +57,7 @@ mod tests {
     use super::BroadcastContext;
 
     use crate::{
-        simulation::{InitializationOptions, ProgramBuilder, RunMode},
+        simulation::{InitializationOptions, ProgramBuilder, RunMode, RunOptions},
         utility_contexts::{CheckerContext, GeneratorContext},
     };
 
@@ -90,6 +90,6 @@ mod tests {
         parent
             .initialize(InitializationOptions::default())
             .unwrap()
-            .run(RunMode::Simple);
+            .run(RunOptions::default());
     }
 }

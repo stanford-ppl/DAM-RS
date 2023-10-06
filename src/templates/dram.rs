@@ -289,7 +289,7 @@ pub mod tests {
             utils::{dequeue, enqueue},
             ChannelElement, Receiver,
         },
-        simulation::{InitializationOptions, ProgramBuilder, RunMode},
+        simulation::{InitializationOptions, ProgramBuilder, RunMode, RunOptions},
         templates::{
             datastore::Behavior,
             dram::{DRAMConfig, DRAMReadBundle, DRAMWriteBundle, DRAM},
@@ -402,6 +402,6 @@ pub mod tests {
         parent
             .initialize(InitializationOptions::default())
             .unwrap()
-            .run(RunMode::Simple);
+            .run(RunOptions::default());
     }
 }

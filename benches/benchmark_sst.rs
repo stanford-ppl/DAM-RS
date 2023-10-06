@@ -106,7 +106,12 @@ pub fn merge_benchmark(c: &mut Criterion) {
                                 .unwrap(),
                         )
                         .unwrap()
-                        .run(RunMode::FIFO);
+                        .run(
+                            RunOptionsBuilder::default()
+                                .mode(RunMode::FIFO)
+                                .build()
+                                .unwrap(),
+                        );
                 })
             },
         );
@@ -215,7 +220,12 @@ pub fn add_benchmark(c: &mut Criterion) {
                             .unwrap(),
                     )
                     .unwrap()
-                    .run(RunMode::FIFO);
+                    .run(
+                        RunOptionsBuilder::default()
+                            .mode(RunMode::FIFO)
+                            .build()
+                            .unwrap(),
+                    );
             })
         });
     }

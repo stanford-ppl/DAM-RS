@@ -16,8 +16,21 @@ pub use executed::Executed;
 pub use initialized::Initialized;
 
 use crate::channel::ChannelID;
-use dam_core::prelude::*;
+use dam_core::{logging::MongoLoggingOptions, prelude::*};
 use thiserror::Error;
+
+#[derive(Default, Debug, Clone)]
+pub enum LoggingOptions {
+    #[default]
+    None,
+    Mongodb(MongoLoggingOptions),
+}
+
+#[derive(Default, Debug, Clone, Builder)]
+pub struct RunOptions {
+    mode: RunMode,
+    logging: LoggingOptions,
+}
 
 #[derive(Debug, Default, Clone, Copy)]
 pub enum RunMode {
@@ -26,17 +39,10 @@ pub enum RunMode {
     FIFO,
 }
 
-#[derive(Default, Debug, Clone)]
-pub enum LoggingOptions {
-    #[default]
-    None,
-    Mongodb(String),
-}
-
 #[derive(Default, Debug, Builder, Clone)]
 pub struct InitializationOptions {
+    #[builder(setter(into), default)]
     pub(super) run_flavor_inference: bool,
-    pub(super) logging: LoggingOptions,
 }
 
 #[derive(Error, Debug)]
