@@ -3,6 +3,9 @@ mod executed;
 mod initialized;
 mod programdata;
 
+mod logging_options;
+pub use logging_options::*;
+
 #[cfg(feature = "dot")]
 mod dot;
 
@@ -16,19 +19,16 @@ pub use executed::Executed;
 pub use initialized::Initialized;
 
 use crate::channel::ChannelID;
-use dam_core::{logging::MongoLoggingOptions, prelude::*};
+use dam_core::prelude::*;
 use thiserror::Error;
 
-#[derive(Default, Debug, Clone)]
-pub enum LoggingOptions {
-    #[default]
-    None,
-    Mongodb(MongoLoggingOptions),
-}
-
-#[derive(Default, Debug, Clone, Builder)]
+#[derive(Builder, Default)]
+#[builder(pattern = "owned")]
 pub struct RunOptions {
+    #[builder(setter(into), default)]
     mode: RunMode,
+
+    #[builder(setter(into), default)]
     logging: LoggingOptions,
 }
 

@@ -19,10 +19,13 @@ rustc-hash = "1.1.0"
 thread-priority = "0.13.1"
 tokio = { version = "1.32.0", features = ["rt"] }
 thiserror = "1.0.49"
+crossbeam = { version = "0.8.2", features = ["crossbeam-queue"] }
+enum_dispatch = "0.3.12"
+derive_more = "0.99.17"
 
 [dependencies.mongodb]
 version = "2.7.0"
-
+default_features = false
 ## Have to use openssl-tls for cross compilation and wsl2.
-features = ["openssl-tls"]
+features = ["sync", "openssl-tls"]
 

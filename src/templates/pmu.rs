@@ -301,7 +301,7 @@ mod tests {
             utils::{dequeue, enqueue},
             ChannelElement,
         },
-        simulation::*,
+        simulation::{mongo::MongoOptionsBuilder, *},
         templates::{
             datastore::Behavior,
             pmu::{PMUReadBundle, PMUWriteBundle},
@@ -387,7 +387,18 @@ mod tests {
         #[cfg(feature = "dot")]
         println!("{}", initialized.to_dot_string());
 
-        let summary = initialized.run(RunOptions::default());
+        let summary = initialized.run(
+            RunOptionsBuilder::default()
+                .logging(LoggingOptions::Mongo(
+                    MongoOptionsBuilder::default()
+                        .db("pmu_log".to_string())
+                        .uri("mongodb://127.0.0.1:27017".to_string())
+                        .build()
+                        .unwrap(),
+                ))
+                .build()
+                .unwrap(),
+        );
         dbg!(summary.elapsed_cycles());
         #[cfg(feature = "dot")]
         {

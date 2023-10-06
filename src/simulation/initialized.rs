@@ -4,9 +4,15 @@ use std::{
 };
 
 use crossbeam::queue::SegQueue;
-use dam_core::logging::{initialize_log, Logger};
+use dam_core::{
+    logging::{
+        destroy_log, initialize_log, mongodb, LogEntry, LogInterface, LogProcessor, MongoLogger,
+        NullProcessor,
+    },
+    prelude::Identifier,
+};
 
-use super::{executed::Executed, programdata::ProgramData, RunMode, RunOptions};
+use super::{executed::Executed, programdata::ProgramData, LoggingOptions, RunMode, RunOptions};
 
 pub struct Initialized<'a> {
     pub(super) data: ProgramData<'a>,
@@ -29,28 +35,21 @@ impl<'a> Initialized<'a> {
             }
         };
 
-        let runtime = match options.logging {
-            super::LoggingOptions::None => None,
-            super::LoggingOptions::Mongodb(_) => Some(Arc::new(
-                tokio::runtime::Builder::new_current_thread()
-                    .worker_threads(2)
-                    .on_thread_start(move || {
-                        thread_priority::set_current_thread_priority(priority)
-                            .expect("Tokio worker thread priority failed!");
-                    })
-                    .build()
-                    .unwrap(),
-            )),
-        };
+        let (log_sender, log_receiver) = crossbeam::channel::unbounded();
+
+        let exec_logger =
+            Self::make_logger(log_receiver, options.logging).expect("Error creating logger!");
+
+        let has_logger = exec_logger.is_some();
 
         let summaries = Arc::new(SegQueue::new());
-
-        let start_time = std::time::Instant::now();
 
         std::thread::scope(|s| {
             let builder = thread_priority::ThreadBuilder::default()
                 .priority(priority)
                 .policy(policy);
+
+            let base_time = std::time::Instant::now();
 
             self.data.nodes.drain(..).for_each(|mut child| {
                 let id = child.id();
@@ -60,29 +59,49 @@ impl<'a> Initialized<'a> {
                     .name(format!("{}({})", child.id(), child.name()));
                 let summary_queue = summaries.clone();
 
-                let rt_clone = runtime.clone();
-                let log_options = options.logging.clone();
+                let sender = log_sender.clone();
                 builder
                     .spawn_scoped_careless(s, move || {
-                        match log_options {
-                            super::LoggingOptions::None => {}
-                            super::LoggingOptions::Mongodb(mongo) => initialize_log(Logger::new(
-                                rt_clone.unwrap(),
-                                start_time,
-                                mongo,
-                                child.id(),
-                            )),
+                        if has_logger {
+                            initialize_log(LogInterface::new(child.id(), base_time, sender));
                         }
                         child.run();
                         summary_queue.push(child.summarize());
+                        println!("Child finished: {}", child.id());
+                        // destroy_log();
                     })
                     .unwrap_or_else(|_| panic!("Failed to spawn child {name:?} {id:?}"));
             });
+
+            drop(log_sender);
+
+            if let Some(mut logger) = exec_logger {
+                builder
+                    .spawn_scoped_careless(s, move || logger.spawn())
+                    .unwrap_or_else(|_| panic!("Failed to start logging thread!"));
+            }
         });
+
         Executed {
             nodes: Arc::into_inner(summaries).unwrap().into_iter().collect(),
             edges: self.data.edges,
         }
+    }
+
+    fn make_logger(
+        queue: crossbeam::channel::Receiver<LogEntry>,
+        options: LoggingOptions,
+    ) -> Result<Option<Box<dyn LogProcessor>>, ()> {
+        Ok(match options {
+            super::LoggingOptions::None => None,
+            super::LoggingOptions::Mongo(mongo_opts) => Some(Box::new(MongoLogger::new(
+                mongodb::sync::Client::with_uri_str(mongo_opts.uri).map_err(|_| ())?,
+                mongo_opts.db,
+                mongo_opts.db_options,
+                mongo_opts.collection,
+                queue,
+            ))),
+        })
     }
 }
 

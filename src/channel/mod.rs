@@ -6,6 +6,7 @@ mod events;
 
 mod flavors;
 
+use dam_core::logging::log_event;
 pub use flavors::*;
 
 pub mod channel_spec;
@@ -32,8 +33,6 @@ use self::handle::ChannelHandle;
 use self::receiver::terminated::TerminatedReceiver;
 use self::receiver::{ReceiverFlavor, ReceiverImpl};
 use self::sender::terminated::TerminatedSender;
-
-use dam_core::metric::LogProducer;
 
 use self::sender::{SenderFlavor, SenderImpl};
 
@@ -89,7 +88,6 @@ impl<T> TryInto<DequeueResult<T>> for PeekResult<T> {
     }
 }
 
-#[log_producer]
 pub struct Sender<T: Clone> {
     pub(crate) underlying: Arc<ChannelData<T>>,
 }
@@ -100,7 +98,7 @@ impl<T: DAMType> Sender<T> {
     }
 
     pub fn attach_sender(&self, sender: &dyn Context) {
-        // Self::log(SendEvent::AttachSender(self.id, sender.id()));
+        // log_event(||{SendEvent::AttachSender(self.id, sender.id())});
         if let SenderImpl::Uninitialized(uninit) = self.under() {
             uninit.attach_sender(sender);
         } else {
@@ -112,9 +110,9 @@ impl<T: DAMType> Sender<T> {
         manager: &TimeManager,
         data: ChannelElement<T>,
     ) -> Result<(), EnqueueError> {
-        Self::log(SendEvent::EnqueueStart(self.id()));
+        log_event(|| SendEvent::EnqueueStart(self.id())).unwrap();
         let res = self.under().enqueue(manager, data);
-        Self::log(SendEvent::EnqueueFinish(self.id()));
+        log_event(|| SendEvent::EnqueueFinish(self.id())).unwrap();
         res
     }
 
@@ -146,7 +144,7 @@ impl<T: DAMType> Receiver<T> {
     }
 
     pub fn attach_receiver(&self, receiver: &dyn Context) {
-        Self::log(ReceiverEvent::AttachReceiver(self.id(), receiver.id()));
+        log_event(|| ReceiverEvent::AttachReceiver(self.id(), receiver.id())).unwrap();
         if let ReceiverImpl::Uninitialized(recv) = self.under() {
             recv.attach_receiver(receiver);
         } else {
@@ -155,20 +153,20 @@ impl<T: DAMType> Receiver<T> {
     }
 
     pub fn peek(&self) -> PeekResult<T> {
-        Self::log(ReceiverEvent::Peek(self.id()));
+        log_event(|| ReceiverEvent::Peek(self.id())).unwrap();
         self.under().peek()
     }
     pub fn peek_next(&self, manager: &TimeManager) -> DequeueResult<T> {
-        Self::log(ReceiverEvent::PeekNextStart(self.id()));
+        log_event(|| ReceiverEvent::PeekNextStart(self.id())).unwrap();
         let result = self.under().peek_next(manager);
-        Self::log(ReceiverEvent::PeekNextFinish(self.id()));
+        log_event(|| ReceiverEvent::PeekNextFinish(self.id())).unwrap();
         result
     }
 
     pub fn dequeue(&self, manager: &TimeManager) -> DequeueResult<T> {
-        Self::log(ReceiverEvent::DequeueStart(self.id()));
+        log_event(|| ReceiverEvent::DequeueStart(self.id())).unwrap();
         let result = self.under().dequeue(manager);
-        Self::log(ReceiverEvent::DequeueFinish(self.id()));
+        log_event(|| ReceiverEvent::DequeueFinish(self.id())).unwrap();
         result
     }
 }

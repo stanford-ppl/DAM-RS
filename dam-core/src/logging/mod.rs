@@ -1,19 +1,22 @@
-use std::{cell::RefCell, num::TryFromIntError, sync::Arc};
+use std::{cell::RefCell, num::TryFromIntError};
 
-use mongodb::{
-    bson::{self, Bson},
-    Client, Collection,
-};
+use crossbeam::channel::Sender;
+use mongodb::bson::{self, Bson};
 use serde::{Deserialize, Serialize};
 
-mod logger;
-pub use logger::*;
+mod mongo_logger;
+mod nullprocessor;
 
 // Mongodb logging structure
 // A programgraph -> one Database
 // A thread -> one collection
 
 use thiserror::Error;
+
+use crate::datastructures::Identifier;
+
+pub use mongo_logger::*;
+pub use nullprocessor::*;
 
 #[derive(Error, Debug)]
 pub enum LogError {
@@ -23,26 +26,67 @@ pub enum LogError {
     #[error("Error converting time into i64. Did we run out of time?")]
     TimeConversionError(TryFromIntError),
 
-    #[error("Uninitialized logger!")]
-    Uninitialized,
+    #[error("Could not send event! Were LogProcessors registered?")]
+    SendError,
 }
 
-#[derive(Debug, Default, Clone)]
-pub enum LogState {
-    #[default]
-    Disabled,
-    Active(Logger),
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct LogEntry {
+    // Time in microseconds since start of simulation
+    pub timestamp: i64,
+
+    // Identity of the current context
+    pub context: usize,
+
+    // String name of the logging event type
+    pub event_type: String,
+
+    // The actual data of the event
+    pub event_data: Bson,
 }
 
-#[derive(Debug, Clone)]
-pub struct MongoLoggingOptions {
-    pub client: Client,
-    pub database: String,
-    pub max_size: Option<u64>,
+pub struct LogInterface {
+    comm: Sender<LogEntry>,
+    id: Identifier,
+    base_time: std::time::Instant,
+}
+
+impl LogInterface {
+    pub fn new(id: Identifier, base_time: std::time::Instant, comm: Sender<LogEntry>) -> Self {
+        Self {
+            id,
+            comm,
+            base_time,
+        }
+    }
+
+    pub fn log<T: Serialize>(&self, event: &T) -> Result<(), LogError> {
+        self.comm
+            .send(LogEntry {
+                timestamp: self
+                    .base_time
+                    .elapsed()
+                    .as_micros()
+                    .try_into()
+                    .map_err(|err| LogError::TimeConversionError(err))?,
+                context: self.id.id,
+                event_type: std::any::type_name::<T>().to_string(),
+                event_data: bson::to_bson(event)
+                    .map_err(|err| LogError::SerializationError(err))?,
+            })
+            .map_err(|_| LogError::SendError)?;
+
+        Ok(())
+    }
+}
+
+// Log Processors actually run and write the logs somewhere.
+pub trait LogProcessor: Send {
+    fn spawn(&mut self);
 }
 
 thread_local! {
-    pub static LOGGER: RefCell<LogState> = RefCell::default();
+    pub static LOGGER: RefCell<Option<LogInterface>> = RefCell::default();
 }
 
 #[inline]
@@ -51,84 +95,20 @@ where
     F: FnOnce() -> T,
 {
     LOGGER.with(|logger| match &*logger.borrow() {
-        LogState::Disabled => {
-            // If we're disabled, then don't do anything.
-            Ok(())
-        }
-        LogState::Active(log) => log.log(callback()),
+        Some(interface) => interface.log(&callback()),
+        None => Ok(()),
     })
 }
 
-pub fn initialize_log(logger: Logger) {
+pub fn initialize_log(logger: LogInterface) {
     LOGGER.with(|cur_logger| {
-        let old = cur_logger.replace(LogState::Active(logger));
-        assert!(matches!(old, LogState::Disabled));
+        let old = cur_logger.replace(Some(logger));
+        assert!(matches!(old, None));
     })
 }
 
-#[cfg(test)]
-mod tests {
-    use mongodb::{
-        bson::{self, doc},
-        options::CreateCollectionOptions,
-        Client,
-    };
-    use serde::{Deserialize, Serialize};
-
-    use super::LogEntry;
-
-    #[derive(Debug, Serialize, Deserialize, Clone)]
-    struct Book {
-        title: String,
-        author: String,
-    }
-
-    async fn run_mongodb() -> Result<(), mongodb::error::Error> {
-        let client = Client::with_uri_str("mongodb://localhost:27017").await?;
-        let database = client.database("mydb");
-        let options = CreateCollectionOptions::builder()
-            .size(1 << 12)
-            .capped(true);
-        database
-            .create_collection("books", Some(options.build()))
-            .await?;
-        let collection = database.collection::<LogEntry>("books");
-
-        let docs = vec![
-            Book {
-                title: "1984".to_string(),
-                author: "George Orwell".to_string(),
-            },
-            Book {
-                title: "Animal Farm".to_string(),
-                author: "George Orwell".to_string(),
-            },
-            Book {
-                title: "The Great Gatsby".to_string(),
-                author: "F. Scott Fitzgerald".to_string(),
-            },
-        ];
-
-        let mapped = docs.into_iter().map(|book| LogEntry {
-            timestamp: 0,
-            context: 0,
-            event_type: "book".to_string(),
-            event_data: bson::to_bson(&book).unwrap(),
-        });
-
-        // Insert some books into the "mydb.books" collection.
-        collection
-            .insert_many(mapped.cycle().take(512), None)
-            .await?;
-
-        Ok(())
-    }
-
-    #[test]
-    fn drive_mongodb() {
-        tokio::runtime::Runtime::new()
-            .unwrap()
-            .block_on(run_mongodb())
-            .unwrap();
-    }
+pub fn destroy_log() {
+    LOGGER.with(|cur_logger| {
+        cur_logger.take();
+    })
 }
