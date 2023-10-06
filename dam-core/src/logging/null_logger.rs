@@ -1,8 +1,8 @@
 use super::LogProcessor;
 
 #[derive(Clone)]
-pub struct NullProcessor {}
+pub struct NullLogger {}
 
-impl LogProcessor for NullProcessor {
+impl LogProcessor for NullLogger {
     fn spawn(&mut self) {} // Does nothing.
 }

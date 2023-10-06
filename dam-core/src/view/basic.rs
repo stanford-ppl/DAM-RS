@@ -1,8 +1,12 @@
 use std::sync::{Arc, Mutex};
 
+use linkme::distributed_slice;
 use serde::{Deserialize, Serialize};
 
-use crate::{datastructures::*, logging::log_event};
+use crate::{
+    datastructures::*,
+    logging::{log_event, registry::METRICS, LogEvent},
+};
 
 use super::ContextView;
 
@@ -13,6 +17,13 @@ enum TimeEvent {
     ScanAndWrite(Time, Vec<Identifier>),
     Finish(Time),
 }
+
+impl LogEvent for TimeEvent {
+    const NAME: &'static str = "TimeEvent";
+}
+
+#[distributed_slice(METRICS)]
+static TIME_EVENT: &'static str = TimeEvent::NAME;
 
 #[derive(Default, Debug, Clone)]
 pub struct TimeManager {
@@ -90,6 +101,13 @@ pub enum ContextViewEvent {
     Park,
     Unpark,
 }
+
+impl LogEvent for ContextViewEvent {
+    const NAME: &'static str = "ContextViewEvent";
+}
+
+#[distributed_slice(METRICS)]
+static CONTEXT_EVENT: &'static str = ContextViewEvent::NAME;
 
 impl ContextView for BasicContextView {
     fn wait_until(&self, when: Time) -> Time {

@@ -13,7 +13,8 @@ pub use proxy::ProxyContext;
 pub type ExplicitConnections = HashMap<Identifier, Vec<(HashSet<ChannelID>, HashSet<ChannelID>)>>;
 
 pub trait Context: Send + Sync + TimeViewable + Identifiable {
-    fn init(&mut self);
+    // A lot of contexts simply define this to be empty anyways.
+    fn init(&mut self) {}
     fn run(&mut self);
 
     fn ids(&self) -> HashMap<VerboseIdentifier, HashSet<VerboseIdentifier>> {

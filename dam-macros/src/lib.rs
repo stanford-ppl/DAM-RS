@@ -1,4 +1,5 @@
 use proc_macro::{self, TokenStream};
+use proc_macro2::Ident;
 use quote::quote;
 use syn::{parse::Parser, parse_macro_input, DeriveInput};
 
@@ -58,4 +59,37 @@ pub fn context(_attrs: TokenStream, item: TokenStream) -> TokenStream {
         }
         _ => quote! {compile_error!("Context can only be tagged on structs!")}.into(),
     }
+}
+
+#[proc_macro_attribute]
+pub fn event_type(_attrs: TokenStream, item: TokenStream) -> TokenStream {
+    let ast = parse_macro_input!(item as DeriveInput);
+
+    let name = ast.ident.clone();
+    let ident_string = name.to_string();
+    let mod_name = Ident::new(
+        format!("{}_metrics_mod", ident_string).as_str(),
+        name.span(),
+    );
+
+    let generics = ast.generics.clone();
+    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+
+    quote! {
+        #ast
+
+        impl #impl_generics ::dam_core::logging::LogEvent for super::#name #ty_generics #where_clause {
+            const NAME: &'static str = #ident_string;
+        }
+        
+        #[allow(non_snake_case)]
+        mod #mod_name {
+            use ::dam_core::logging::registry::*;
+            
+
+            #[distributed_slice(METRICS)]
+            static EVENT_NAME: &'static str = #ident_string;
+        }
+    }
+    .into()
 }
