@@ -289,7 +289,7 @@ pub mod tests {
             utils::{dequeue, enqueue},
             ChannelElement, Receiver,
         },
-        simulation::{InitializationOptions, ProgramBuilder, RunMode, RunOptions},
+        simulation::{InitializationOptions, ProgramBuilder, RunOptions},
         templates::{
             datastore::Behavior,
             dram::{DRAMConfig, DRAMReadBundle, DRAMWriteBundle, DRAM},
