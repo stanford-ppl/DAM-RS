@@ -1,12 +1,8 @@
 use std::sync::{Arc, Mutex};
 
-use linkme::distributed_slice;
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    datastructures::*,
-    metric::{LogProducer, METRICS},
-};
+use crate::{datastructures::*, logging::log_event};
 
 use super::ContextView;
 
@@ -43,23 +39,16 @@ impl Drop for TimeManager {
     }
 }
 
-impl LogProducer for TimeManager {
-    const LOG_NAME: &'static str = "TimeManager";
-}
-
-#[distributed_slice(METRICS)]
-static TIMEMANAGER_NAME: &'static str = "TimeManager";
-
 impl TimeManager {
     pub fn incr_cycles(&self, incr: u64) {
-        Self::log(TimeEvent::Incr(incr));
+        let _ = log_event(&TimeEvent::Incr(incr));
         self.underlying.time.incr_cycles(incr);
         self.scan_and_write_signals();
     }
 
     pub fn advance(&self, new: Time) {
         if self.underlying.time.try_advance(new) {
-            Self::log(TimeEvent::Advance(new));
+            let _ = log_event(&TimeEvent::Advance(new));
             self.scan_and_write_signals();
         }
     }
@@ -67,13 +56,9 @@ impl TimeManager {
     fn scan_and_write_signals(&self) {
         let mut signal_buffer = self.underlying.signal_buffer.lock().unwrap();
         let tlb = self.underlying.time.load();
-        #[cfg(logging)]
-        let mut released = Vec::new();
         signal_buffer.retain(|signal| {
             if signal.when <= tlb {
                 signal.thread.unpark();
-                #[cfg(logging)]
-                released.push(signal.thread.id());
                 false
             } else {
                 true
@@ -81,21 +66,6 @@ impl TimeManager {
         });
 
         drop(signal_buffer);
-        #[cfg(logging)]
-        if !released.is_empty() {
-            let graph = get_registry();
-            Self::log(TimeEvent::ScanAndWrite(
-                tlb,
-                released
-                    .into_iter()
-                    .map(|thr| {
-                        graph
-                            .get_identifier(thr)
-                            .expect("Not all threads had registered identifiers!")
-                    })
-                    .collect(),
-            ));
-        }
     }
 
     pub fn tick(&self) -> Time {
@@ -104,7 +74,7 @@ impl TimeManager {
 
     pub fn cleanup(&mut self) {
         self.underlying.time.set_infinite();
-        Self::log(TimeEvent::Finish(self.underlying.time.load()));
+        let _ = log_event(&TimeEvent::Finish(self.underlying.time.load()));
         self.scan_and_write_signals();
     }
 }
@@ -114,10 +84,6 @@ pub struct BasicContextView {
     under: Arc<TimeInfo>,
 }
 
-impl LogProducer for BasicContextView {
-    const LOG_NAME: &'static str = "BasicContextView";
-}
-
 #[derive(Serialize, Deserialize, Debug)]
 pub enum ContextViewEvent {
     WaitUntil(Time),
@@ -125,11 +91,9 @@ pub enum ContextViewEvent {
     Unpark,
 }
 
-#[distributed_slice(METRICS)]
-static CONTEXTVIEW_NAME: &'static str = "BasicContextView";
 impl ContextView for BasicContextView {
     fn wait_until(&self, when: Time) -> Time {
-        Self::log(ContextViewEvent::WaitUntil(when));
+        let _ = log_event(&ContextViewEvent::WaitUntil(when));
 
         // Check time first. Since time is non-decreasing, if this cond is true, then it's always true.
         let cur_time = self.under.time.load();
@@ -149,14 +113,14 @@ impl ContextView for BasicContextView {
             // Unlock the signal buffer
             drop(signal_buffer);
 
-            Self::log(ContextViewEvent::Park);
+            let _ = log_event(&ContextViewEvent::Park);
 
             while cur_time < when {
                 // Park is Acquire, so the load can be relaxed
                 std::thread::park();
                 cur_time = self.under.time.load_relaxed();
             }
-            Self::log(ContextViewEvent::Unpark);
+            let _ = log_event(&ContextViewEvent::Unpark);
 
             return self.under.time.load();
         }

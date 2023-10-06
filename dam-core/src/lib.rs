@@ -1,5 +1,4 @@
 pub mod datastructures;
-pub mod metric;
 pub mod view;
 
 pub mod logging;

@@ -1,5 +1,4 @@
 use proc_macro::{self, TokenStream};
-use proc_macro2::Ident;
 use quote::quote;
 use syn::{parse::Parser, parse_macro_input, DeriveInput};
 
@@ -59,28 +58,4 @@ pub fn context(_attrs: TokenStream, item: TokenStream) -> TokenStream {
         }
         _ => quote! {compile_error!("Context can only be tagged on structs!")}.into(),
     }
-}
-
-#[proc_macro_attribute]
-pub fn log_producer(_attrs: TokenStream, item: TokenStream) -> TokenStream {
-    let ast = parse_macro_input!(item as DeriveInput);
-
-    let name = ast.ident.clone();
-    let metric_name = name.to_string();
-    let slice_name = Ident::new(metric_name.to_ascii_uppercase().as_str(), name.span());
-
-    let generics = ast.generics.clone();
-    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
-
-    return quote! {
-        #ast
-
-        impl #impl_generics ::dam_core::metric::LogProducer for #name #ty_generics #where_clause {
-            const LOG_NAME: &'static str = #metric_name;
-        }
-
-        #[::linkme::distributed_slice(::dam_core::metric::METRICS)]
-        pub static #slice_name: &'static str = #metric_name;
-    }
-    .into();
 }

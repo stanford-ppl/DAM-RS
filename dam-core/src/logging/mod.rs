@@ -1,33 +1,32 @@
 use std::{cell::RefCell, num::TryFromIntError};
 
+use bson::Bson;
 use crossbeam::channel::Sender;
-use mongodb::bson::{self, Bson};
 use serde::{Deserialize, Serialize};
-
-mod mongo_logger;
 mod nullprocessor;
 
-// Mongodb logging structure
-// A programgraph -> one Database
-// A thread -> one collection
+pub use nullprocessor::*;
+
+#[cfg(feature = "log-mongo")]
+mod mongo_logger;
+#[cfg(feature = "log-mongo")]
+pub use mongo_logger::*;
 
 use thiserror::Error;
 
 use crate::datastructures::Identifier;
 
-pub use mongo_logger::*;
-pub use nullprocessor::*;
-
 #[derive(Error, Debug)]
 pub enum LogError {
-    #[error("Serialization Error")]
-    SerializationError(mongodb::bson::ser::Error),
-
     #[error("Error converting time into i64. Did we run out of time?")]
     TimeConversionError(TryFromIntError),
 
     #[error("Could not send event! Were LogProcessors registered?")]
     SendError,
+
+    #[cfg(feature = "log-mongo")]
+    #[error("Serialization Error")]
+    SerializationError(mongodb::bson::ser::Error),
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -91,12 +90,20 @@ thread_local! {
 }
 
 #[inline]
-pub fn log_event<T: Serialize, F>(callback: F) -> Result<(), LogError>
+pub fn log_event_cb<T: Serialize, F>(callback: F) -> Result<(), LogError>
 where
     F: FnOnce() -> T,
 {
     LOGGER.with(|logger| match &*logger.borrow() {
         Some(interface) => interface.log(&callback()),
+        None => Ok(()),
+    })
+}
+
+#[inline]
+pub fn log_event<T: Serialize>(event: &T) -> Result<(), LogError> {
+    LOGGER.with(|logger| match &*logger.borrow() {
+        Some(interface) => interface.log(event),
         None => Ok(()),
     })
 }
