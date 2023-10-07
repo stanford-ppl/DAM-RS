@@ -1,5 +1,5 @@
 use crate::{
-    channel::{ChannelElement, Receiver, Sender},
+    channel::{ChannelElement, DequeueResult, EnqueueError, PeekResult, Receiver, Sender},
     context::Context,
     types::DAMType,
 };
@@ -7,6 +7,12 @@ use crate::{
 use super::ops::{ALUOp, PipelineRegister};
 use dam_core::prelude::*;
 use dam_macros::context;
+
+pub enum Reg16Bit {
+    U32(u32),
+    F32(f32),
+    I32(i32),
+}
 
 #[derive(Debug)]
 pub struct PCUConfig<ElementType> {
@@ -62,8 +68,95 @@ impl<ET: DAMType> PipelineStage<ET> {
     }
 }
 
-type InputChannelsType<ElementType> = Vec<Receiver<ElementType>>;
-type OutputChannelsType<ElementType> = Vec<Sender<ElementType>>;
+trait IntoReceiver<OT> {
+    fn peek_box(&self) -> PeekResult<OT>;
+    fn peek_next_box(&self, manager: &TimeManager) -> DequeueResult<OT>;
+    fn dequeue_box(&mut self, manager: &TimeManager) -> DequeueResult<OT>;
+    fn attach_receiver_box(&self, receiver: &dyn Context);
+}
+
+impl<T: DAMType, OT: Clone> IntoReceiver<OT> for Receiver<T>
+where
+    T: Into<OT>,
+{
+    fn peek_box(&self) -> PeekResult<OT> {
+        match self.peek() {
+            PeekResult::Something(x) => PeekResult::Something(ChannelElement {
+                time: x.time,
+                data: x.data.into(),
+            }),
+            PeekResult::Nothing(x) => PeekResult::Nothing(x),
+            PeekResult::Closed => PeekResult::Closed,
+        }
+    }
+
+    fn peek_next_box(&self, manager: &TimeManager) -> DequeueResult<OT> {
+        match self.peek_next(manager) {
+            DequeueResult::Something(x) => DequeueResult::Something(ChannelElement {
+                time: x.time,
+                data: x.data.into(),
+            }),
+            DequeueResult::Closed => DequeueResult::Closed,
+        }
+    }
+
+    fn dequeue_box(&mut self, manager: &TimeManager) -> DequeueResult<OT> {
+        match self.dequeue(manager) {
+            DequeueResult::Something(x) => DequeueResult::Something(ChannelElement {
+                time: x.time,
+                data: x.data.into(),
+            }),
+            DequeueResult::Closed => DequeueResult::Closed,
+        }
+    }
+
+    fn attach_receiver_box(&self, receiver: &dyn Context) {
+        self.attach_receiver(receiver)
+    }
+    // OT: enum
+    // T: orignal datatype for the receiver
+}
+
+trait IntoSender<IT> {
+    //fn wait_until_available_box(&mut self, manager: &TimeManager) -> Result<(), EnqueueError>;
+
+    fn enqueue_box(
+        &mut self,
+        manager: &TimeManager,
+        data: ChannelElement<IT>,
+    ) -> Result<(), EnqueueError>;
+
+    fn attach_sender_box(&self, sender: &dyn Context);
+}
+
+impl<T: DAMType, IT> IntoSender<IT> for Sender<T>
+where
+    IT: Into<T>,
+{
+    // IT: enum
+    // T: sender datatype
+    fn enqueue_box(
+        &mut self,
+        manager: &TimeManager,
+        data: ChannelElement<IT>,
+    ) -> Result<(), EnqueueError> {
+        Sender::enqueue(
+            self,
+            manager,
+            ChannelElement {
+                time: data.time,
+                data: data.data.into(),
+            },
+        )
+    }
+
+    fn attach_sender_box(&self, sender: &dyn Context) {
+        self.attach_sender(sender)
+    }
+}
+
+type InputChannelsType<ElementType> = Vec<Box<dyn IntoReceiver<ElementType> + Sync + Send>>;
+type OutputChannelsType<ElementType> = Vec<Box<dyn IntoSender<ElementType> + Sync + Send>>;
 type IngressOpType<ElementType> = fn(
     &InputChannelsType<ElementType>,
     &mut Vec<PipelineRegister<ElementType>>,
@@ -117,9 +210,9 @@ impl<ElementType: DAMType> PCU<ElementType> {
 
     pub const READ_ALL_INPUTS: IngressOpType<ElementType> = |ics, regs, time, cntr| {
         ics.iter().for_each(|recv| {
-            recv.peek_next(time);
+            recv.peek_next_box(time);
         });
-        let reads: Vec<_> = ics.iter().map(|recv| recv.dequeue(time)).collect();
+        let reads: Vec<_> = ics.iter().map(|recv| (*recv).dequeue_box(time)).collect();
 
         for (ind, read) in reads.into_iter().enumerate() {
             match read {
@@ -133,9 +226,9 @@ impl<ElementType: DAMType> PCU<ElementType> {
 
     pub const READ_ALL_INPUTS_COUNTER: IngressOpType<ElementType> = |ics, regs, time, cntr| {
         ics.iter().for_each(|recv| {
-            recv.peek_next(time);
+            recv.peek_next_box(time);
         });
-        let reads: Vec<_> = ics.iter().map(|recv| recv.dequeue(time)).collect();
+        let reads: Vec<_> = ics.iter().map(|recv| recv.dequeue_box(time)).collect();
 
         match cntr {
             Some(x) => regs[0].data = x.clone(),
@@ -154,8 +247,8 @@ impl<ElementType: DAMType> PCU<ElementType> {
 
     pub const WRITE_ALL_RESULTS: EgressOpType<ElementType> = |ocs, regs, out_time, manager| {
         ocs.iter().enumerate().for_each(|(ind, out_chan)| {
-            out_chan
-                .enqueue(
+            (*out_chan)
+                .enqueue_box(
                     manager,
                     ChannelElement {
                         time: out_time,
@@ -171,18 +264,22 @@ impl<ElementType: DAMType> PCU<ElementType> {
         assert!(self.stages.len() <= self.configuration.pipeline_depth);
     }
 
-    pub fn add_input_channel(&mut self, recv: Receiver<ElementType>) {
-        recv.attach_receiver(self);
-        self.input_channels.push(recv);
+    pub fn add_input_channel(&mut self, recv: impl IntoReceiver<ElementType> + Send + Sync) {
+        recv.attach_receiver_box(self);
+        self.input_channels.push(Box::new(recv));
     }
 
-    pub fn add_output_channel(&mut self, send: Sender<ElementType>) {
-        send.attach_sender(self);
-        self.output_channels.push(send);
+    pub fn add_output_channel(&mut self, send: impl IntoSender<ElementType> + Send + Sync) {
+        send.attach_sender_box(self);
+        self.output_channels.push(Box::new(send));
     }
 }
 
-impl<ElementType: DAMType> Context for PCU<ElementType> {
+impl<ElementType: DAMType> Context for PCU<ElementType>
+// where
+//     Box<dyn IntoReceiver<ElementType>>: Context,
+//     Box<dyn IntoSender<ElementType>>: Context,
+{
     fn init(&mut self) {}
 
     fn run(&mut self) {
@@ -223,6 +320,25 @@ impl<ElementType: DAMType> Context for PCU<ElementType> {
                 &self.time,
             );
             self.time.incr_cycles(1);
+        }
+    }
+
+    fn ids(
+        &self,
+    ) -> std::collections::HashMap<VerboseIdentifier, std::collections::HashSet<VerboseIdentifier>>
+    {
+        std::collections::HashMap::from([(self.verbose(), std::collections::HashSet::new())])
+    }
+
+    fn edge_connections(&self) -> Option<crate::context::ExplicitConnections> {
+        None
+    }
+
+    fn summarize(&self) -> crate::context::ContextSummary {
+        crate::context::ContextSummary {
+            id: self.verbose(),
+            time: self.view(),
+            children: vec![],
         }
     }
 }
