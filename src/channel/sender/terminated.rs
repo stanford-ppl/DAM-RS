@@ -7,7 +7,7 @@ use crate::{
 
 use super::SenderFlavor;
 
-pub struct TerminatedSender<T> {
+pub(crate) struct TerminatedSender<T> {
     _marker: PhantomData<T>,
 }
 impl<T> SenderFlavor<T> for TerminatedSender<T> {

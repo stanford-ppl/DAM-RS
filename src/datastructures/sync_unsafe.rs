@@ -1,3 +1,4 @@
+#![allow(unused)]
 use std::cell::UnsafeCell;
 
 // Copied from rust core unstable.

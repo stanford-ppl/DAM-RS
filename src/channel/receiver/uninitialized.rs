@@ -8,12 +8,12 @@ use crate::{
 
 use super::ReceiverFlavor;
 
-pub struct UninitializedReceiver {
+pub(crate) struct UninitializedReceiver {
     spec: Arc<ChannelSpec>,
 }
 
 impl UninitializedReceiver {
-    pub fn new(spec: Arc<ChannelSpec>) -> Self {
+    pub(crate) fn new(spec: Arc<ChannelSpec>) -> Self {
         Self { spec }
     }
 }

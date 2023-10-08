@@ -1,4 +1,6 @@
 mod channel_id;
+
+/// Utility functions and constructs for interacting with channels.
 pub mod utils;
 pub use channel_id::*;
 

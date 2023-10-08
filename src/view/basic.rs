@@ -25,18 +25,22 @@ impl LogEvent for TimeEvent {
 #[distributed_slice(METRICS)]
 static TIME_EVENT: &'static str = TimeEvent::NAME;
 
+/// The basic "owned" time construct.
+/// All time mutations should be performed through a TimeManager.
 #[derive(Default, Debug, Clone)]
 pub struct TimeManager {
     underlying: Arc<TimeInfo>,
 }
 
 impl TimeManager {
+    /// Constructs a new owned time.
     pub fn new() -> TimeManager {
         TimeManager {
             underlying: Arc::new(TimeInfo::default()),
         }
     }
 
+    /// Constructs a [super::BasicContextView] of the owned time.
     pub fn view(&self) -> BasicContextView {
         BasicContextView {
             under: self.underlying.clone(),
@@ -51,12 +55,14 @@ impl Drop for TimeManager {
 }
 
 impl TimeManager {
+    /// Increments time by a non-negative number of cycles.
     pub fn incr_cycles(&self, incr: u64) {
         let _ = log_event(&TimeEvent::Incr(incr));
         self.underlying.time.incr_cycles(incr);
         self.scan_and_write_signals();
     }
 
+    /// Advances to a new time. If the new time is in the past, this is a no-op.
     pub fn advance(&self, new: Time) {
         if self.underlying.time.try_advance(new) {
             let _ = log_event(&TimeEvent::Advance(new));
@@ -79,10 +85,14 @@ impl TimeManager {
         drop(signal_buffer);
     }
 
+    /// Reads the current time.
+    /// Since this is only available on the owning context, it does not need to be ordered w.r.t. anything else.
     pub fn tick(&self) -> Time {
         self.underlying.time.load_relaxed()
     }
 
+    /// Explicitly advances the context to infinite time.
+    /// This is useful if we don't want to wait for `Drop` to trigger.
     pub fn cleanup(&mut self) {
         self.underlying.time.set_infinite();
         let _ = log_event(&TimeEvent::Finish(self.underlying.time.load()));
@@ -90,13 +100,14 @@ impl TimeManager {
     }
 }
 
+/// A simple view of a "primitive" context's time.
 #[derive(Clone)]
 pub struct BasicContextView {
     under: Arc<TimeInfo>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-pub enum ContextViewEvent {
+enum ContextViewEvent {
     WaitUntil(Time),
     Park,
     Unpark,
@@ -149,15 +160,15 @@ impl ContextView for BasicContextView {
     }
 }
 
-// Private bookkeeping constructs
-
+/// Registers a waking callback to a TimeManager.
+/// This is used to implement wait_until on [BasicContextView]s
 #[derive(Debug, Clone)]
 struct SignalElement {
     when: Time,
     thread: std::thread::Thread,
 }
 
-// Encapsulates the callback backlog and the current tick info to make BasicContextView work.
+/// Encapsulates the callback backlog and the current tick info to make BasicContextView work.
 #[derive(Default, Debug)]
 struct TimeInfo {
     time: AtomicTime,

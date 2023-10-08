@@ -8,7 +8,7 @@ use crate::{
 
 use super::SenderFlavor;
 
-pub struct UninitializedSender<T> {
+pub(crate) struct UninitializedSender<T> {
     _marker: PhantomData<T>,
     spec: Arc<ChannelSpec>,
 }
@@ -27,7 +27,7 @@ impl<T> SenderFlavor<T> for UninitializedSender<T> {
 }
 
 impl<T> UninitializedSender<T> {
-    pub fn new(spec: Arc<ChannelSpec>) -> Self {
+    pub(crate) fn new(spec: Arc<ChannelSpec>) -> Self {
         Self {
             _marker: PhantomData,
             spec,

@@ -6,7 +6,7 @@ use crate::{
 use super::ReceiverFlavor;
 
 #[derive(Default)]
-pub struct TerminatedReceiver {}
+pub(crate) struct TerminatedReceiver {}
 
 impl TerminatedReceiver {}
 

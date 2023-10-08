@@ -2,8 +2,10 @@ use crate::datastructures::Time;
 
 use super::{ContextView, TimeView};
 
+/// A simple aggregate view which delegates to its children.
 #[derive(Clone)]
 pub struct ParentView {
+    /// Delegates operations to the child views via thin wrapper
     pub child_views: Vec<TimeView>,
 }
 
