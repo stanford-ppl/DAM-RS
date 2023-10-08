@@ -63,8 +63,8 @@ impl<'a> Initialized<'a> {
                                 super::LogFilterKind::PerChild(func) => func(child.id()),
                             };
                             initialize_log(LogInterface::new(
-                                sender,
                                 child.id(),
+                                sender,
                                 base_time,
                                 active_filter,
                             ));

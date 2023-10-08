@@ -1,5 +1,6 @@
 use super::LogProcessor;
 
+/// A no-op logger.
 #[derive(Clone)]
 pub struct NullLogger {}
 

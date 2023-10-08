@@ -3,6 +3,8 @@ use std::sync::atomic::AtomicUsize;
 use serde::{Deserialize, Serialize};
 
 static ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+/// A unique identifier for a channel. Not guaranteed stable across program runs.
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, PartialOrd, Eq, Ord, Hash)]
 pub struct ChannelID {
     id: usize,
@@ -13,6 +15,7 @@ impl ChannelID {
         ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
     }
 
+    /// Construct a new ChannelID
     pub fn new() -> Self {
         Self {
             id: Self::next_id(),

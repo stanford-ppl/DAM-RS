@@ -5,9 +5,11 @@ use crate::logging::LogInterface;
 use super::{LogError, LogEvent};
 
 thread_local! {
-    pub static LOGGER: RefCell<Option<LogInterface>> = RefCell::default();
+    pub(crate) static LOGGER: RefCell<Option<LogInterface>> = RefCell::default();
 }
 
+/// Logs with a callback. This should be used when constructing the event is particularly expensive, as it does require extra overhead.
+/// The callback is only invoked if the logger is set AND the filter permits the event.
 #[inline]
 pub fn log_event_cb<T: LogEvent, F>(callback: F) -> Result<(), LogError>
 where
@@ -20,6 +22,7 @@ where
     })
 }
 
+/// Standard logging method, which logs to the underlying logger.
 #[inline]
 pub fn log_event<T: LogEvent>(event: &T) -> Result<(), LogError> {
     LOGGER.with_borrow(|logger| match logger {
@@ -29,10 +32,12 @@ pub fn log_event<T: LogEvent>(event: &T) -> Result<(), LogError> {
     })
 }
 
+/// Initializes the thread-local log with a specific logger.
 pub fn initialize_log(logger: LogInterface) {
     LOGGER.set(Some(logger));
 }
 
+/// Gets the current logger, used for 'inheriting' loggers from a parent context.
 pub fn copy_log() -> Option<LogInterface> {
     LOGGER.with_borrow(|cur_logger| cur_logger.clone())
 }

@@ -20,58 +20,73 @@ pub use log_functions::*;
 
 use self::registry::{get_metrics_vec, METRICS};
 
+/// Handles the registering/checking of LogEntry names
 pub mod registry;
 
+/// Errors which may occur when attempting to log.
 #[derive(Error, Debug)]
 pub enum LogError {
+    /// Attempted to convert time (in us) to i64, but ran out of time. This is unlikely to ever happen.
     #[error("Error converting time into i64. Did we run out of time?")]
     TimeConversionError(TryFromIntError),
 
+    /// No logprocessors were registered, so the event that was sent will never be seen.
     #[error("Could not send event! Were LogProcessors registered?")]
     SendError,
 
+    /// The filter that was registered wasn't valid -- some of the filter types weren't registered.
     #[error(
         "Invalid Log Filter Defined: {0:?} were not registered filters! Options: {:?}",
         get_metrics_vec()
     )]
     InvalidFilter(Vec<String>),
 
+    /// Failed to convert the message into bson.
     #[error("Serialization Error")]
     SerializationError(bson::ser::Error),
 }
 
+/// A real log entry, which is eventually serialized to some actual log.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct LogEntry {
-    // Time in microseconds since start of simulation
-    pub timestamp: i64,
+    /// Time in microseconds since start of simulation
+    pub(crate) timestamp: i64,
 
-    // Identity of the current context
-    pub context: usize,
+    /// Identity of the current context
+    pub(crate) context: usize,
 
-    // String name of the logging event type
-    pub event_type: String,
+    /// String name of the logging event type
+    pub(crate) event_type: String,
 
-    // The actual data of the event
-    pub event_data: Bson,
+    /// The actual data of the event
+    pub(crate) event_data: Bson,
 }
 
+/// All logs types must expose a name, which is used by filters.
 pub trait LogEvent: Serialize {
+    /// The declared name of the logging type. This is used to report the the event type in the [LogEntry], as well as check filters in [LogFilter]
     const NAME: &'static str;
 }
 
-// Log Processors actually run and write the logs somewhere.
+/// Log Processors actually run and write the logs somewhere.
 pub trait LogProcessor: Send {
+    /// Starts the logging job, invoked within a dedicated thread.
     fn spawn(&mut self);
 }
 
+/// Log filtering policies
 #[derive(Debug, Default, Clone)]
 pub enum LogFilter {
+    /// Enables ALL logging -- likely to be VERY verbose and expensive
     #[default]
     AllowAll,
+
+    /// Only enable a subset of logs, based on their registered LogEvent::NAME
     Some(HashSet<String>),
 }
 
 impl LogFilter {
+    /// Checks to see if all elements of the LogFilter are actually registered metrics.
     pub fn check(&self) -> Result<(), LogError> {
         match self {
             LogFilter::AllowAll => Ok(()),
@@ -90,6 +105,8 @@ impl LogFilter {
         }
     }
 
+    /// Checks to see if a log type T is enabled, without actually requiring an instance of T.
+    /// This allows checking even when the event is a callback.
     pub fn enabled<T: LogEvent>(&self) -> bool {
         match self {
             LogFilter::AllowAll => true,

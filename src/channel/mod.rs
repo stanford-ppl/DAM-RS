@@ -8,9 +8,9 @@ mod events;
 
 mod flavors;
 
-pub use flavors::*;
+pub(crate) use flavors::*;
 
-pub mod channel_spec;
+pub(crate) mod channel_spec;
 mod receiver;
 mod sender;
 
@@ -37,28 +37,38 @@ use self::sender::terminated::TerminatedSender;
 
 use self::sender::{SenderFlavor, SenderImpl};
 
+/// An item with an associated timestamp -- used for sending/receiving objects on channels and modifying contexts' owned times.
 #[derive(Clone, Debug)]
 pub struct ChannelElement<T> {
+    /// The element's timestamp
     pub time: Time,
+    /// The contained data
     pub data: T,
 }
 
-impl<T: Clone> ChannelElement<T> {
+impl<T> ChannelElement<T> {
+    // TODO: Is this actually necessary?
+    /// Constructs a new timestamp.
     pub fn new(time: Time, data: T) -> ChannelElement<T> {
         ChannelElement { time, data }
     }
-}
 
-impl<T> ChannelElement<T> {
+    /// Updates the timestamp with a later timestamp. This is used for emulating stalls.
     pub fn update_time(&mut self, new_time: Time) {
         self.time = std::cmp::max(self.time, new_time);
     }
 }
 
+/// The result of a Peek operation
 #[derive(Clone, Debug)]
 pub enum PeekResult<T> {
+    /// We found an element. Note: The timestamp MAY be in the future.
     Something(ChannelElement<T>),
+
+    /// Nothing was available at a particular time -- also serves as proof that no element will arrive prior to or at the timestamp.
     Nothing(Time),
+
+    /// Channel was closed. Roughly equivalent to Nothing(Infinity)
     Closed,
 }
 
@@ -74,15 +84,18 @@ impl<T> TryInto<Result<ChannelElement<T>, DequeueError>> for PeekResult<T> {
     }
 }
 
+/// The send side of a channel, modelled after std::mpsc, crossbeam, and the like.
 pub struct Sender<T: Clone> {
     pub(crate) underlying: Arc<ChannelData<T>>,
 }
 
 impl<T: DAMType> Sender<T> {
+    /// Gets the ID of the channel.
     pub fn id(&self) -> ChannelID {
         self.underlying.id()
     }
 
+    /// Registers a context for the sender.
     pub fn attach_sender(&self, sender: &dyn Context) {
         // log_event(&{SendEvent::AttachSender(self.id, sender.id())});
         if let SenderImpl::Uninitialized(uninit) = self.under() {
@@ -91,6 +104,8 @@ impl<T: DAMType> Sender<T> {
             panic!("Cannot attach a context to an initialized sender!");
         }
     }
+
+    /// Writes to a channel. This will error if the receive side has already been closed.
     pub fn enqueue(
         &self,
         manager: &TimeManager,
@@ -102,6 +117,7 @@ impl<T: DAMType> Sender<T> {
         res
     }
 
+    /// Advances time forward until the channel is not full.
     pub fn wait_until_available(&mut self, manager: &mut TimeManager) -> Result<(), EnqueueError> {
         self.under().wait_until_available(manager)
     }
@@ -119,15 +135,18 @@ impl<T: Clone> Sender<T> {
     }
 }
 
+/// The receive side of a channel, modelled after std::mpsc, crossbeam, and the like.
 pub struct Receiver<T: Clone> {
     pub(crate) underlying: Arc<ChannelData<T>>,
 }
 
 impl<T: DAMType> Receiver<T> {
+    /// Gets the ID of the channel.
     pub fn id(&self) -> ChannelID {
         self.underlying.id()
     }
 
+    /// Registers a context for the receiver.
     pub fn attach_receiver(&self, receiver: &dyn Context) {
         log_event(&ReceiverEvent::AttachReceiver(self.id(), receiver.id())).unwrap();
         if let ReceiverImpl::Uninitialized(recv) = self.under() {
@@ -137,10 +156,14 @@ impl<T: DAMType> Receiver<T> {
         }
     }
 
+    /// Peeks the channel. Note: It is possible to see a value in the future when peeking, as noted by [PeekResult].
     pub fn peek(&self) -> PeekResult<T> {
         log_event(&ReceiverEvent::Peek(self.id())).unwrap();
         self.under().peek()
     }
+
+    /// Advances forward in time until there is an element in the channel, and returns that value.
+    /// If the channel is closed before another element is sent, then it returns a DequeueError instead.
     pub fn peek_next(&self, manager: &TimeManager) -> Result<ChannelElement<T>, DequeueError> {
         log_event(&ReceiverEvent::PeekNextStart(self.id())).unwrap();
         let result = self.under().peek_next(manager);
@@ -148,6 +171,8 @@ impl<T: DAMType> Receiver<T> {
         result
     }
 
+    /// Advances forward in time until there is an element in the channel, and pops that value.
+    /// If the channel is closed before another element is sent, then it returns a DequeueError instead.
     pub fn dequeue(&self, manager: &TimeManager) -> Result<ChannelElement<T>, DequeueError> {
         log_event(&ReceiverEvent::DequeueStart(self.id())).unwrap();
         let result = self.under().dequeue(manager);
@@ -168,14 +193,18 @@ impl<T: Clone> Drop for Receiver<T> {
     }
 }
 
+/// Errors that can occur when dequeueing from a channel.
 #[derive(Error, Debug)]
 pub enum DequeueError {
+    /// Marks that the channel was closed without any further values.
     #[error("Dequeued from a simulation-closed channel!")]
     Closed,
 }
 
+/// Errors that can occur when enqueueing into a channel.
 #[derive(Error, Debug)]
 pub enum EnqueueError {
+    /// Marks that the channel was closed without any further values.
     #[error("Enqueued to a simulation-closed channel!")]
     Closed,
 }

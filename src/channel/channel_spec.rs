@@ -25,7 +25,6 @@ pub(crate) struct ChannelSpec {
 
 /// An inline version of the specification. This avoids needing an extra Arc/indirection to get back to the original object.
 pub(crate) struct InlineSpec {
-    pub channel_id: ChannelID,
     pub capacity: Option<usize>,
     pub send_latency: u64,
     pub response_latency: u64,
@@ -92,7 +91,6 @@ impl ChannelSpec {
 
     pub(crate) fn make_inline(&self) -> InlineSpec {
         InlineSpec {
-            channel_id: self.channel_id,
             capacity: self.capacity,
             send_latency: self.send_latency,
             response_latency: self.response_latency,

@@ -5,6 +5,7 @@ use derive_more::Constructor;
 
 pub use mongodb;
 
+/// A logger using MongoDB as the backing datastore.
 #[derive(Clone, Constructor)]
 pub struct MongoLogger {
     client: mongodb::sync::Client,

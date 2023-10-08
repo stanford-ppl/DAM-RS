@@ -4,15 +4,20 @@ use super::{LogEntry, LogError, LogEvent, LogFilter};
 use crate::datastructures::Identifier;
 use derive_more::Constructor;
 
+/// A logging interface, which simply pushes data into a communication channel.
+/// Actual logging is done by the log processor.
 #[derive(Clone, Constructor)]
 pub struct LogInterface {
-    comm: Sender<LogEntry>,
+    /// The Identifier for the currently executing context
     pub id: Identifier,
+    comm: Sender<LogEntry>,
     base_time: std::time::Instant,
-    pub log_filter: LogFilter,
+    pub(crate) log_filter: LogFilter,
 }
 
 impl LogInterface {
+    /// Logs an event into the communication channel.
+    /// May return an error if either the channel was prematurely closed, or if some aspect of serialization failed.
     pub fn log<T: LogEvent>(&self, event: &T) -> Result<(), LogError> {
         self.comm
             .send(LogEntry {
