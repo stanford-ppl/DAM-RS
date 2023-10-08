@@ -1,8 +1,9 @@
 use std::marker::PhantomData;
 
-use dam_core::prelude::*;
-
-use crate::channel::{ChannelElement, EnqueueError};
+use crate::{
+    channel::{ChannelElement, EnqueueError},
+    view::TimeManager,
+};
 
 use super::SenderFlavor;
 

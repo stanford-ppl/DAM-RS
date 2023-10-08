@@ -1,10 +1,9 @@
 use std::{marker::PhantomData, sync::Arc};
 
-use dam_core::prelude::*;
-
 use crate::{
     channel::{channel_spec::ChannelSpec, ChannelElement, EnqueueError},
     context::Context,
+    view::TimeManager,
 };
 
 use super::SenderFlavor;

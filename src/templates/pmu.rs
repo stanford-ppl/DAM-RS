@@ -7,17 +7,17 @@ use std::{
 use crate::{
     channel::{
         utils::{EventTime, Peekable},
-        ChannelElement, ChannelID, Receiver, Sender,
+        ChannelID,
     },
     context::{self, Context, ContextSummary, ExplicitConnections, ProxyContext},
+    datastructures::{Identifiable, Identifier, Time, VerboseIdentifier},
+    logging::{copy_log, initialize_log},
     types::{Cleanable, DAMType, IndexLike},
+    view::{ContextView, ParentView, TimeView, TimeViewable},
 };
 
-use dam_core::{
-    logging::{copy_log, initialize_log},
-    prelude::*,
-};
-use dam_macros::context;
+use crate::context_tools::*;
+use dam_macros::context_internal;
 
 use super::datastore::{self, Behavior, Datastore};
 
@@ -159,7 +159,7 @@ pub struct PMUWriteBundle<T: Clone, IT: Clone, AT: Clone> {
     pub ack: Sender<AT>,
 }
 
-#[context]
+#[context_internal]
 struct ReadPipeline<T, IT>
 where
     T: DAMType,
@@ -237,7 +237,7 @@ impl<T: DAMType, IT: IndexLike> Context for ReadPipeline<T, IT> {
     }
 }
 
-#[context]
+#[context_internal]
 struct WritePipeline<T: DAMType, IT: DAMType, AT: DAMType> {
     writers: Vec<PMUWriteBundle<T, IT, AT>>,
     datastore: Arc<Datastore<T>>,

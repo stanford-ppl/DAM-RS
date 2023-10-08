@@ -1,13 +1,12 @@
 use std::sync::Arc;
 
-use dam_core::prelude::Identifier;
 use graphviz_rust::{
     dot_generator::*,
     dot_structures::*,
     printer::{DotPrinter, PrinterContext},
 };
 
-use crate::channel::handle::ChannelHandle;
+use crate::{channel::handle::ChannelHandle, datastructures::Identifier};
 
 pub trait DotConvertible {
     fn to_dot(&self) -> Graph;

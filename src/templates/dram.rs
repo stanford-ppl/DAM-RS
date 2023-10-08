@@ -6,11 +6,11 @@ use crate::{
         ChannelElement, Receiver, Sender,
     },
     context::Context,
+    datastructures::Time,
     types::{DAMType, IndexLike},
 };
 
-use dam_core::prelude::*;
-use dam_macros::context;
+use dam_macros::context_internal;
 
 use super::datastore::{Behavior, Datastore};
 
@@ -72,7 +72,7 @@ impl<IT: DAMType, DT: DAMType, AT: Clone> Peekable for AccessBundle<IT, DT, AT> 
 }
 
 // The basic DRAM handles scalar addressing
-#[context]
+#[context_internal]
 pub struct DRAM<IType: DAMType, T: DAMType, AT: DAMType> {
     config: DRAMConfig,
     datastore: Datastore<T>,
@@ -289,6 +289,7 @@ pub mod tests {
             utils::{dequeue, enqueue},
             ChannelElement, Receiver,
         },
+        datastructures::Time,
         simulation::{InitializationOptions, ProgramBuilder, RunOptions},
         templates::{
             datastore::Behavior,
@@ -296,8 +297,6 @@ pub mod tests {
         },
         utility_contexts::*,
     };
-
-    use dam_core::prelude::*;
 
     #[test]
     fn test_dram_rw() {

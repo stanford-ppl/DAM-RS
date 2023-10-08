@@ -1,11 +1,10 @@
-use dam_macros::context;
+use dam_macros::context_internal;
 
 use crate::{channel::Receiver, types::DAMType};
-use dam_core::prelude::*;
 
 use crate::context::Context;
 
-#[context]
+#[context_internal]
 pub struct ConsumerContext<T: DAMType> {
     chan: Receiver<T>,
 }
@@ -34,7 +33,7 @@ impl<T: DAMType> ConsumerContext<T> {
     }
 }
 
-#[context]
+#[context_internal]
 pub struct PrinterContext<T: DAMType> {
     chan: Receiver<T>,
 }

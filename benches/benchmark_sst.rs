@@ -1,16 +1,14 @@
 use std::collections::VecDeque;
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use dam_macros::context;
 use dam_rs::channel::*;
 use dam_rs::context::Context;
+use dam_rs::context_tools::*;
 use dam_rs::simulation::*;
 use dam_rs::types::DAMType;
 use dam_rs::utility_contexts::*;
 
-use dam_core::prelude::*;
-
-#[context]
+#[context_macro]
 struct MergeUnit<T: DAMType> {
     input_a: Receiver<T>,
     input_b: Receiver<T>,
@@ -119,7 +117,7 @@ pub fn merge_benchmark(c: &mut Criterion) {
     group.finish();
 }
 
-#[context]
+#[context_macro]
 struct AddUnit<T: DAMType> {
     input_a: Receiver<T>,
     input_b: Receiver<T>,

@@ -1,8 +1,8 @@
 use crossbeam::channel::TryRecvError;
 
-use dam_core::prelude::*;
-
 use enum_dispatch::enum_dispatch;
+
+use crate::{datastructures::Time, view::TimeManager};
 
 use self::{acyclic::AcyclicReceiver, cyclic::CyclicReceiver};
 

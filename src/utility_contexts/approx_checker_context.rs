@@ -1,13 +1,12 @@
-use dam_macros::context;
+use crate::dam_macros::context_internal;
 
 use crate::context::Context;
 use crate::{
     channel::{ChannelElement, Receiver},
     types::DAMType,
 };
-use dam_core::prelude::*;
 
-#[context]
+#[context_internal]
 pub struct ApproxCheckerContext<T: Clone, IType, FType, CheckType>
 where
     IType: Iterator<Item = T>,

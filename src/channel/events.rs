@@ -1,11 +1,12 @@
-use dam_core::prelude::*;
-use dam_macros::event_type;
+use dam_macros::event_type_internal;
 use serde::{Deserialize, Serialize};
+
+use crate::datastructures::Identifier;
 
 use super::ChannelID;
 
 #[derive(Serialize, Deserialize, Debug)]
-#[event_type]
+#[event_type_internal]
 pub enum SendEvent {
     TrySend(ChannelID),
     EnqueueStart(ChannelID),
@@ -15,7 +16,7 @@ pub enum SendEvent {
 }
 
 #[derive(Serialize, Deserialize, Debug, Copy, Clone)]
-#[event_type]
+#[event_type_internal]
 pub enum ReceiverEvent {
     Peek(ChannelID),
     PeekNextStart(ChannelID),

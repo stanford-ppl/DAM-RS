@@ -1,7 +1,10 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::channel::ChannelID;
-use dam_core::prelude::*;
+use crate::{
+    channel::ChannelID,
+    datastructures::{Identifiable, Identifier, VerboseIdentifier},
+    view::TimeViewable,
+};
 
 mod proxy;
 

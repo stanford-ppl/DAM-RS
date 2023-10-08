@@ -6,7 +6,6 @@
     },
     "rust-analyzer.linkedProjects": [
         "./Cargo.toml",
-        "./dam-core/Cargo.toml",
         "./dam-macros/Cargo.toml"
     ],
     "rust-analyzer.procMacro.attributes.enable": true

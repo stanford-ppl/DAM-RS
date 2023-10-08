@@ -1,6 +1,7 @@
-use dam_core::prelude::*;
-
-use crate::channel::{ChannelElement, DequeueError, PeekResult};
+use crate::{
+    channel::{ChannelElement, DequeueError, PeekResult},
+    view::TimeManager,
+};
 
 use super::ReceiverCommon;
 

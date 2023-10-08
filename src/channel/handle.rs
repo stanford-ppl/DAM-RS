@@ -5,7 +5,8 @@
 use std::sync::Arc;
 
 use crossbeam::channel;
-use dam_core::prelude::{sync_unsafe::SyncUnsafeCell, *};
+
+use crate::datastructures::{sync_unsafe::SyncUnsafeCell, Identifier, Time};
 
 use super::{
     channel_spec::ChannelSpec,

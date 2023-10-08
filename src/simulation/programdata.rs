@@ -1,9 +1,8 @@
 use std::sync::Arc;
 
-use dam_core::prelude::Identifier;
 use rustc_hash::FxHashMap;
 
-use crate::{channel::handle::ChannelHandle, context::Context};
+use crate::{channel::handle::ChannelHandle, context::Context, datastructures::Identifier};
 
 use super::InitializationError;
 

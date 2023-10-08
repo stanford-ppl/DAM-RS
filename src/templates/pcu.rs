@@ -1,12 +1,13 @@
 use crate::{
     channel::{ChannelElement, Receiver, Sender},
     context::Context,
+    datastructures::Time,
     types::DAMType,
+    view::TimeManager,
 };
 
 use super::ops::{ALUOp, PipelineRegister};
-use dam_core::prelude::*;
-use dam_macros::context;
+use dam_macros::context_internal;
 
 #[derive(Debug)]
 pub struct PCUConfig {
@@ -72,7 +73,7 @@ type IngressOpType<ElementType> = fn(
 type EgressOpType<ElementType> =
     fn(&OutputChannelsType<ElementType>, &Vec<PipelineRegister<ElementType>>, Time, &TimeManager);
 
-#[context]
+#[context_internal]
 pub struct PCU<ElementType: Clone> {
     configuration: PCUConfig,
     registers: Vec<Vec<PipelineRegister<ElementType>>>,

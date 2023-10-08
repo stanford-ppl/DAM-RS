@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
+use crate::logging::{initialize_log, LogEntry, LogInterface, LogProcessor};
 use crossbeam::queue::SegQueue;
-use dam_core::logging::{initialize_log, LogEntry, LogInterface, LogProcessor};
 
 #[cfg(feature = "log-mongo")]
-use dam_core::logging::{mongodb, MongoLogger};
+use crate::logging::{mongodb, MongoLogger};
 
 use super::{executed::Executed, programdata::ProgramData, LoggingOptions, RunMode, RunOptions};
 
@@ -115,12 +115,11 @@ mod inner {
     use std::collections::HashMap;
     use std::collections::HashSet;
 
-    use dam_core::prelude::Identifier;
-    use dam_core::prelude::VerboseIdentifier;
     use graphviz_rust::dot_generator::*;
     use graphviz_rust::dot_structures::*;
     use rustc_hash::FxHashSet;
 
+    use crate::datastructures::*;
     use crate::simulation::dot::DotConvertibleHelper;
 
     impl super::Initialized<'_> {

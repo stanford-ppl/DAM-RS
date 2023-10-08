@@ -1,6 +1,7 @@
-use dam_core::view::TimeViewable;
-
-use crate::types::Cleanable;
+use crate::{
+    types::Cleanable,
+    view::{TimeView, TimeViewable},
+};
 
 use super::{Context, ContextSummary};
 
@@ -46,7 +47,7 @@ impl<T: Context> Cleanable for ProxyContext<T> {
 }
 
 impl<T: Context> TimeViewable for ProxyContext<T> {
-    fn view(&self) -> dam_core::view::TimeView {
+    fn view(&self) -> TimeView {
         match self {
             ProxyContext::Running(ctx) => ctx.view(),
             ProxyContext::Cleaned(this_summary) => this_summary.time.clone(),

@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use dam_core::prelude::*;
 use petgraph::prelude::*;
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -11,6 +10,7 @@ use crate::{
         ChannelID, Receiver, Sender,
     },
     context::Context,
+    datastructures::Identifier,
 };
 
 use super::{programdata::ProgramData, InitializationError, InitializationOptions, Initialized};

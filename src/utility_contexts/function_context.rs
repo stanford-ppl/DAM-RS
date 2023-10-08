@@ -1,9 +1,7 @@
-use dam_core::prelude::*;
-use dam_macros::context;
+use crate::{context_tools::*, view::TimeManager};
+use dam_macros::context_internal;
 
-use crate::context::Context;
-
-#[context]
+#[context_internal]
 pub struct FunctionContext<RT> {
     run_fn: Option<RT>,
 }

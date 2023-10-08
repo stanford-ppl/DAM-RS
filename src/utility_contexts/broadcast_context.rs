@@ -1,14 +1,13 @@
-use dam_macros::context;
+use dam_macros::context_internal;
 
 use crate::{
     channel::{Receiver, Sender},
     types::DAMType,
 };
-use dam_core::prelude::*;
 
 use crate::context::Context;
 
-#[context]
+#[context_internal]
 pub struct BroadcastContext<T: Clone> {
     receiver: Receiver<T>,
     targets: Vec<Sender<T>>,

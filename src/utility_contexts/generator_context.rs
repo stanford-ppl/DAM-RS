@@ -1,14 +1,10 @@
-use dam_core::prelude::*;
-use dam_macros::context;
+use dam_macros::context_internal;
 
-use crate::{
-    channel::{ChannelElement, Sender},
-    types::DAMType,
-};
+use crate::context_tools::*;
 
 use crate::context::Context;
 
-#[context]
+#[context_internal]
 pub struct GeneratorContext<T: Clone, IType, FType>
 where
     IType: Iterator<Item = T>,
@@ -28,7 +24,7 @@ where
     fn run(&mut self) {
         if let Some(func) = self.iterator.take() {
             for val in (func)() {
-                let current_time: Time = self.time.tick();
+                let current_time = self.time.tick();
                 self.output
                     .enqueue(&self.time, ChannelElement::new(current_time + 1, val))
                     .unwrap();

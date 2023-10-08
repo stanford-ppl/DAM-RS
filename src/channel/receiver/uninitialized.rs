@@ -1,10 +1,9 @@
 use std::sync::Arc;
 
-use dam_core::prelude::*;
-
 use crate::{
     channel::{channel_spec::ChannelSpec, ChannelElement, DequeueError, PeekResult},
     context::Context,
+    view::TimeManager,
 };
 
 use super::ReceiverFlavor;

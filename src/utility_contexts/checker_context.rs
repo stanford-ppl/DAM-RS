@@ -1,5 +1,4 @@
-use dam_core::prelude::*;
-use dam_macros::context;
+use dam_macros::context_internal;
 
 use crate::{
     channel::{ChannelElement, Receiver},
@@ -8,7 +7,7 @@ use crate::{
 
 use crate::context::Context;
 
-#[context]
+#[context_internal]
 pub struct CheckerContext<T: Clone, IType, FType>
 where
     IType: Iterator<Item = T>,

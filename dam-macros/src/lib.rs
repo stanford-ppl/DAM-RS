@@ -1,10 +1,28 @@
 use proc_macro::{self, TokenStream};
-use proc_macro2::Ident;
+use proc_macro2::{Ident, Span};
 use quote::quote;
-use syn::{parse::Parser, parse_macro_input, DeriveInput};
+use syn::{parse::Parser, parse_macro_input, DeriveInput, Path, token::PathSep, punctuated::Punctuated, PathSegment};
+
+fn make_dam_path(path: &str, fqn: bool) -> Path {
+    let mut segments = Punctuated::new();
+    segments.push(PathSegment { ident: Ident::new(path, Span::call_site()), arguments: syn::PathArguments::None });
+    Path {
+        leading_colon: (if fqn { Some(PathSep::default()) } else {None}),
+        segments
+    }
+}
 
 #[proc_macro_attribute]
-pub fn context(_attrs: TokenStream, item: TokenStream) -> TokenStream {
+pub fn context_internal(_attrs: TokenStream, item: TokenStream) -> TokenStream {
+    context_impl(_attrs, item, make_dam_path("crate", false))
+}
+
+#[proc_macro_attribute]
+pub fn context_macro(_attrs: TokenStream, item: TokenStream) -> TokenStream {
+    context_impl(_attrs, item, make_dam_path("dam_rs", true))
+}
+
+fn context_impl(_attrs: TokenStream, item: TokenStream, dam_path: Path) -> TokenStream {
     let mut ast = parse_macro_input!(item as DeriveInput);
 
     let name = ast.ident.clone();
@@ -16,7 +34,7 @@ pub fn context(_attrs: TokenStream, item: TokenStream) -> TokenStream {
             match &mut struct_data.fields {
                 syn::Fields::Named(fields) => fields.named.push(
                     syn::Field::parse_named
-                        .parse2(quote! {context_info: ::dam_core::datastructures::ContextInfo})
+                        .parse2(quote! {context_info: #dam_path::macro_support::ContextInfo})
                         .unwrap(),
                 ),
                 _ => (),
@@ -26,8 +44,8 @@ pub fn context(_attrs: TokenStream, item: TokenStream) -> TokenStream {
             return quote! {
                 #ast
 
-                impl #impl_generics ::dam_core::datastructures::Identifiable for #name #ty_generics #where_clause {
-                    fn id(&self) -> ::dam_core::datastructures::Identifier {
+                impl #impl_generics #dam_path::macro_support::Identifiable for #name #ty_generics #where_clause {
+                    fn id(&self) -> #dam_path::macro_support::Identifier {
                         self.context_info.id
                     }
 
@@ -36,14 +54,14 @@ pub fn context(_attrs: TokenStream, item: TokenStream) -> TokenStream {
                     }
                 }
 
-                impl #impl_generics ::dam_core::view::TimeViewable for #name #ty_generics #where_clause {
-                    fn view(&self) -> ::dam_core::view::TimeView {
+                impl #impl_generics #dam_path::macro_support::TimeViewable for #name #ty_generics #where_clause {
+                    fn view(&self) -> #dam_path::macro_support::TimeView {
                         self.context_info.time.view().into()
                     }
                 }
 
                 impl #impl_generics std::ops::Deref for #name #ty_generics #where_clause {
-                    type Target = ContextInfo;
+                    type Target = #dam_path::macro_support::ContextInfo;
                     fn deref(&self) -> &Self::Target {
                         &self.context_info
                     }
@@ -62,7 +80,16 @@ pub fn context(_attrs: TokenStream, item: TokenStream) -> TokenStream {
 }
 
 #[proc_macro_attribute]
+pub fn event_type_internal(_attrs: TokenStream, item: TokenStream) -> TokenStream {
+    event_type_impl(_attrs, item, make_dam_path("crate", false))
+}
+
+#[proc_macro_attribute]
 pub fn event_type(_attrs: TokenStream, item: TokenStream) -> TokenStream {
+    event_type_impl(_attrs, item, make_dam_path("dan_rs", false))
+}
+
+fn event_type_impl(_attrs: TokenStream, item: TokenStream, dam_path: Path) -> TokenStream {
     let ast = parse_macro_input!(item as DeriveInput);
 
     let name = ast.ident.clone();
@@ -78,13 +105,13 @@ pub fn event_type(_attrs: TokenStream, item: TokenStream) -> TokenStream {
     quote! {
         #ast
 
-        impl #impl_generics ::dam_core::logging::LogEvent for super::#name #ty_generics #where_clause {
+        impl #impl_generics #dam_path::macro_support::logging::LogEvent for super::#name #ty_generics #where_clause {
             const NAME: &'static str = #ident_string;
         }
-        
+
         #[allow(non_snake_case)]
         mod #mod_name {
-            use ::dam_core::logging::registry::*;
+            use #dam_path::macro_support::logging::registry::*;
             
 
             #[distributed_slice(METRICS)]

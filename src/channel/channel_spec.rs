@@ -1,7 +1,10 @@
 use std::sync::Mutex;
 
-use crate::context::Context;
-use dam_core::prelude::*;
+use crate::{
+    context::Context,
+    datastructures::{Identifier, Time},
+    view::{ContextView, TimeView},
+};
 
 use super::ChannelID;
 

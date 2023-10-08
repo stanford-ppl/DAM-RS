@@ -6,7 +6,6 @@ mod events;
 
 mod flavors;
 
-use dam_core::logging::log_event;
 pub use flavors::*;
 
 pub mod channel_spec;
@@ -20,9 +19,10 @@ use thiserror::Error;
 
 use crate::context::Context;
 
+use crate::datastructures::Time;
+use crate::logging::log_event;
 use crate::types::DAMType;
-
-use dam_core::prelude::*;
+use crate::view::TimeManager;
 
 use self::events::ReceiverEvent;
 use self::events::SendEvent;
