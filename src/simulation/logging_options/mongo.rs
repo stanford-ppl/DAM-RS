@@ -1,5 +1,5 @@
-use dam_core::logging::mongodb;
 use derive_builder::Builder;
+use mongodb;
 
 #[derive(Clone, Debug, Builder)]
 #[builder(pattern = "owned")]

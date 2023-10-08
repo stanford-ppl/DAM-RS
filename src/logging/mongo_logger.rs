@@ -28,9 +28,9 @@ impl super::LogProcessor for MongoLogger {
             .expect("Error setting collection options");
         let collection = database.collection::<LogEntry>(self.collection_name.as_str());
         let mut should_continue = true;
+        let mut batch = vec![];
         while should_continue {
-            let mut batch = vec![];
-
+            std::thread::yield_now();
             loop {
                 match self.queue.try_recv() {
                     Ok(data) => batch.push(data),
@@ -44,10 +44,9 @@ impl super::LogProcessor for MongoLogger {
                 }
             }
             if !batch.is_empty() {
-                collection.insert_many(batch, None).unwrap();
+                collection.insert_many(batch.iter(), None).unwrap();
+                batch.clear();
             }
-
-            std::thread::yield_now();
         }
         self.client.clone().shutdown();
     }

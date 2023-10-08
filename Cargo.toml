@@ -32,7 +32,7 @@ derive_more = "0.99.17"
 bson = "2.7.0"
 
 [features]
-default = ["dot"]
+default = ["dot", "log-mongo"]
 dot = ["dep:graphviz-rust"]
 log-mongo = ["dep:mongodb"]
 

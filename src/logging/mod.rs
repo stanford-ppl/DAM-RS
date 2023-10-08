@@ -1,7 +1,6 @@
 use bson::Bson;
-use rustc_hash::FxHashSet;
 use serde::{Deserialize, Serialize};
-use std::num::TryFromIntError;
+use std::{collections::HashSet, num::TryFromIntError};
 use thiserror::Error;
 
 // Adds a logger that does nothing.
@@ -69,7 +68,7 @@ pub trait LogProcessor: Send {
 pub enum LogFilter {
     #[default]
     AllowAll,
-    Some(FxHashSet<String>),
+    Some(HashSet<String>),
 }
 
 impl LogFilter {

@@ -400,7 +400,9 @@ mod tests {
         #[cfg(feature = "dot")]
         println!("{}", initialized.to_dot_string());
 
-        let run_options = RunOptionsBuilder::default();
+        let run_options = RunOptionsBuilder::default().log_filter(LogFilterKind::Blanket(
+            crate::logging::LogFilter::Some(["TimeEvent".to_string()].into()),
+        ));
         cfg_if::cfg_if! {
             if #[cfg(feature = "log-mongo")] {
                 let run_options = run_options.logging(LoggingOptions::Mongo(

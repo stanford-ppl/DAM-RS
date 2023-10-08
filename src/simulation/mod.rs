@@ -32,7 +32,7 @@ pub struct RunOptions {
     #[builder(setter(into), default)]
     logging: LoggingOptions,
 
-    #[builder(setter(custom), default)]
+    #[builder(setter(into), default)]
     log_filter: LogFilterKind,
 }
 

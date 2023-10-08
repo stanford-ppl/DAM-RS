@@ -13,7 +13,7 @@ pub fn log_event_cb<T: LogEvent, F>(callback: F) -> Result<(), LogError>
 where
     F: FnOnce() -> T,
 {
-    LOGGER.with(|logger| match &*logger.borrow() {
+    LOGGER.with_borrow(|logger| match logger {
         Some(interface) if interface.log_filter.enabled::<T>() => interface.log(&callback()),
         Some(_) => Ok(()),
         None => Ok(()),
@@ -22,7 +22,7 @@ where
 
 #[inline]
 pub fn log_event<T: LogEvent>(event: &T) -> Result<(), LogError> {
-    LOGGER.with(|logger| match &*logger.borrow() {
+    LOGGER.with_borrow(|logger| match logger {
         Some(interface) if interface.log_filter.enabled::<T>() => interface.log(event),
         Some(_) => Ok(()),
         None => Ok(()),
@@ -30,12 +30,9 @@ pub fn log_event<T: LogEvent>(event: &T) -> Result<(), LogError> {
 }
 
 pub fn initialize_log(logger: LogInterface) {
-    LOGGER.with(|cur_logger| {
-        let old = cur_logger.replace(Some(logger));
-        assert!(matches!(old, None));
-    })
+    LOGGER.set(Some(logger));
 }
 
 pub fn copy_log() -> Option<LogInterface> {
-    LOGGER.with(|cur_logger| cur_logger.borrow().clone())
+    LOGGER.with_borrow(|cur_logger| cur_logger.clone())
 }
