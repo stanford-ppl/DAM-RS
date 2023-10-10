@@ -18,5 +18,7 @@ builtin_ss!(i32, 32);
 builtin_ss!(i64, 64);
 builtin_ss!(u64, 64);
 
+builtin_ss!(usize, 64);
+
 builtin_ss!(f32, 32);
 builtin_ss!(f64, 64);
