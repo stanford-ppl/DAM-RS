@@ -1,3 +1,4 @@
+//! A simple implementation of a single DRAM bank
 use std::collections::VecDeque;
 
 use crate::{
@@ -14,6 +15,7 @@ use dam_macros::context_internal;
 
 use super::datastore::{Behavior, Datastore};
 
+/// Basic configuration variables for a DRAM bank
 #[derive(Clone, Copy, Debug)]
 pub struct DRAMConfig {
     num_simultaneous_requests: usize,
@@ -22,6 +24,7 @@ pub struct DRAMConfig {
     capacity: usize,
 }
 
+/// A Triplet describing a read from a DRAM.
 pub struct DRAMReadBundle<IT: Clone, DT: Clone> {
     addr: Receiver<IT>,
     req_size: Receiver<IT>,
@@ -37,6 +40,7 @@ impl<IT: DAMType, DT: Clone> Peekable for DRAMReadBundle<IT, DT> {
     }
 }
 
+/// A Quadruplet of fields used for describing a Write access to a DRAM.
 pub struct DRAMWriteBundle<IT: DAMType, DT: DAMType, AT: Clone> {
     addr: Receiver<IT>,
     request_size: Receiver<IT>,
@@ -71,7 +75,7 @@ impl<IT: DAMType, DT: DAMType, AT: Clone> Peekable for AccessBundle<IT, DT, AT> 
     }
 }
 
-// The basic DRAM handles scalar addressing
+/// A Basic DRAM bank, which processes overlapping reads and writes but only services one at a time.
 #[context_internal]
 pub struct DRAM<IType: DAMType, T: DAMType, AT: DAMType> {
     config: DRAMConfig,
@@ -82,6 +86,7 @@ pub struct DRAM<IType: DAMType, T: DAMType, AT: DAMType> {
 }
 
 impl<IType: DAMType, T: DAMType, AT: DAMType> DRAM<IType, T, AT> {
+    /// Constructs a new DRAM based on a config and its underlying datastore behavior.
     pub fn new(config: DRAMConfig, datastore_behavior: Behavior) -> Self {
         Self {
             config,
@@ -92,6 +97,7 @@ impl<IType: DAMType, T: DAMType, AT: DAMType> DRAM<IType, T, AT> {
         }
     }
 
+    /// Fills a DRAM with some function, used for initializing the values.
     pub fn fill(&mut self, mut fill_func: impl FnMut(usize) -> T) {
         for ind in 0..self.config.capacity {
             self.datastore.write(ind, fill_func(ind), Time::new(0));
@@ -108,6 +114,7 @@ impl<I: DAMType, T: DAMType, A: DAMType> DRAM<I, T, A>
 where
     Self: Context,
 {
+    /// Registers a new writer to the DRAM
     pub fn add_writer(&mut self, drw: DRAMWriteBundle<I, T, A>) {
         drw.ack.attach_sender(self);
         drw.addr.attach_receiver(self);
@@ -116,6 +123,7 @@ where
         self.bundles.push(AccessBundle::Write(drw));
     }
 
+    /// Registers a new reader to the DRAM
     pub fn add_reader(&mut self, drr: DRAMReadBundle<I, T>) {
         drr.addr.attach_receiver(self);
         drr.data.attach_sender(self);
@@ -285,10 +293,7 @@ impl<IType: IndexLike, T: DAMType, AT: DAMType> Context for DRAM<IType, T, AT> {
 pub mod tests {
 
     use crate::{
-        channel::{
-            utils::{dequeue, enqueue},
-            ChannelElement, Receiver,
-        },
+        channel::{ChannelElement, Receiver},
         datastructures::Time,
         simulation::{InitializationOptions, ProgramBuilder, RunOptions},
         templates::{
@@ -351,7 +356,7 @@ pub mod tests {
         });
 
         // Create a node that waits for all of the acks to come back, and then issues reads
-        let (mut rd_addr_send, rd_addr_recv) = parent.bounded(128);
+        let (rd_addr_send, rd_addr_recv) = parent.bounded(128);
         let (rd_data_send, rd_data_recv) = parent.bounded(128);
         let (req_size_send, req_size_recv) = parent.bounded(128);
         let mut read_issue = FunctionContext::new();
@@ -361,18 +366,18 @@ pub mod tests {
         rd_addr_send.attach_sender(&read_issue);
         read_issue.set_run(move |time| {
             ack_channels.iter_mut().for_each(|ack| {
-                dequeue(time, ack).unwrap();
+                ack.dequeue(time).unwrap();
             });
             let send_time = time.tick();
-            enqueue(
-                time,
-                &mut rd_addr_send,
-                ChannelElement {
-                    time: send_time,
-                    data: 0,
-                },
-            )
-            .unwrap();
+            rd_addr_send
+                .enqueue(
+                    time,
+                    ChannelElement {
+                        time: send_time,
+                        data: 0,
+                    },
+                )
+                .unwrap();
         });
         parent.add_child(read_issue);
 

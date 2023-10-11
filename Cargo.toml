@@ -39,6 +39,7 @@ bson = "2.7.0"
 default = ["dot", "log-mongo"]
 dot = ["dep:graphviz-rust"]
 log-mongo = ["dep:mongodb"]
+test-log-mongo = ["log-mongo"]
 
 [dependencies.mongodb]
 version = "2.7.0"

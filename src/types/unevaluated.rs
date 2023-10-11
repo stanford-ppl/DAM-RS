@@ -1,4 +1,4 @@
-//! Support for [Unevaluated<T>] types, including implementations of common ops.
+//! Support for [Unevaluated] types, including implementations of common ops.
 use std::{marker::PhantomData, str::FromStr};
 
 use super::StaticallySized;

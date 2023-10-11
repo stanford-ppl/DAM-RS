@@ -1,3 +1,6 @@
+//! An implementation of the Pattern Memory Unit from the Plasticine paper.
+//! Unlike the original PMU, this does not support processing within the pipeline, and so all values must be pre-computed before being sent here.
+
 use std::{
     cmp::max,
     collections::{HashMap, HashSet},
@@ -21,6 +24,8 @@ use dam_macros::context_internal;
 
 use super::datastore::{self, Behavior, Datastore};
 
+/// A PMU consists of a reader and a writer, which may operate simultaneously.
+/// Each reader and writer can process one request per cycle, but may both be active (to support use-cases such as FIFOs).
 pub struct PMU<T: DAMType, IT: IndexLike, AT: DAMType> {
     reader: ProxyContext<ReadPipeline<T, IT>>,
     writer: ProxyContext<WritePipeline<T, IT, AT>>,
@@ -112,6 +117,7 @@ impl<T: DAMType, IT: IndexLike, AT: DAMType> TimeViewable for PMU<T, IT, AT> {
 }
 
 impl<T: DAMType, IT: IndexLike, AT: DAMType> PMU<T, IT, AT> {
+    /// Constructs a new PMU with a given capacity and datastore [Behavior]
     pub fn new(capacity: usize, behavior: Behavior) -> PMU<T, IT, AT> {
         // This could probably somehow be embedded into the PMU instead of being an Arc.
         let datastore = Arc::new(Datastore::new(capacity, behavior));
@@ -139,23 +145,32 @@ impl<T: DAMType, IT: IndexLike, AT: DAMType> PMU<T, IT, AT> {
         pmu
     }
 
+    /// Registers a new reader
     pub fn add_reader(&mut self, reader: PMUReadBundle<T, IT>) {
         self.reader.add_reader(reader);
     }
 
+    /// Registers a new writer
     pub fn add_writer(&mut self, writer: PMUWriteBundle<T, IT, AT>) {
         self.writer.add_writer(writer);
     }
 }
 
+/// Represents a reader, which receives addresses and writes out the data at the address.
 pub struct PMUReadBundle<T: Clone, IT: Clone> {
+    /// An input stream consisting of addresses to read from.
     pub addr: Receiver<IT>,
+    /// An output stream which will hold addresses.
     pub resp: Sender<T>,
 }
 
+/// Represents a writer, which sends in addresses and data, receiving an acknowledgement after the write is processed.
 pub struct PMUWriteBundle<T: Clone, IT: Clone, AT: Clone> {
+    /// The write address
     pub addr: Receiver<IT>,
+    /// The data to be written
     pub data: Receiver<T>,
+    /// The acknowledgement channel, which is written to each time a write is successfully processed.
     pub ack: Sender<AT>,
 }
 
@@ -310,10 +325,7 @@ impl<T: DAMType, IT: IndexLike, AT: DAMType> Context for WritePipeline<T, IT, AT
 mod tests {
 
     use crate::{
-        channel::{
-            utils::{dequeue, enqueue},
-            ChannelElement,
-        },
+        channel::ChannelElement,
         simulation::*,
         templates::{
             datastore::Behavior,
@@ -340,7 +352,7 @@ mod tests {
 
         let (wr_addr_send, wr_addr_recv) = parent.bounded(CHAN_SIZE);
         let (wr_data_send, wr_data_recv) = parent.bounded(CHAN_SIZE);
-        let (wr_ack_send, mut wr_ack_recv) = parent.bounded(CHAN_SIZE);
+        let (wr_ack_send, wr_ack_recv) = parent.bounded(CHAN_SIZE);
 
         let write_addr_gen = GeneratorContext::new(
             move || (0..TEST_SIZE).map(|x| u16::try_from(x).unwrap()),
@@ -361,7 +373,7 @@ mod tests {
             ack: wr_ack_send,
         });
 
-        let (mut rd_addr_send, rd_addr_recv) = parent.bounded(CHAN_SIZE);
+        let (rd_addr_send, rd_addr_recv) = parent.bounded(CHAN_SIZE);
         let (rd_data_send, rd_data_recv) = parent.bounded(CHAN_SIZE);
         pmu.add_reader(PMUReadBundle {
             addr: rd_addr_recv,
@@ -373,17 +385,17 @@ mod tests {
         rd_addr_send.attach_sender(&rd_addr_gen);
         rd_addr_gen.set_run(move |time| {
             for ind in 0..TEST_SIZE {
-                dequeue(time, &mut wr_ack_recv).unwrap();
+                wr_ack_recv.dequeue(time).unwrap();
                 let send_time = time.tick();
-                enqueue(
-                    time,
-                    &mut rd_addr_send,
-                    ChannelElement {
-                        time: send_time,
-                        data: u16::try_from(ind).unwrap(),
-                    },
-                )
-                .unwrap();
+                rd_addr_send
+                    .enqueue(
+                        time,
+                        ChannelElement {
+                            time: send_time,
+                            data: u16::try_from(ind).unwrap(),
+                        },
+                    )
+                    .unwrap();
             }
         });
 
@@ -404,7 +416,7 @@ mod tests {
             crate::logging::LogFilter::Some(["TimeEvent".to_string()].into()),
         ));
         cfg_if::cfg_if! {
-            if #[cfg(feature = "log-mongo")] {
+            if #[cfg(feature = "test-log-mongo")] {
                 let run_options = run_options.logging(LoggingOptions::Mongo(
                     MongoOptionsBuilder::default()
                         .db("pmu_log".to_string())

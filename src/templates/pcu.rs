@@ -1,3 +1,5 @@
+//! An implementation of a simple multi-stage processing pipeline, named after the Pattern Compute Units from Plasticine.
+
 use crate::{
     channel::{ChannelElement, Receiver, Sender},
     context::Context,
@@ -9,22 +11,38 @@ use crate::{
 use super::ops::{ALUOp, PipelineRegister};
 use dam_macros::context_internal;
 
-#[derive(Debug)]
+/// The configuration for a specific PCU.
+/// Each PCU can have its own configuration
+#[derive(Debug, Copy, Clone)]
 pub struct PCUConfig {
+    /// The number of stages in the PCU
     pub pipeline_depth: usize,
+
+    /// The number of registers per stage.
     pub num_registers: usize,
 }
 
+/// A single pipeline stage inside a PCU
 #[derive(Debug)]
 pub struct PipelineStage<ET> {
+    /// The operation to perform in that stage
     pub op: ALUOp<ET>,
+
+    /// Register values to be forwarded from the input registers
     pub forward: Vec<(usize, usize)>,
+
+    /// Register values that need to be read and passed into the operation from the previous layer of registers
     pub prev_register_ids: Vec<usize>,
+
+    /// Register values which need to be read from the next layer of registers.
     pub next_register_ids: Vec<usize>,
+
+    /// The output registers for the operation.
     pub output_register_ids: Vec<usize>,
 }
 
 impl<ET: DAMType> PipelineStage<ET> {
+    /// Executes the PipelineStage given the previous registers and the next registers.
     pub fn run(
         &self,
         prev_registers: &[PipelineRegister<ET>],
@@ -73,6 +91,8 @@ type IngressOpType<ElementType> = fn(
 type EgressOpType<ElementType> =
     fn(&OutputChannelsType<ElementType>, &Vec<PipelineRegister<ElementType>>, Time, &TimeManager);
 
+/// The basic PCU structure from the Plasticine paper.
+/// The PCU is an N-stage pipeline with M registers per stage.
 #[context_internal]
 pub struct PCU<ElementType: Clone> {
     configuration: PCUConfig,
@@ -90,6 +110,7 @@ pub struct PCU<ElementType: Clone> {
 }
 
 impl<ElementType: DAMType> PCU<ElementType> {
+    /// Constructs a PCU given a configuration, and its input/output behaviors.
     pub fn new(
         configuration: PCUConfig,
         ingress_op: IngressOpType<ElementType>,
@@ -114,6 +135,7 @@ impl<ElementType: DAMType> PCU<ElementType> {
         }
     }
 
+    /// A Basic ingress implementation which reads all input channels, and terminates if any inputs are closed.
     pub const READ_ALL_INPUTS: IngressOpType<ElementType> = |ics, regs, time| {
         ics.iter().for_each(|recv| {
             let _ = recv.peek_next(time);
@@ -130,6 +152,7 @@ impl<ElementType: DAMType> PCU<ElementType> {
         true
     };
 
+    /// Writes out register[i] into channel[i] for all output channels.
     pub const WRITE_ALL_RESULTS: EgressOpType<ElementType> = |ocs, regs, out_time, manager| {
         ocs.iter().enumerate().for_each(|(ind, out_chan)| {
             out_chan
@@ -144,16 +167,19 @@ impl<ElementType: DAMType> PCU<ElementType> {
         });
     };
 
+    /// Adds another stage to the PCU
     pub fn push_stage(&mut self, stage: PipelineStage<ElementType>) {
         self.stages.push(stage);
         assert!(self.stages.len() <= self.configuration.pipeline_depth);
     }
 
+    /// Registers an input channel
     pub fn add_input_channel(&mut self, recv: Receiver<ElementType>) {
         recv.attach_receiver(self);
         self.input_channels.push(recv);
     }
 
+    /// Registers an output channel
     pub fn add_output_channel(&mut self, send: Sender<ElementType>) {
         send.attach_sender(self);
         self.output_channels.push(send);
