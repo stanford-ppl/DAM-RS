@@ -5,8 +5,13 @@ use crate::{
 
 use super::{Context, ContextSummary};
 
+/// A wrapper around a context, to support early dropping.
+/// This is used by the PMU and other composite contexts because many events are hooked to the drop.
 pub enum ProxyContext<T> {
+    /// An actively running (or runnable) context
     Running(T),
+
+    /// A post-execution summary of the context.
     Cleaned(ContextSummary),
 }
 
@@ -56,6 +61,7 @@ impl<T: Context> TimeViewable for ProxyContext<T> {
 }
 
 impl<T: Context> ProxyContext<T> {
+    /// Wraps around [Context::summarize]
     pub fn summarize(&self) -> ContextSummary {
         match self {
             ProxyContext::Running(_) => panic!("Attempting to summarize a running node!"),

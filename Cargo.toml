@@ -3,9 +3,9 @@ name = "dam-rs"
 version = "0.1.0"
 edition = "2021"
 
-[build.rustdocflags]
-document-private-items = true
-all-features = true
+[build]
+rustdocflags = ["--document-private-items"]
+
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

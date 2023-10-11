@@ -406,7 +406,7 @@ mod tests {
         cfg_if::cfg_if! {
             if #[cfg(feature = "log-mongo")] {
                 let run_options = run_options.logging(LoggingOptions::Mongo(
-                    mongo::MongoOptionsBuilder::default()
+                    MongoOptionsBuilder::default()
                         .db("pmu_log".to_string())
                         .uri("mongodb://127.0.0.1:27017".to_string())
                         .build()
