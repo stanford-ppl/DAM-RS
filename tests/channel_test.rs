@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
 
-    use dam_rs::{channel::ChannelElement, simulation::*, utility_contexts::FunctionContext};
+    use dam::{channel::ChannelElement, simulation::*, utility_contexts::FunctionContext};
 
     use rand::Rng;
 

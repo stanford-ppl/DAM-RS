@@ -1,12 +1,12 @@
 use std::collections::VecDeque;
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use dam_rs::channel::*;
-use dam_rs::context::Context;
-use dam_rs::context_tools::*;
-use dam_rs::simulation::*;
-use dam_rs::types::DAMType;
-use dam_rs::utility_contexts::*;
+use dam::channel::*;
+use dam::context::Context;
+use dam::context_tools::*;
+use dam::simulation::*;
+use dam::types::DAMType;
+use dam::utility_contexts::*;
 
 #[context_macro]
 struct MergeUnit<T: DAMType> {

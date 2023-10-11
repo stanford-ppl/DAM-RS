@@ -4,10 +4,10 @@ use crate::types::DAMType;
 
 /// Creates a new [ALUOp] struct.
 /// ```
-/// use dam_rs::RegisterALUOp;
-/// use dam_rs::templates::ops::PipelineRegister;
-/// use dam_rs::templates::ops::ALUOp;
-/// use dam_rs::context_tools::DAMType;
+/// use dam::RegisterALUOp;
+/// use dam::templates::ops::PipelineRegister;
+/// use dam::templates::ops::ALUOp;
+/// use dam::context_tools::DAMType;
 /// RegisterALUOp!(
 /// ALUAddOp,
 /// |(i0, i1), ()| [i0 + i1],

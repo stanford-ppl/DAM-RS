@@ -1,7 +1,7 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use dam_rs::templates::ops::*;
-use dam_rs::utility_contexts::*;
-use dam_rs::{simulation::*, templates::pcu::*};
+use dam::templates::ops::*;
+use dam::utility_contexts::*;
+use dam::{simulation::*, templates::pcu::*};
 
 pub fn pcu_benchmark(c: &mut Criterion) {
     let mut group = c.benchmark_group("PCU_MulAdd");

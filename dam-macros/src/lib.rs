@@ -19,7 +19,7 @@ pub fn context_internal(_attrs: TokenStream, item: TokenStream) -> TokenStream {
 
 #[proc_macro_attribute]
 pub fn context_macro(_attrs: TokenStream, item: TokenStream) -> TokenStream {
-    context_impl(_attrs, item, make_dam_path("dam_rs", true))
+    context_impl(_attrs, item, make_dam_path("dam", true))
 }
 
 fn context_impl(_attrs: TokenStream, item: TokenStream, dam_path: Path) -> TokenStream {
