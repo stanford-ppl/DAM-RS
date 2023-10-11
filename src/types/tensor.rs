@@ -1,3 +1,6 @@
+//! Adds basic support for ndarrays as DAMTypes, with possibly dynamic sizes.
+//! This requires the underlying element type to be statically sized for the blanket implementation
+
 use ndarray::{Dimension, IntoDimension};
 
 use super::{DAMType, StaticallySized};

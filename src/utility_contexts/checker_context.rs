@@ -17,7 +17,7 @@ where
     input: Receiver<T>,
 }
 
-impl<T: DAMType, IType, FType> Context for CheckerContext<T, IType, FType>
+impl<T: DAMType + PartialEq, IType, FType> Context for CheckerContext<T, IType, FType>
 where
     IType: Iterator<Item = T>,
     FType: FnOnce() -> IType + Send + Sync,
@@ -43,7 +43,7 @@ where
     }
 }
 
-impl<T: DAMType, IType, FType> CheckerContext<T, IType, FType>
+impl<T: DAMType + PartialEq, IType, FType> CheckerContext<T, IType, FType>
 where
     IType: Iterator<Item = T>,
     FType: FnOnce() -> IType + Send + Sync,
