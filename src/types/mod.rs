@@ -37,7 +37,7 @@ pub trait IndexLike: DAMType + TryInto<usize> + num::Num {
 
 impl<T> IndexLike for T where T: DAMType + Into<usize> + num::Num {}
 
-///
+/// DAM types which behave like numbers, used for trait bounds in contexts.
 pub trait IntegerLike: DAMType + num::Num {}
 
 /// Generic trait for objects which may be cleaned up early
