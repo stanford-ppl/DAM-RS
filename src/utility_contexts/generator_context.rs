@@ -4,6 +4,8 @@ use crate::context_tools::*;
 
 use crate::context::Context;
 
+/// A context which writes to a channel with elements taken from an iterator.
+/// This is used for sending pre-defined values, or for reading from files.
 #[context_internal]
 pub struct GeneratorContext<T: Clone, IType, FType>
 where
@@ -41,6 +43,7 @@ where
     IType: Iterator<Item = T>,
     FType: FnOnce() -> IType + Send + Sync,
 {
+    /// Constructs a GeneratorContext from an iterator and the output channel
     pub fn new(iterator: FType, output: Sender<T>) -> GeneratorContext<T, IType, FType> {
         let gc = GeneratorContext {
             iterator: Some(iterator),

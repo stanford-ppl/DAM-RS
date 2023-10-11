@@ -1,3 +1,6 @@
+//! Common utility contexts for testing, checking, etc.
+//! These can be used to 'black-box' a lot of functionality, such as reading from a file for input, etc.
+
 mod approx_checker_context;
 mod broadcast_context;
 mod checker_context;

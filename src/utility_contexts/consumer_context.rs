@@ -4,6 +4,8 @@ use crate::{channel::Receiver, types::DAMType};
 
 use crate::context::Context;
 
+/// A context which simply consumes values out of a channel
+/// This is useful for when it is not feasible to construct a Void sender instead via [crate::simulation::ProgramBuilder::void] instead
 #[context_internal]
 pub struct ConsumerContext<T: DAMType> {
     chan: Receiver<T>,
@@ -23,6 +25,7 @@ impl<T: DAMType> Context for ConsumerContext<T> {
 }
 
 impl<T: DAMType> ConsumerContext<T> {
+    /// Constructs a context which reads out of a channel
     pub fn new(chan: Receiver<T>) -> Self {
         let s = Self {
             chan,
@@ -33,6 +36,8 @@ impl<T: DAMType> ConsumerContext<T> {
     }
 }
 
+/// A context which prints elements of a channel to STDOUT
+/// Basically for debugging only, as it can emit a large amout of text.
 #[context_internal]
 pub struct PrinterContext<T: DAMType> {
     chan: Receiver<T>,
@@ -53,6 +58,7 @@ impl<T: DAMType> Context for PrinterContext<T> {
 }
 
 impl<T: DAMType> PrinterContext<T> {
+    /// Constructs a PrinterContext from a receiver.
     pub fn new(chan: Receiver<T>) -> Self {
         let s = Self {
             chan,

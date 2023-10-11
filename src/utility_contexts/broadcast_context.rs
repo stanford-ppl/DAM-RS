@@ -7,6 +7,7 @@ use crate::{
 
 use crate::context::Context;
 
+/// Since DAM channels are single-producer single-consumer, Broadcasts can be used to send from a single channel to multiple channels.
 #[context_internal]
 pub struct BroadcastContext<T: Clone> {
     receiver: Receiver<T>,
@@ -14,8 +15,6 @@ pub struct BroadcastContext<T: Clone> {
 }
 
 impl<T: DAMType> Context for BroadcastContext<T> {
-    fn init(&mut self) {} // No-op
-
     fn run(&mut self) {
         loop {
             let value = self.receiver.dequeue(&self.time);
@@ -34,6 +33,7 @@ impl<T: DAMType> Context for BroadcastContext<T> {
 }
 
 impl<T: DAMType> BroadcastContext<T> {
+    /// Sets up a broadcast context with an empty target list.
     pub fn new(receiver: Receiver<T>) -> Self {
         let x = Self {
             receiver,
@@ -44,6 +44,7 @@ impl<T: DAMType> BroadcastContext<T> {
         x
     }
 
+    /// Registers a target for the broadcast
     pub fn add_target(&mut self, target: Sender<T>) {
         target.attach_sender(self);
         self.targets.push(target);

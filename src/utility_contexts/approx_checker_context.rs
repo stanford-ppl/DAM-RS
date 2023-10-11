@@ -6,6 +6,7 @@ use crate::{
     types::DAMType,
 };
 
+/// Checks that a given channel contains elements approximately equal to a reference iterator, with a user-defined function.
 #[context_internal]
 pub struct ApproxCheckerContext<T: Clone, IType, FType, CheckType>
 where
@@ -52,6 +53,7 @@ where
     FType: FnOnce() -> IType + Send + Sync,
     CheckType: Fn(&T, &T) -> bool + Send + Sync,
 {
+    /// Constructs an approximate checker with an iterator and a channel.
     pub fn new(iterator: FType, input: Receiver<T>, checker: CheckType) -> Self {
         let gc = Self {
             iterator: Some(iterator),

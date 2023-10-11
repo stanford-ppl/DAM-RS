@@ -1,6 +1,8 @@
 use crate::{context_tools::*, view::TimeManager};
 use dam_macros::context_internal;
 
+/// Contains an arbitrarily defined inner body for a context
+/// Used mostly for one-off operations, such as test drivers.
 #[context_internal]
 pub struct FunctionContext<RT> {
     run_fn: Option<RT>,
@@ -24,6 +26,7 @@ impl<RT> FunctionContext<RT>
 where
     RT: FnOnce(&mut TimeManager) + Send + Sync,
 {
+    /// Constructs an empty FunctionContext
     pub fn new() -> Self {
         Self {
             run_fn: Default::default(),
@@ -31,6 +34,7 @@ where
         }
     }
 
+    /// Sets the run function for the context.
     pub fn set_run(&mut self, run_fn: RT) {
         self.run_fn = Some(run_fn);
     }

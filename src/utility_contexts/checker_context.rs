@@ -7,6 +7,7 @@ use crate::{
 
 use crate::context::Context;
 
+/// An exact validation context for checking a channel against an iterator.
 #[context_internal]
 pub struct CheckerContext<T: Clone, IType, FType>
 where
@@ -48,6 +49,7 @@ where
     IType: Iterator<Item = T>,
     FType: FnOnce() -> IType + Send + Sync,
 {
+    /// Constructs a new (exact) Checker -- for approximate checking use [super::ApproxCheckerContext]
     pub fn new(iterator: FType, input: Receiver<T>) -> CheckerContext<T, IType, FType> {
         let gc = CheckerContext {
             iterator: Some(iterator),
