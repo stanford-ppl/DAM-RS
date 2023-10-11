@@ -1,3 +1,7 @@
+//! This module provides MongoDB support for logging, and is the only currently supported logger.
+//!
+//! The MongoLogger takes in a [crossbeam::channel::Receiver] containing [LogEntry] and writes them to the database in as large a chunk as it can.
+
 use crossbeam::channel::TryRecvError;
 
 use super::LogEntry;

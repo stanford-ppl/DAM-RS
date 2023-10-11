@@ -11,10 +11,9 @@ use thiserror::Error;
 mod null_logger;
 pub use null_logger::*;
 
+#[cfg_attr(docsrs, doc(cfg(feature = "log-mongo")))]
 #[cfg(feature = "log-mongo")]
-mod mongo_logger;
-#[cfg(feature = "log-mongo")]
-pub use mongo_logger::*;
+pub mod mongo_logger;
 
 mod log_interface;
 pub use log_interface::LogInterface;

@@ -4,7 +4,7 @@ use crate::logging::{initialize_log, LogEntry, LogInterface, LogProcessor};
 use crossbeam::queue::SegQueue;
 
 #[cfg(feature = "log-mongo")]
-use crate::logging::{mongodb, MongoLogger};
+use crate::logging::mongo_logger::{mongodb, MongoLogger};
 
 use super::{executed::Executed, programdata::ProgramData, LoggingOptions, RunMode, RunOptions};
 

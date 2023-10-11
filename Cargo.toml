@@ -3,11 +3,9 @@ name = "dam"
 version = "0.1.0"
 edition = "2021"
 
-[build]
-rustdocflags = ["--document-private-items"]
-
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
 crossbeam = "0.8.2"
