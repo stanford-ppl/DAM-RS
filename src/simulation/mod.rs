@@ -1,3 +1,8 @@
+//! This module defines the core of how a DAM simulation is actually executed.
+//! First, construct and populate a [ProgramBuilder], which can then be validated and initialized via [ProgramBuilder::initialize]
+//! The initialized graph can then be executed, returning a [Executed] object, which is a summary of the execution.
+//! Programs are run-once, so re-running a program requires starting from scratch.
+
 mod building;
 mod executed;
 mod initialized;

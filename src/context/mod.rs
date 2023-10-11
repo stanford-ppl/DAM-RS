@@ -1,3 +1,6 @@
+//! Context provides the basic traits and wrappers for defining the behavior of logical units.
+//! Each context is programmed in a CSP-like fashion, expressing its entire execution via a monolithic [Context::run] method, which accepts arbitrary user code.
+
 use std::collections::{HashMap, HashSet};
 
 use crate::{

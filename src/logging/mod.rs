@@ -1,3 +1,7 @@
+//! Logging support for DAM execution
+//! Right now, the only logger we support is MongoDB, but support for SQL-type databases may be added in the future.
+//! It is important to note that DAM simulations can put out hundreds of GiB to TiB of logs in a single run, so any logger must be designed for scale.
+
 use bson::Bson;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, num::TryFromIntError};

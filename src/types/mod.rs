@@ -1,3 +1,5 @@
+//! Trait bounds used in DAM and many contexts.
+
 pub mod scalar;
 pub mod tensor;
 pub mod unevaluated;

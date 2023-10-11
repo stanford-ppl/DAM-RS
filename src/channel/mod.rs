@@ -1,3 +1,6 @@
+//! Channels in DAM are Single-Producer Single-Consumer (SPSC) constructs, and are the primary form of communication between [super::context::Context]s.
+//! Blocking operations automatically handle time manipulation when used with blocking operations such as dequeue and enqueue.
+
 mod channel_id;
 
 /// Utility functions and constructs for interacting with channels.
