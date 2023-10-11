@@ -167,7 +167,7 @@ impl<ElementType: DAMType> PCU<ElementType> {
         });
     };
 
-    /// Adds another stage to the PCU
+    /// Appends another stage to the PCU. Unfilled stages are no-ops and forward all of their values.
     pub fn push_stage(&mut self, stage: PipelineStage<ElementType>) {
         self.stages.push(stage);
         assert!(self.stages.len() <= self.configuration.pipeline_depth);
