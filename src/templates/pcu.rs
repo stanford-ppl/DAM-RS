@@ -152,7 +152,7 @@ impl<ElementType: DAMType> PCU<ElementType> {
         true
     };
 
-    /// Writes out register[i] into channel[i] for all output channels.
+    /// Writes out `register[i]` into `channel[i]` for all output channels.
     pub const WRITE_ALL_RESULTS: EgressOpType<ElementType> = |ocs, regs, out_time, manager| {
         ocs.iter().enumerate().for_each(|(ind, out_chan)| {
             out_chan
