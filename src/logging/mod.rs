@@ -72,7 +72,7 @@ pub trait LogEvent: Serialize {
     const NAME: &'static str;
 }
 
-/// Log Processors actually run and write the logs somewhere.
+/// Log Processors are responsible for processing logs (i.e. serializing to database).
 pub trait LogProcessor: Send {
     /// Starts the logging job, invoked within a dedicated thread.
     fn spawn(&mut self);
