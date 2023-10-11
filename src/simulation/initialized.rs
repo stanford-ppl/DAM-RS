@@ -8,11 +8,14 @@ use crate::logging::{mongodb, MongoLogger};
 
 use super::{executed::Executed, programdata::ProgramData, LoggingOptions, RunMode, RunOptions};
 
+/// An initialized program, which has passed checking after the [super::ProgramBuilder]
 pub struct Initialized<'a> {
     pub(super) data: ProgramData<'a>,
 }
 
 impl<'a> Initialized<'a> {
+    /// Executes the program with specified options.
+    /// Currently will deadlock frequently if there is an error at runtime, due to blocking dequeues.
     pub fn run(mut self, options: RunOptions) -> Executed<'a> {
         let (priority, policy) = match options.mode {
             RunMode::Simple => (

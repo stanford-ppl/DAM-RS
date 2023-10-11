@@ -21,6 +21,7 @@ enum ChannelOrContext {
     Context(Identifier),
 }
 
+/// Constructor for a basic Program
 #[derive(Default)]
 pub struct ProgramBuilder<'a> {
     data: ProgramData<'a>,
@@ -59,10 +60,12 @@ impl<'a> ProgramBuilder<'a> {
         )
     }
 
+    /// Constructs a bounded channel with unit latency
     pub fn bounded<T: Clone + 'a>(&mut self, capacity: usize) -> (Sender<T>, Receiver<T>) {
         self.make_channel_with_latency(Some(capacity), None, None)
     }
 
+    /// Constructs a bounded channel with a given latency
     pub fn bounded_with_latency<T: Clone + 'a>(
         &mut self,
         capacity: usize,
@@ -72,10 +75,12 @@ impl<'a> ProgramBuilder<'a> {
         self.make_channel_with_latency(Some(capacity), Some(latency), Some(resp_latency))
     }
 
+    /// Constructs an infinitely deep channel with unit latency
     pub fn unbounded<T: Clone + 'a>(&mut self) -> (Sender<T>, Receiver<T>) {
         self.make_channel_with_latency(None, None, None)
     }
 
+    /// Constructs an infinitely deep channel with given latency
     pub fn unbounded_with_latency<T: Clone + 'a>(
         &mut self,
         latency: u64,
@@ -84,6 +89,7 @@ impl<'a> ProgramBuilder<'a> {
         self.make_channel_with_latency(None, Some(latency), Some(resp_latency))
     }
 
+    /// Constructs a channel which writes to nowhere
     pub fn void<T: Clone + 'a>(&mut self) -> Sender<T> {
         let spec = Arc::new(ChannelSpec::new(None, None, None));
         let underlying = Arc::new(ChannelData::new(spec));
@@ -91,6 +97,8 @@ impl<'a> ProgramBuilder<'a> {
         Sender { underlying }
     }
 
+    /// Registers a new context under this program.
+    /// The Program now owns the child, and all children must be on board before initialization.
     pub fn add_child<T>(&mut self, child: T)
     where
         T: Context + 'a,
@@ -98,6 +106,8 @@ impl<'a> ProgramBuilder<'a> {
         self.add_node(Box::new(child));
     }
 
+    /// Initializes the program, and returns an [Initialized] program if successful.
+    /// On error, returns a [InitializationError], which encodes the first error that occurred.
     pub fn initialize(
         mut self,
         options: InitializationOptions,

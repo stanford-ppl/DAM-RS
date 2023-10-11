@@ -8,9 +8,13 @@ use graphviz_rust::{
 
 use crate::{channel::handle::ChannelHandle, datastructures::Identifier};
 
+/// Describes objects which have a DOT visualization.
+/// This is applied to [super::Initialized] and [super::Executed] structures, but may be extended in the future to support additional visualizations.
 pub trait DotConvertible {
+    /// Generates a DOT graph from the current object
     fn to_dot(&self) -> Graph;
 
+    /// A utility function to turn the object into a DOT string
     fn to_dot_string(&self) -> String {
         self.to_dot().print(&mut PrinterContext::default())
     }
