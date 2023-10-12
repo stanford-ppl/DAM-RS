@@ -1,14 +1,17 @@
 use std::sync::Mutex;
 
-use dam_core::{identifier::Identifier, time::Time, ContextView, TimeView};
-
-use crate::context::Context;
+use crate::{
+    context::Context,
+    datastructures::{Identifier, Time},
+    view::{ContextView, TimeView},
+};
 
 use super::ChannelID;
 
 type ViewType = Option<TimeView>;
 
-pub struct ChannelSpec {
+/// The basic specification of a connection.
+pub(crate) struct ChannelSpec {
     sender_view: Mutex<ViewType>,
     receiver_view: Mutex<ViewType>,
 
@@ -20,8 +23,8 @@ pub struct ChannelSpec {
     response_latency: u64,
 }
 
-pub struct InlineSpec {
-    pub channel_id: ChannelID,
+/// An inline version of the specification. This avoids needing an extra Arc/indirection to get back to the original object.
+pub(crate) struct InlineSpec {
     pub capacity: Option<usize>,
     pub send_latency: u64,
     pub response_latency: u64,
@@ -86,9 +89,8 @@ impl ChannelSpec {
         self.channel_id
     }
 
-    pub fn make_inline(&self) -> InlineSpec {
+    pub(crate) fn make_inline(&self) -> InlineSpec {
         InlineSpec {
-            channel_id: self.channel_id,
             capacity: self.capacity,
             send_latency: self.send_latency,
             response_latency: self.response_latency,

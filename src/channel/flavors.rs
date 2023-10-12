@@ -1,6 +1,5 @@
 #[derive(Clone, Copy, Debug)]
-pub enum ChannelFlavor {
-    Unknown,
+pub(crate) enum ChannelFlavor {
     Acyclic,
     Cyclic,
     Void,

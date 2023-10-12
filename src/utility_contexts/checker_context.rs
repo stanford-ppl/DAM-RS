@@ -1,15 +1,14 @@
-use dam_core::identifier::Identifier;
-use dam_macros::{cleanup, identifiable, time_managed};
+use dam_macros::context_internal;
 
 use crate::{
-    channel::{utils::dequeue, ChannelElement, Receiver},
+    channel::{ChannelElement, Receiver},
     types::DAMType,
 };
 
-use super::Context;
+use crate::context::Context;
 
-#[time_managed]
-#[identifiable]
+/// An exact validation context for checking a channel against an iterator.
+#[context_internal]
 pub struct CheckerContext<T: Clone, IType, FType>
 where
     IType: Iterator<Item = T>,
@@ -19,7 +18,7 @@ where
     input: Receiver<T>,
 }
 
-impl<T: DAMType, IType, FType> Context for CheckerContext<T, IType, FType>
+impl<T: DAMType + PartialEq, IType, FType> Context for CheckerContext<T, IType, FType>
 where
     IType: Iterator<Item = T>,
     FType: FnOnce() -> IType + Send + Sync,
@@ -29,7 +28,7 @@ where
     fn run(&mut self) {
         if let Some(iter) = self.iterator.take() {
             for (ind, val) in iter().enumerate() {
-                match dequeue(&mut self.time, &mut self.input) {
+                match self.input.dequeue(&self.time) {
                     Ok(ChannelElement { time, data }) if data != val => {
                         panic!("Mismatch on iteration {ind} at time {time:?}: Expected {val:?} but found {data:?}")
                     }
@@ -43,22 +42,19 @@ where
             panic!("Cannot run a Checker twice!");
         }
     }
-
-    #[cleanup(time_managed)]
-    fn cleanup(&mut self) {}
 }
 
-impl<T: DAMType, IType, FType> CheckerContext<T, IType, FType>
+impl<T: DAMType + PartialEq, IType, FType> CheckerContext<T, IType, FType>
 where
     IType: Iterator<Item = T>,
     FType: FnOnce() -> IType + Send + Sync,
 {
+    /// Constructs a new (exact) Checker -- for approximate checking use [super::ApproxCheckerContext]
     pub fn new(iterator: FType, input: Receiver<T>) -> CheckerContext<T, IType, FType> {
         let gc = CheckerContext {
             iterator: Some(iterator),
             input,
-            time: Default::default(),
-            identifier: Identifier::new(),
+            context_info: Default::default(),
         };
         gc.input.attach_receiver(&gc);
         gc

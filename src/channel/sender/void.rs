@@ -1,8 +1,9 @@
 use std::marker::PhantomData;
 
-use dam_core::TimeManager;
-
-use crate::channel::{ChannelElement, EnqueueError};
+use crate::{
+    channel::{ChannelElement, EnqueueError},
+    view::TimeManager,
+};
 
 use super::SenderFlavor;
 
@@ -22,13 +23,13 @@ impl<T> Default for VoidSender<T> {
 impl<T> SenderFlavor<T> for VoidSender<T> {
     fn enqueue(
         &mut self,
-        _manager: &mut TimeManager,
+        _manager: &TimeManager,
         _data: ChannelElement<T>,
     ) -> Result<(), EnqueueError> {
         Ok(())
     }
 
-    fn wait_until_available(&mut self, _manager: &mut TimeManager) -> Result<(), EnqueueError> {
+    fn wait_until_available(&mut self, _manager: &TimeManager) -> Result<(), EnqueueError> {
         // No-op
         Ok(())
     }

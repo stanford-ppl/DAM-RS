@@ -1,15 +1,16 @@
-use dam_core::TimeManager;
-
-use crate::channel::{DequeueResult, PeekResult};
+use crate::{
+    channel::{ChannelElement, DequeueError, PeekResult},
+    view::TimeManager,
+};
 
 use super::ReceiverCommon;
 
 pub(super) trait AcyclicReceiver<T: Clone>: ReceiverCommon<T> {
-    fn peek_next(&mut self, manager: &mut TimeManager) -> DequeueResult<T> {
+    fn peek_next(&mut self, manager: &TimeManager) -> Result<ChannelElement<T>, DequeueError> {
         match &self.data().head {
-            Some(PeekResult::Closed) => return DequeueResult::Closed,
+            Some(PeekResult::Closed) => return Err(DequeueError::Closed),
             None | Some(PeekResult::Nothing(_)) => {}
-            Some(PeekResult::Something(data)) => return DequeueResult::Something(data.clone()),
+            Some(PeekResult::Something(data)) => return Ok(data.clone()),
         }
 
         self.data().head = match self.data().underlying.recv() {
@@ -22,15 +23,15 @@ pub(super) trait AcyclicReceiver<T: Clone>: ReceiverCommon<T> {
         self.data().head.clone().unwrap().try_into().unwrap()
     }
 
-    fn dequeue(&mut self, manager: &mut TimeManager) -> DequeueResult<T> {
+    fn dequeue(&mut self, manager: &TimeManager) -> Result<ChannelElement<T>, DequeueError> {
         match &self.data().head {
-            Some(PeekResult::Closed) => return DequeueResult::Closed,
+            Some(PeekResult::Closed) => return Err(DequeueError::Closed),
             Some(PeekResult::Something(element)) => {
                 let cloned = element.clone();
                 self.data().head = None;
                 self.register_recv(cloned.time);
                 manager.advance(cloned.time);
-                return DequeueResult::Something(cloned);
+                return Ok(cloned);
             }
             None | Some(PeekResult::Nothing(_)) => {}
         }
@@ -40,11 +41,11 @@ pub(super) trait AcyclicReceiver<T: Clone>: ReceiverCommon<T> {
             Ok(ce) => {
                 self.register_recv(ce.time);
                 manager.advance(ce.time);
-                DequeueResult::Something(ce)
+                Ok(ce)
             }
             Err(_) => {
                 self.data().head = Some(PeekResult::Closed);
-                DequeueResult::Closed
+                Err(DequeueError::Closed)
             }
         }
     }

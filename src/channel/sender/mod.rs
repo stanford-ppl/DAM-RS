@@ -1,6 +1,6 @@
-use dam_core::TimeManager;
-
 use enum_dispatch::enum_dispatch;
+
+use crate::view::TimeManager;
 
 use self::{
     bounded::{BoundedAcyclicSender, BoundedCyclicSender},
@@ -17,11 +17,11 @@ pub(super) mod void;
 
 #[enum_dispatch(SenderImpl<T>)]
 pub trait SenderFlavor<T> {
-    fn wait_until_available(&mut self, manager: &mut TimeManager) -> Result<(), EnqueueError>;
+    fn wait_until_available(&mut self, manager: &TimeManager) -> Result<(), EnqueueError>;
 
     fn enqueue(
         &mut self,
-        manager: &mut TimeManager,
+        manager: &TimeManager,
         data: ChannelElement<T>,
     ) -> Result<(), EnqueueError>;
 }
@@ -56,19 +56,22 @@ trait DataProvider<T> {
 
 trait BoundedProvider {
     fn register_send(&mut self);
-    fn wait_until_available(&mut self, manager: &mut TimeManager) -> Result<(), EnqueueError>;
+    fn wait_until_available(&mut self, manager: &TimeManager) -> Result<(), EnqueueError>;
 }
 
 trait SenderCommon<T>: DataProvider<T> + BoundedProvider {
     fn enqueue(
         &mut self,
-        manager: &mut TimeManager,
+        manager: &TimeManager,
         mut data: ChannelElement<T>,
     ) -> Result<(), EnqueueError> {
         if let err @ Err(_) = self.wait_until_available(manager) {
             return err;
         }
-        data.update_time(manager.tick() + self.data().spec.send_latency);
+        let min_time = manager.tick() + self.data().spec.send_latency;
+        if data.time < min_time {
+            data.update_time(min_time);
+        }
         self.data().underlying.send(data).unwrap();
         self.register_send();
         Ok(())

@@ -1,13 +1,28 @@
-use std::collections::HashSet;
-
-use phf::phf_map;
 use proc_macro::{self, TokenStream};
-use proc_macro2::Ident;
-use quote::{quote, ToTokens};
-use syn::{parse::Parser, parse_macro_input, parse_str, DeriveInput, ImplItemFn};
+use proc_macro2::{Ident, Span};
+use quote::quote;
+use syn::{parse::Parser, parse_macro_input, DeriveInput, Path, token::PathSep, punctuated::Punctuated, PathSegment};
+
+fn make_dam_path(path: &str, fqn: bool) -> Path {
+    let mut segments = Punctuated::new();
+    segments.push(PathSegment { ident: Ident::new(path, Span::call_site()), arguments: syn::PathArguments::None });
+    Path {
+        leading_colon: (if fqn { Some(PathSep::default()) } else {None}),
+        segments
+    }
+}
 
 #[proc_macro_attribute]
-pub fn identifiable(_attrs: TokenStream, item: TokenStream) -> TokenStream {
+pub fn context_internal(_attrs: TokenStream, item: TokenStream) -> TokenStream {
+    context_impl(_attrs, item, make_dam_path("crate", false))
+}
+
+#[proc_macro_attribute]
+pub fn context_macro(_attrs: TokenStream, item: TokenStream) -> TokenStream {
+    context_impl(_attrs, item, make_dam_path("dam", true))
+}
+
+fn context_impl(_attrs: TokenStream, item: TokenStream, dam_path: Path) -> TokenStream {
     let mut ast = parse_macro_input!(item as DeriveInput);
 
     let name = ast.ident.clone();
@@ -19,7 +34,7 @@ pub fn identifiable(_attrs: TokenStream, item: TokenStream) -> TokenStream {
             match &mut struct_data.fields {
                 syn::Fields::Named(fields) => fields.named.push(
                     syn::Field::parse_named
-                        .parse2(quote! {identifier: dam_core::identifier::Identifier})
+                        .parse2(quote! {context_info: #dam_path::macro_support::ContextInfo})
                         .unwrap(),
                 ),
                 _ => (),
@@ -29,134 +44,79 @@ pub fn identifiable(_attrs: TokenStream, item: TokenStream) -> TokenStream {
             return quote! {
                 #ast
 
-                impl #impl_generics dam_core::identifier::Identifiable for #name #ty_generics #where_clause {
-                    fn id(&self) -> dam_core::identifier::Identifier {
-                        self.identifier
+                impl #impl_generics #dam_path::macro_support::Identifiable for #name #ty_generics #where_clause {
+                    fn id(&self) -> #dam_path::macro_support::Identifier {
+                        self.context_info.id
                     }
 
                     fn name(&self) -> String {
                         (#ident_string).into()
                     }
                 }
-            }
-            .into();
-        }
-        _ => quote! {compile_error!("identifiable can only be tagged on structs!")}.into(),
-    }
-}
 
-#[proc_macro_attribute]
-pub fn time_managed(_attrs: TokenStream, item: TokenStream) -> TokenStream {
-    let mut ast = parse_macro_input!(item as DeriveInput);
-
-    let name = ast.ident.clone();
-    let generics = ast.generics.clone();
-    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
-
-    match &mut ast.data {
-        syn::Data::Struct(ref mut struct_data) => {
-            match &mut struct_data.fields {
-                syn::Fields::Named(fields) => fields.named.push(
-                    syn::Field::parse_named
-                        .parse2(quote! {time: dam_core::TimeManager})
-                        .unwrap(),
-                ),
-                _ => (),
-            }
-
-            return quote! {
-                #ast
-
-                impl #impl_generics dam_core::TimeManaged for #name #ty_generics #where_clause {
-                    fn time_manager_mut(&mut self) -> &mut dam_core::TimeManager {
-                        &mut self.time
-                    }
-
-                    fn time_manager(&self) -> &dam_core::TimeManager {
-                        &self.time
+                impl #impl_generics #dam_path::macro_support::TimeViewable for #name #ty_generics #where_clause {
+                    fn view(&self) -> #dam_path::macro_support::TimeView {
+                        self.context_info.time.view().into()
                     }
                 }
 
-                impl #impl_generics dam_core::TimeViewable for #name #ty_generics #where_clause {
-                    fn view(&self) -> dam_core::TimeView {
-                        self.time.view().into()
+                impl #impl_generics std::ops::Deref for #name #ty_generics #where_clause {
+                    type Target = #dam_path::macro_support::ContextInfo;
+                    fn deref(&self) -> &Self::Target {
+                        &self.context_info
+                    }
+                }
+
+                impl #impl_generics std::ops::DerefMut for #name #ty_generics #where_clause {
+                    fn deref_mut(&mut self) -> &mut Self::Target {
+                        &mut self.context_info
                     }
                 }
             }
             .into();
         }
-        _ => quote! {compile_error!("time_viewable can only be tagged on structs!")}.into(),
+        _ => quote! {compile_error!("Context can only be tagged on structs!")}.into(),
     }
 }
 
-static MEMBER_MAP: phf::Map<&'static str, &'static str> = phf_map! {
-    "time_managed" => "time",
-};
-
 #[proc_macro_attribute]
-pub fn cleanup(attrs: TokenStream, item: TokenStream) -> TokenStream {
-    let mut ast = parse_macro_input!(item as ImplItemFn);
-    let all_attrs = attrs.into_iter().collect::<Vec<_>>();
-    let mut cleanup_attrs = Vec::new();
-    let mut already_seen = HashSet::<String>::new();
-    for (ind, attr) in all_attrs.iter().enumerate() {
-        match attr {
-            proc_macro::TokenTree::Ident(ident) if ind % 2 == 0 => {
-                let ident_str = ident.to_string();
-                if already_seen.contains(&ident_str) {
-                    return quote! {compile_error!("Cannot execute duplicate cleanups!");}.into();
-                }
-                already_seen.insert(ident_str.clone());
-                match MEMBER_MAP.get(ident_str.as_str()) {
-                    Some(repl) => cleanup_attrs.push(*repl),
-                    None => {
-                        return quote! {compile_error!("Could not find a valid member map entry.");}
-                            .into()
-                    }
-                }
-            }
-            proc_macro::TokenTree::Punct(comma) if ind % 2 == 1 && comma.as_char() == ',' => {}
-            _ => {
-                return quote!{compile_error!("Unexpected token while processing cleanup macro!"); }.into();
-            }
-        };
-    }
-
-    if ast.sig.ident != "cleanup" {
-        return quote! {
-            compile_error!("#[cleanup] can only be attached to methods named cleanup(&self)!");
-        }
-        .into();
-    }
-
-    for cleanup_attr in cleanup_attrs.into_iter() {
-        let stmt = parse_str(format!("self.{}.cleanup();", cleanup_attr).as_str()).unwrap();
-        ast.block.stmts.push(stmt);
-    }
-
-    ast.into_token_stream().into()
+pub fn event_type_internal(_attrs: TokenStream, item: TokenStream) -> TokenStream {
+    event_type_impl(_attrs, item, make_dam_path("crate", false))
 }
 
 #[proc_macro_attribute]
-pub fn log_producer(_attrs: TokenStream, item: TokenStream) -> TokenStream {
+pub fn event_type(_attrs: TokenStream, item: TokenStream) -> TokenStream {
+    event_type_impl(_attrs, item, make_dam_path("dan_rs", false))
+}
+
+fn event_type_impl(_attrs: TokenStream, item: TokenStream, dam_path: Path) -> TokenStream {
     let ast = parse_macro_input!(item as DeriveInput);
 
     let name = ast.ident.clone();
-    let metric_name = name.to_string();
-    let slice_name = Ident::new(metric_name.to_ascii_uppercase().as_str(), name.span());
+    let ident_string = name.to_string();
+    let mod_name = Ident::new(
+        format!("{}_metrics_mod", ident_string).as_str(),
+        name.span(),
+    );
 
     let generics = ast.generics.clone();
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
-    return quote! {
+    quote! {
         #ast
 
-        impl #impl_generics ::dam_core::metric::LogProducer for #name #ty_generics #where_clause {
-            const LOG_NAME: &'static str = #metric_name;
+        impl #impl_generics #dam_path::macro_support::logging::LogEvent for super::#name #ty_generics #where_clause {
+            const NAME: &'static str = #ident_string;
         }
 
-        #[::linkme::distributed_slice(::dam_core::metric::METRICS)]
-        pub static #slice_name: &'static str = #metric_name;
+        #[allow(non_snake_case)]
+        mod #mod_name {
+            use #dam_path::macro_support::logging::registry::*;
+            
+
+            #[distributed_slice(METRICS)]
+            static EVENT_NAME: &'static str = #ident_string;
+        }
     }
-    .into();
+    .into()
 }

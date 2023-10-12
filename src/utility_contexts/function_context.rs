@@ -1,10 +1,9 @@
-use dam_core::{identifier::Identifier, TimeManager};
-use dam_macros::{cleanup, identifiable, time_managed};
+use crate::{context_tools::*, view::TimeManager};
+use dam_macros::context_internal;
 
-use super::Context;
-
-#[identifiable]
-#[time_managed]
+/// Contains an arbitrarily defined inner body for a context
+/// Used mostly for one-off operations, such as test drivers.
+#[context_internal]
 pub struct FunctionContext<RT> {
     run_fn: Option<RT>,
 }
@@ -22,22 +21,20 @@ where
             panic!("Called run twice!");
         }
     }
-
-    #[cleanup(time_managed)]
-    fn cleanup(&mut self) {}
 }
 impl<RT> FunctionContext<RT>
 where
     RT: FnOnce(&mut TimeManager) + Send + Sync,
 {
+    /// Constructs an empty FunctionContext
     pub fn new() -> Self {
         Self {
             run_fn: Default::default(),
-            identifier: Identifier::new(),
-            time: Default::default(),
+            context_info: Default::default(),
         }
     }
 
+    /// Sets the run function for the context.
     pub fn set_run(&mut self, run_fn: RT) {
         self.run_fn = Some(run_fn);
     }

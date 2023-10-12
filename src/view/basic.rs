@@ -4,9 +4,8 @@ use linkme::distributed_slice;
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    identifier::Identifier,
-    metric::{LogProducer, METRICS},
-    time::{AtomicTime, Time},
+    datastructures::*,
+    logging::{log_event, registry::METRICS, LogEvent},
 };
 
 use super::ContextView;
@@ -19,18 +18,29 @@ enum TimeEvent {
     Finish(Time),
 }
 
-#[derive(Default, Debug)]
+impl LogEvent for TimeEvent {
+    const NAME: &'static str = "TimeEvent";
+}
+
+#[distributed_slice(METRICS)]
+static TIME_EVENT: &'static str = TimeEvent::NAME;
+
+/// The basic "owned" time construct.
+/// All time mutations should be performed through a TimeManager.
+#[derive(Default, Debug, Clone)]
 pub struct TimeManager {
     underlying: Arc<TimeInfo>,
 }
 
 impl TimeManager {
+    /// Constructs a new owned time.
     pub fn new() -> TimeManager {
         TimeManager {
             underlying: Arc::new(TimeInfo::default()),
         }
     }
 
+    /// Constructs a [super::BasicContextView] of the owned time.
     pub fn view(&self) -> BasicContextView {
         BasicContextView {
             under: self.underlying.clone(),
@@ -38,37 +48,34 @@ impl TimeManager {
     }
 }
 
-impl LogProducer for TimeManager {
-    const LOG_NAME: &'static str = "TimeManager";
+impl Drop for TimeManager {
+    fn drop(&mut self) {
+        self.cleanup();
+    }
 }
 
-#[distributed_slice(METRICS)]
-static TIMEMANAGER_NAME: &'static str = "TimeManager";
-
 impl TimeManager {
-    pub fn incr_cycles(&mut self, incr: u64) {
-        Self::log(TimeEvent::Incr(incr));
+    /// Increments time by a non-negative number of cycles.
+    pub fn incr_cycles(&self, incr: u64) {
+        let _ = log_event(&TimeEvent::Incr(incr));
         self.underlying.time.incr_cycles(incr);
         self.scan_and_write_signals();
     }
 
-    pub fn advance(&mut self, new: Time) {
+    /// Advances to a new time. If the new time is in the past, this is a no-op.
+    pub fn advance(&self, new: Time) {
         if self.underlying.time.try_advance(new) {
-            Self::log(TimeEvent::Advance(new));
+            let _ = log_event(&TimeEvent::Advance(new));
             self.scan_and_write_signals();
         }
     }
 
-    fn scan_and_write_signals(&mut self) {
+    fn scan_and_write_signals(&self) {
         let mut signal_buffer = self.underlying.signal_buffer.lock().unwrap();
         let tlb = self.underlying.time.load();
-        #[cfg(logging)]
-        let mut released = Vec::new();
         signal_buffer.retain(|signal| {
             if signal.when <= tlb {
                 signal.thread.unpark();
-                #[cfg(logging)]
-                released.push(signal.thread.id());
                 false
             } else {
                 true
@@ -76,55 +83,46 @@ impl TimeManager {
         });
 
         drop(signal_buffer);
-        #[cfg(logging)]
-        if !released.is_empty() {
-            let graph = get_registry();
-            Self::log(TimeEvent::ScanAndWrite(
-                tlb,
-                released
-                    .into_iter()
-                    .map(|thr| {
-                        graph
-                            .get_identifier(thr)
-                            .expect("Not all threads had registered identifiers!")
-                    })
-                    .collect(),
-            ));
-        }
     }
 
+    /// Reads the current time.
+    /// Since this is only available on the owning context, it does not need to be ordered w.r.t. anything else.
     pub fn tick(&self) -> Time {
         self.underlying.time.load_relaxed()
     }
 
+    /// Explicitly advances the context to infinite time.
+    /// This is useful if we don't want to wait for `Drop` to trigger.
     pub fn cleanup(&mut self) {
         self.underlying.time.set_infinite();
-        Self::log(TimeEvent::Finish(self.underlying.time.load()));
+        let _ = log_event(&TimeEvent::Finish(self.underlying.time.load()));
         self.scan_and_write_signals();
     }
 }
 
+/// A simple view of a "primitive" context's time.
 #[derive(Clone)]
 pub struct BasicContextView {
     under: Arc<TimeInfo>,
 }
 
-impl LogProducer for BasicContextView {
-    const LOG_NAME: &'static str = "BasicContextView";
-}
-
 #[derive(Serialize, Deserialize, Debug)]
-pub enum ContextViewEvent {
+enum ContextViewEvent {
     WaitUntil(Time),
     Park,
     Unpark,
 }
 
+impl LogEvent for ContextViewEvent {
+    const NAME: &'static str = "ContextViewEvent";
+}
+
 #[distributed_slice(METRICS)]
-static CONTEXTVIEW_NAME: &'static str = "BasicContextView";
+static CONTEXT_EVENT: &'static str = ContextViewEvent::NAME;
+
 impl ContextView for BasicContextView {
     fn wait_until(&self, when: Time) -> Time {
-        Self::log(ContextViewEvent::WaitUntil(when));
+        let _ = log_event(&ContextViewEvent::WaitUntil(when));
 
         // Check time first. Since time is non-decreasing, if this cond is true, then it's always true.
         let cur_time = self.under.time.load();
@@ -144,14 +142,14 @@ impl ContextView for BasicContextView {
             // Unlock the signal buffer
             drop(signal_buffer);
 
-            Self::log(ContextViewEvent::Park);
+            let _ = log_event(&ContextViewEvent::Park);
 
             while cur_time < when {
                 // Park is Acquire, so the load can be relaxed
                 std::thread::park();
                 cur_time = self.under.time.load_relaxed();
             }
-            Self::log(ContextViewEvent::Unpark);
+            let _ = log_event(&ContextViewEvent::Unpark);
 
             return self.under.time.load();
         }
@@ -162,15 +160,15 @@ impl ContextView for BasicContextView {
     }
 }
 
-// Private bookkeeping constructs
-
+/// Registers a waking callback to a TimeManager.
+/// This is used to implement wait_until on [BasicContextView]s
 #[derive(Debug, Clone)]
 struct SignalElement {
     when: Time,
     thread: std::thread::Thread,
 }
 
-// Encapsulates the callback backlog and the current tick info to make BasicContextView work.
+/// Encapsulates the callback backlog and the current tick info to make BasicContextView work.
 #[derive(Default, Debug)]
 struct TimeInfo {
     time: AtomicTime,

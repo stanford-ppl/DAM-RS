@@ -5,6 +5,8 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 
+/// An immutable timestamp.
+/// The time is stored as a separate u64 and a done flag. This way a context can be marked as finished (via infinite time), but preserves the actual timestamp for logging.
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
 pub struct Time {
     time: u64,
@@ -12,10 +14,12 @@ pub struct Time {
 }
 
 impl Time {
+    /// Constructs a time from a non-negative initializer
     pub fn new(time: u64) -> Self {
         Self { time, done: false }
     }
 
+    /// Constructs an infinite timestamp.
     pub fn infinite() -> Self {
         Self {
             time: 0,
@@ -23,14 +27,17 @@ impl Time {
         }
     }
 
+    /// Checks whether the timestamp is 'done'
     pub fn is_infinite(&self) -> bool {
         self.done
     }
 
+    /// Marks this timestamp as infinite
     pub fn set_infinite(&mut self) {
         self.done = true;
     }
 
+    /// Gets the underlying tick count, regardless of whether it is marked as infinite.
     pub fn time(&self) -> u64 {
         self.time
     }
@@ -129,9 +136,9 @@ impl std::ops::AddAssign<Time> for Time {
     }
 }
 
-// This is used for TimeManagers to avoid rwlock.
+/// An atomic notion of time, used by the [crate::view::TimeManager] construct.
 #[derive(Debug, Default)]
-pub struct AtomicTime {
+pub(crate) struct AtomicTime {
     time: AtomicU64,
     done: AtomicBool,
 }
@@ -139,12 +146,15 @@ pub struct AtomicTime {
 impl AtomicTime {
     const UPDATE_ORDERING: std::sync::atomic::Ordering = std::sync::atomic::Ordering::Release;
 
+    /// Reads the underlying time with Acquire semantics, used by other threads.
     pub fn load(&self) -> Time {
-        let time = self.time.load(std::sync::atomic::Ordering::Acquire);
+        let time = self.time.load(std::sync::atomic::Ordering::Relaxed);
         let done = self.done.load(std::sync::atomic::Ordering::Acquire);
         Time { time, done }
     }
 
+    /// Reads the underlying time with Relaxed semantics, only safe when performing optimistic operations
+    /// or within the same thread.
     pub fn load_relaxed(&self) -> Time {
         let time = self.time.load(std::sync::atomic::Ordering::Relaxed);
         let done = self.done.load(std::sync::atomic::Ordering::Relaxed);
@@ -170,8 +180,8 @@ impl AtomicTime {
             }
             (false, false) => {
                 // If we weren't done, and neither were they.
-                let old_done = self.time.load(std::sync::atomic::Ordering::Relaxed);
-                if old_done < rhs.time {
+                let old_time = self.time.load(std::sync::atomic::Ordering::Relaxed);
+                if old_time < rhs.time {
                     self.time
                         .store(rhs.time, std::sync::atomic::Ordering::Release);
                     return true;

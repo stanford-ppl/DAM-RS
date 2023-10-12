@@ -1,3 +1,6 @@
+//! Simple scalar implementations of DAMType
+//! This registers the common datatypes as statically sized DAMTypes, such as u64, f32, etc.
+
 use super::StaticallySized;
 
 macro_rules! builtin_ss {
