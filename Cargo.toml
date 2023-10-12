@@ -1,9 +1,11 @@
 [package]
-name = "dam-rs"
+name = "dam"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
 crossbeam = "0.8.2"
@@ -11,7 +13,6 @@ num = "0.4.0"
 ndarray = "0.15.6"
 ntest = "0.9.0"
 dam-macros = { version = "0.1.0", path = "dam-macros" }
-dam-core = { version = "0.1.0", path = "dam-core" }
 linkme = "0.3.12"
 serde = "1.0.171"
 serde_json = "1.0.103"
@@ -24,6 +25,27 @@ thread-priority = "0.13.1"
 
 # For running tests
 rand = "0.8.5"
+thiserror = "1.0.49"
+graphviz-rust = {version = "0.6.6", optional = true}
+derive_builder = "0.12.0"
+cfg-if = "1.0.0"
+enum_delegate = "0.2.0"
+derive_more = "0.99.17"
+bson = "2.7.0"
+
+[features]
+default = ["dot", "log-mongo"]
+dot = ["dep:graphviz-rust"]
+log-mongo = ["dep:mongodb"]
+test-log-mongo = ["log-mongo"]
+
+[dependencies.mongodb]
+version = "2.7.0"
+default_features = false
+optional = true
+## Have to use openssl-tls for cross compilation and wsl2.
+features = ["sync", "openssl-tls"]
+
 
 [dev-dependencies]
 criterion = "0.5.1"
@@ -34,13 +56,10 @@ debug = 1
 lto = "thin"
 codegen-units = 1
 
-#[profile.dev.build-override]
-#codegen-units = 1
-#opt-level = 3
-
-[[bench]]
-name = "benchmark_examples"
-harness = false
+[profile.dev.build-override]
+codegen-units = 1
+opt-level = 3
+debug = 1
 
 [[bench]]
 name = "benchmark_templates"

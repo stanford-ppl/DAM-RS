@@ -1,20 +1,19 @@
 use std::sync::Arc;
 
-use dam_core::TimeManager;
-
 use crate::{
-    channel::{channel_spec::ChannelSpec, DequeueResult, PeekResult},
+    channel::{channel_spec::ChannelSpec, ChannelElement, DequeueError, PeekResult},
     context::Context,
+    view::TimeManager,
 };
 
 use super::ReceiverFlavor;
 
-pub struct UninitializedReceiver {
+pub(crate) struct UninitializedReceiver {
     spec: Arc<ChannelSpec>,
 }
 
 impl UninitializedReceiver {
-    pub fn new(spec: Arc<ChannelSpec>) -> Self {
+    pub(crate) fn new(spec: Arc<ChannelSpec>) -> Self {
         Self { spec }
     }
 }
@@ -24,11 +23,11 @@ impl<T> ReceiverFlavor<T> for UninitializedReceiver {
         panic!("Calling peek on an uninitialized receiver");
     }
 
-    fn peek_next(&mut self, _manager: &mut TimeManager) -> DequeueResult<T> {
+    fn peek_next(&mut self, _manager: &TimeManager) -> Result<ChannelElement<T>, DequeueError> {
         panic!("Calling peek_next on an uninitialized receiver");
     }
 
-    fn dequeue(&mut self, _manager: &mut TimeManager) -> DequeueResult<T> {
+    fn dequeue(&mut self, _manager: &TimeManager) -> Result<ChannelElement<T>, DequeueError> {
         panic!("Calling dequeue on an uninitialized receiver");
     }
 }

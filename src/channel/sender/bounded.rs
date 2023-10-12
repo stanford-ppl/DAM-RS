@@ -1,7 +1,9 @@
+use crate::{
+    channel::{ChannelElement, EnqueueError},
+    datastructures::Time,
+    view::TimeManager,
+};
 use crossbeam::channel;
-use dam_core::{time::Time, TimeManager};
-
-use crate::channel::{ChannelElement, EnqueueError};
 
 use super::{BoundedProvider, DataProvider, SenderCommon, SenderData, SenderFlavor};
 
@@ -26,7 +28,7 @@ impl<T> BoundedProvider for BoundedAcyclicSender<T> {
         self.bound.send_receive_delta += 1;
     }
 
-    fn wait_until_available(&mut self, manager: &mut TimeManager) -> Result<(), EnqueueError> {
+    fn wait_until_available(&mut self, manager: &TimeManager) -> Result<(), EnqueueError> {
         if self.bound.send_receive_delta < self.data.spec.capacity.unwrap() {
             return Ok(());
         }
@@ -35,20 +37,20 @@ impl<T> BoundedProvider for BoundedAcyclicSender<T> {
                 manager.advance(time);
                 Ok(())
             }
-            Err(_) => Err(EnqueueError {}),
+            Err(_) => Err(EnqueueError::Closed),
         }
     }
 }
 impl<T> SenderCommon<T> for BoundedAcyclicSender<T> {}
 
 impl<T> SenderFlavor<T> for BoundedAcyclicSender<T> {
-    fn wait_until_available(&mut self, manager: &mut TimeManager) -> Result<(), EnqueueError> {
+    fn wait_until_available(&mut self, manager: &TimeManager) -> Result<(), EnqueueError> {
         BoundedProvider::wait_until_available(self, manager)
     }
 
     fn enqueue(
         &mut self,
-        manager: &mut TimeManager,
+        manager: &TimeManager,
         data: ChannelElement<T>,
     ) -> Result<(), EnqueueError> {
         SenderCommon::enqueue(self, manager, data)
@@ -106,7 +108,7 @@ impl<T> BoundedProvider for BoundedCyclicSender<T> {
         self.bound.send_receive_delta += 1;
     }
 
-    fn wait_until_available(&mut self, manager: &mut TimeManager) -> Result<(), EnqueueError> {
+    fn wait_until_available(&mut self, manager: &TimeManager) -> Result<(), EnqueueError> {
         loop {
             if self.bound.send_receive_delta < self.data.spec.capacity.unwrap() {
                 return Ok(());
@@ -119,7 +121,7 @@ impl<T> BoundedProvider for BoundedCyclicSender<T> {
                     return Ok(());
                 }
                 Some(SendOptions::Never) => {
-                    return Err(EnqueueError {});
+                    return Err(EnqueueError::Closed);
                 }
                 Some(SendOptions::CheckBackAt(time)) => {
                     manager.advance(time);
@@ -152,13 +154,13 @@ impl<T> DataProvider<T> for BoundedCyclicSender<T> {
 impl<T> SenderCommon<T> for BoundedCyclicSender<T> {}
 
 impl<T> SenderFlavor<T> for BoundedCyclicSender<T> {
-    fn wait_until_available(&mut self, manager: &mut TimeManager) -> Result<(), EnqueueError> {
+    fn wait_until_available(&mut self, manager: &TimeManager) -> Result<(), EnqueueError> {
         BoundedProvider::wait_until_available(self, manager)
     }
 
     fn enqueue(
         &mut self,
-        manager: &mut TimeManager,
+        manager: &TimeManager,
         data: ChannelElement<T>,
     ) -> Result<(), EnqueueError> {
         SenderCommon::enqueue(self, manager, data)

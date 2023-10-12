@@ -1,19 +1,21 @@
+//! A simple implementation of a single DRAM bank
 use std::collections::VecDeque;
 
 use crate::{
     channel::{
-        utils::{dequeue, enqueue, EventTime, Peekable},
-        ChannelElement, DequeueResult, Receiver, Sender,
+        utils::{EventTime, Peekable},
+        ChannelElement, Receiver, Sender,
     },
     context::Context,
-    types::{Cleanable, DAMType, IndexLike},
+    datastructures::Time,
+    types::{DAMType, IndexLike},
 };
 
-use dam_core::{identifier::Identifier, time::Time};
-use dam_macros::{cleanup, identifiable, time_managed};
+use dam_macros::context_internal;
 
 use super::datastore::{Behavior, Datastore};
 
+/// Basic configuration variables for a DRAM bank
 #[derive(Clone, Copy, Debug)]
 pub struct DRAMConfig {
     num_simultaneous_requests: usize,
@@ -22,18 +24,11 @@ pub struct DRAMConfig {
     capacity: usize,
 }
 
+/// A Triplet describing a read from a DRAM.
 pub struct DRAMReadBundle<IT: Clone, DT: Clone> {
     addr: Receiver<IT>,
     req_size: Receiver<IT>,
     data: Sender<DT>,
-}
-
-impl<IT: DAMType, DT: DAMType> Cleanable for DRAMReadBundle<IT, DT> {
-    fn cleanup(&mut self) {
-        self.addr.cleanup();
-        self.req_size.cleanup();
-        self.data.cleanup();
-    }
 }
 
 impl<IT: DAMType, DT: Clone> Peekable for DRAMReadBundle<IT, DT> {
@@ -45,20 +40,12 @@ impl<IT: DAMType, DT: Clone> Peekable for DRAMReadBundle<IT, DT> {
     }
 }
 
+/// A Quadruplet of fields used for describing a Write access to a DRAM.
 pub struct DRAMWriteBundle<IT: DAMType, DT: DAMType, AT: Clone> {
     addr: Receiver<IT>,
     request_size: Receiver<IT>,
     data: Receiver<DT>,
     ack: Sender<AT>,
-}
-
-impl<IT: DAMType, DT: DAMType, AT: Clone> Cleanable for DRAMWriteBundle<IT, DT, AT> {
-    fn cleanup(&mut self) {
-        self.addr.cleanup();
-        self.data.cleanup();
-        self.request_size.cleanup();
-        self.ack.cleanup();
-    }
 }
 
 impl<IT: DAMType, DT: DAMType, AT: Clone> Peekable for DRAMWriteBundle<IT, DT, AT> {
@@ -88,18 +75,8 @@ impl<IT: DAMType, DT: DAMType, AT: Clone> Peekable for AccessBundle<IT, DT, AT> 
     }
 }
 
-impl<IT: DAMType, DT: DAMType, AT: Clone> Cleanable for AccessBundle<IT, DT, AT> {
-    fn cleanup(&mut self) {
-        match self {
-            AccessBundle::Write(wr) => wr.cleanup(),
-            AccessBundle::Read(rd) => rd.cleanup(),
-        }
-    }
-}
-
-// The basic DRAM handles scalar addressing
-#[identifiable]
-#[time_managed]
+/// A Basic DRAM bank, which processes overlapping reads and writes but only services one at a time.
+#[context_internal]
 pub struct DRAM<IType: DAMType, T: DAMType, AT: DAMType> {
     config: DRAMConfig,
     datastore: Datastore<T>,
@@ -109,17 +86,18 @@ pub struct DRAM<IType: DAMType, T: DAMType, AT: DAMType> {
 }
 
 impl<IType: DAMType, T: DAMType, AT: DAMType> DRAM<IType, T, AT> {
+    /// Constructs a new DRAM based on a config and its underlying datastore behavior.
     pub fn new(config: DRAMConfig, datastore_behavior: Behavior) -> Self {
         Self {
             config,
             datastore: Datastore::new(config.capacity, datastore_behavior),
             request_windows: VecDeque::<Time>::with_capacity(config.num_simultaneous_requests),
             bundles: vec![],
-            identifier: Identifier::new(),
-            time: Default::default(),
+            context_info: Default::default(),
         }
     }
 
+    /// Fills a DRAM with some function, used for initializing the values.
     pub fn fill(&mut self, mut fill_func: impl FnMut(usize) -> T) {
         for ind in 0..self.config.capacity {
             self.datastore.write(ind, fill_func(ind), Time::new(0));
@@ -136,6 +114,7 @@ impl<I: DAMType, T: DAMType, A: DAMType> DRAM<I, T, A>
 where
     Self: Context,
 {
+    /// Registers a new writer to the DRAM
     pub fn add_writer(&mut self, drw: DRAMWriteBundle<I, T, A>) {
         drw.ack.attach_sender(self);
         drw.addr.attach_receiver(self);
@@ -144,6 +123,7 @@ where
         self.bundles.push(AccessBundle::Write(drw));
     }
 
+    /// Registers a new reader to the DRAM
     pub fn add_reader(&mut self, drr: DRAMReadBundle<I, T>) {
         drr.addr.attach_receiver(self);
         drr.data.attach_sender(self);
@@ -198,23 +178,20 @@ impl<IType: IndexLike, T: DAMType, AT: DAMType> Context for DRAM<IType, T, AT> {
                 None => unreachable!(), // This case should have been caught by the init!
             };
             let prev_transfer_time = self.last_transfer_end_time();
-            match &mut self.bundles[event_id] {
+            match &self.bundles[event_id] {
                 AccessBundle::Write(DRAMWriteBundle {
                     addr,
                     request_size,
                     data,
                     ack,
-                }) => match (
-                    addr.dequeue(&mut self.time),
-                    request_size.dequeue(&mut self.time),
-                ) {
+                }) => match (addr.dequeue(&self.time), request_size.dequeue(&self.time)) {
                     // This should be the only matched case since we waited for the events to show up.
                     (
-                        DequeueResult::Something(ChannelElement {
+                        Ok(ChannelElement {
                             time: t1,
                             data: address,
                         }),
-                        DequeueResult::Something(ChannelElement {
+                        Ok(ChannelElement {
                             time: t2,
                             data: write_size,
                         }),
@@ -228,7 +205,7 @@ impl<IType: IndexLike, T: DAMType, AT: DAMType> Context for DRAM<IType, T, AT> {
                         // DRAM.
                         let mut write_buffer = Vec::<T>::with_capacity(size);
                         for _ in 0..size {
-                            write_buffer.push(dequeue(&mut self.time, data).unwrap().data);
+                            write_buffer.push(data.dequeue(&self.time).unwrap().data);
                         }
 
                         // We can't start this transfer until after the previous transfer finished
@@ -250,9 +227,8 @@ impl<IType: IndexLike, T: DAMType, AT: DAMType> Context for DRAM<IType, T, AT> {
                                 self.datastore.write(start + offset, data, write_time);
                             });
 
-                        enqueue(
-                            &mut self.time,
-                            ack,
+                        ack.enqueue(
+                            &self.time,
                             ChannelElement {
                                 time: write_time + 1,
                                 data: AT::default(),
@@ -270,16 +246,13 @@ impl<IType: IndexLike, T: DAMType, AT: DAMType> Context for DRAM<IType, T, AT> {
                     addr,
                     req_size,
                     data,
-                }) => match (
-                    addr.dequeue(&mut self.time),
-                    req_size.dequeue(&mut self.time),
-                ) {
+                }) => match (addr.dequeue(&self.time), req_size.dequeue(&self.time)) {
                     (
-                        DequeueResult::Something(ChannelElement {
+                        Ok(ChannelElement {
                             time: _,
                             data: address,
                         }),
-                        DequeueResult::Something(ChannelElement {
+                        Ok(ChannelElement {
                             time: _,
                             data: size,
                         }),
@@ -303,7 +276,7 @@ impl<IType: IndexLike, T: DAMType, AT: DAMType> Context for DRAM<IType, T, AT> {
 
                         for out in read_vals {
                             result_time = std::cmp::max(self.time.tick() + 1, result_time + 1);
-                            enqueue(&mut self.time, data, ChannelElement::new(result_time, out))
+                            data.enqueue(&self.time, ChannelElement::new(result_time, out))
                                 .unwrap();
                         }
 
@@ -314,33 +287,21 @@ impl<IType: IndexLike, T: DAMType, AT: DAMType> Context for DRAM<IType, T, AT> {
             }
         }
     }
-
-    #[cleanup(time_managed)]
-    fn cleanup(&mut self) {
-        self.bundles.iter_mut().for_each(|x| x.cleanup());
-    }
 }
 
 #[cfg(test)]
 pub mod tests {
 
     use crate::{
-        channel::{
-            utils::{dequeue, enqueue},
-            ChannelElement, Receiver,
-        },
-        context::{
-            checker_context::CheckerContext, function_context::FunctionContext,
-            generator_context::GeneratorContext,
-        },
-        simulation::Program,
+        channel::{ChannelElement, Receiver},
+        datastructures::Time,
+        simulation::{InitializationOptions, ProgramBuilder, RunOptions},
         templates::{
             datastore::Behavior,
             dram::{DRAMConfig, DRAMReadBundle, DRAMWriteBundle, DRAM},
         },
+        utility_contexts::*,
     };
-
-    use dam_core::time::Time;
 
     #[test]
     fn test_dram_rw() {
@@ -361,7 +322,7 @@ pub mod tests {
             },
         );
 
-        let mut parent = Program::default();
+        let mut parent = ProgramBuilder::default();
         let mut ack_channels = Vec::<Receiver<bool>>::with_capacity(NUM_WRITERS);
 
         (0..NUM_WRITERS).for_each(|split_ind| {
@@ -395,7 +356,7 @@ pub mod tests {
         });
 
         // Create a node that waits for all of the acks to come back, and then issues reads
-        let (mut rd_addr_send, rd_addr_recv) = parent.bounded(128);
+        let (rd_addr_send, rd_addr_recv) = parent.bounded(128);
         let (rd_data_send, rd_data_recv) = parent.bounded(128);
         let (req_size_send, req_size_recv) = parent.bounded(128);
         let mut read_issue = FunctionContext::new();
@@ -405,18 +366,18 @@ pub mod tests {
         rd_addr_send.attach_sender(&read_issue);
         read_issue.set_run(move |time| {
             ack_channels.iter_mut().for_each(|ack| {
-                dequeue(time, ack).unwrap();
+                ack.dequeue(time).unwrap();
             });
             let send_time = time.tick();
-            enqueue(
-                time,
-                &mut rd_addr_send,
-                ChannelElement {
-                    time: send_time,
-                    data: 0,
-                },
-            )
-            .unwrap();
+            rd_addr_send
+                .enqueue(
+                    time,
+                    ChannelElement {
+                        time: send_time,
+                        data: 0,
+                    },
+                )
+                .unwrap();
         });
         parent.add_child(read_issue);
 
@@ -442,8 +403,9 @@ pub mod tests {
 
         dbg!("Finished Setup!");
 
-        parent.init();
-        dbg!("Finished Init!");
-        parent.run();
+        parent
+            .initialize(InitializationOptions::default())
+            .unwrap()
+            .run(RunOptions::default());
     }
 }

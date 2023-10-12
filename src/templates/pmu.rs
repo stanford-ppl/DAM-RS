@@ -1,3 +1,6 @@
+//! An implementation of the Pattern Memory Unit from the Plasticine paper.
+//! Unlike the original PMU, this does not support processing within the pipeline, and so all values must be pre-computed before being sent here.
+
 use std::{
     cmp::max,
     collections::{HashMap, HashSet},
@@ -6,28 +9,27 @@ use std::{
 
 use crate::{
     channel::{
-        utils::{dequeue, enqueue, EventTime, Peekable},
-        ChannelElement, ChannelID, Receiver, Sender,
+        utils::{EventTime, Peekable},
+        ChannelID,
     },
-    context::{self, Context, ExplicitConnections},
-    types::{DAMType, IndexLike},
+    context::{self, Context, ContextSummary, ExplicitConnections, ProxyContext},
+    datastructures::{Identifiable, Identifier, Time, VerboseIdentifier},
+    logging::{copy_log, initialize_log},
+    types::{Cleanable, DAMType, IndexLike},
+    view::{ContextView, ParentView, TimeView, TimeViewable},
 };
 
-use dam_core::{
-    identifier::{Identifiable, Identifier},
-    log_graph::{get_log, with_log_scope, RegistryEvent},
-    metric::NODE,
-    time::Time,
-    ContextView, ParentView, TimeManaged, TimeView, TimeViewable,
-};
-use dam_macros::{cleanup, identifiable, time_managed};
+use crate::context_tools::*;
+use dam_macros::context_internal;
 
 use super::datastore::{self, Behavior, Datastore};
 
-#[identifiable]
+/// A PMU consists of a reader and a writer, which may operate simultaneously.
+/// Each reader and writer can process one request per cycle, but may both be active (to support use-cases such as FIFOs).
 pub struct PMU<T: DAMType, IT: IndexLike, AT: DAMType> {
-    reader: ReadPipeline<T, IT>,
-    writer: WritePipeline<T, IT, AT>,
+    reader: ProxyContext<ReadPipeline<T, IT>>,
+    writer: ProxyContext<WritePipeline<T, IT, AT>>,
+    identifier: Identifier,
 }
 
 impl<T: DAMType, IT: IndexLike, AT: DAMType> Context for PMU<T, IT, AT> {
@@ -37,29 +39,36 @@ impl<T: DAMType, IT: IndexLike, AT: DAMType> Context for PMU<T, IT, AT> {
     }
 
     fn run(&mut self) {
+        let read_log = copy_log();
+        let write_log = copy_log();
         std::thread::scope(|s| {
             s.spawn(|| {
-                with_log_scope(self.reader.id(), self.reader.name(), || {
-                    self.reader.run();
-                    self.reader.cleanup();
-                });
+                if let Some(mut logger) = read_log {
+                    logger.id = self.reader.id();
+                    initialize_log(logger);
+                }
+                self.reader.run();
+                self.reader.cleanup();
             });
             s.spawn(|| {
-                with_log_scope(self.writer.id(), self.writer.name(), || {
-                    self.writer.run();
-                    self.writer.cleanup();
-                });
+                if let Some(mut logger) = write_log {
+                    logger.id = self.writer.id();
+                    initialize_log(logger);
+                }
+                self.writer.run();
+                self.writer.cleanup();
             });
         });
     }
 
-    fn cleanup(&mut self) {} // No-op
-
-    fn child_ids(&self) -> HashMap<Identifier, HashSet<Identifier>> {
-        let mut base: HashMap<Identifier, HashSet<Identifier>> =
-            [(self.id(), [self.reader.id(), self.writer.id()].into())].into();
-        base.extend(self.reader.child_ids());
-        base.extend(self.writer.child_ids());
+    fn ids(&self) -> HashMap<VerboseIdentifier, HashSet<VerboseIdentifier>> {
+        let mut base: HashMap<_, _> = [(
+            self.verbose(),
+            [self.reader.verbose(), self.writer.verbose()].into(),
+        )]
+        .into();
+        base.extend(self.reader.ids());
+        base.extend(self.writer.ids());
         base
     }
 
@@ -78,6 +87,24 @@ impl<T: DAMType, IT: IndexLike, AT: DAMType> Context for PMU<T, IT, AT> {
         }
         Some(result)
     }
+
+    fn summarize(&self) -> context::ContextSummary {
+        ContextSummary {
+            id: self.verbose(),
+            time: self.view(),
+            children: vec![self.reader.summarize(), self.writer.summarize()],
+        }
+    }
+}
+
+impl<T: DAMType, IT: IndexLike, AT: DAMType> Identifiable for PMU<T, IT, AT> {
+    fn id(&self) -> Identifier {
+        self.identifier
+    }
+
+    fn name(&self) -> String {
+        "PMU".to_string()
+    }
 }
 
 impl<T: DAMType, IT: IndexLike, AT: DAMType> TimeViewable for PMU<T, IT, AT> {
@@ -90,6 +117,7 @@ impl<T: DAMType, IT: IndexLike, AT: DAMType> TimeViewable for PMU<T, IT, AT> {
 }
 
 impl<T: DAMType, IT: IndexLike, AT: DAMType> PMU<T, IT, AT> {
+    /// Constructs a new PMU with a given capacity and datastore [Behavior]
     pub fn new(capacity: usize, behavior: Behavior) -> PMU<T, IT, AT> {
         // This could probably somehow be embedded into the PMU instead of being an Arc.
         let datastore = Arc::new(Datastore::new(capacity, behavior));
@@ -98,59 +126,55 @@ impl<T: DAMType, IT: IndexLike, AT: DAMType> PMU<T, IT, AT> {
                 readers: Default::default(),
                 datastore: datastore.clone(),
                 writer_view: None,
-                identifier: Identifier::new(),
-                time: Default::default(),
-            },
+                context_info: Default::default(),
+            }
+            .into(),
             writer: WritePipeline {
                 writers: Default::default(),
                 datastore,
-                identifier: Identifier::new(),
-                time: Default::default(),
-            },
+                context_info: Default::default(),
+            }
+            .into(),
             identifier: Identifier::new(),
         };
         pmu.reader.writer_view = Some(pmu.writer.view());
-        with_log_scope(pmu.id(), pmu.name(), || {
-            let log = &get_log(NODE);
-            log.log(RegistryEvent::WithChild(
-                pmu.id(),
-                pmu.name(),
-                pmu.reader.id(),
-                pmu.reader.name(),
-            ));
-            log.log(RegistryEvent::WithChild(
-                pmu.id(),
-                pmu.name(),
-                pmu.writer.id(),
-                pmu.writer.name(),
-            ));
-        });
+        dbg!(pmu.id());
+        dbg!(pmu.reader.id());
+        dbg!(pmu.writer.id());
 
         pmu
     }
 
+    /// Registers a new reader
     pub fn add_reader(&mut self, reader: PMUReadBundle<T, IT>) {
         self.reader.add_reader(reader);
     }
 
+    /// Registers a new writer
     pub fn add_writer(&mut self, writer: PMUWriteBundle<T, IT, AT>) {
         self.writer.add_writer(writer);
     }
 }
 
+/// Represents a reader, which receives addresses and writes out the data at the address.
 pub struct PMUReadBundle<T: Clone, IT: Clone> {
+    /// An input stream consisting of addresses to read from.
     pub addr: Receiver<IT>,
+    /// An output stream which will hold addresses.
     pub resp: Sender<T>,
 }
 
+/// Represents a writer, which sends in addresses and data, receiving an acknowledgement after the write is processed.
 pub struct PMUWriteBundle<T: Clone, IT: Clone, AT: Clone> {
+    /// The write address
     pub addr: Receiver<IT>,
+    /// The data to be written
     pub data: Receiver<T>,
+    /// The acknowledgement channel, which is written to each time a write is successfully processed.
     pub ack: Sender<AT>,
 }
 
-#[identifiable]
-#[time_managed]
+#[context_internal]
 struct ReadPipeline<T, IT>
 where
     T: DAMType,
@@ -174,7 +198,7 @@ where
 
     fn await_writer(&mut self) -> Time {
         self.writer_view
-            .as_mut()
+            .as_ref()
             .unwrap()
             .wait_until(self.time.tick())
     }
@@ -202,9 +226,9 @@ impl<T: DAMType, IT: IndexLike> Context for ReadPipeline<T, IT> {
                 Some((ind, time)) => (ind, time),
             };
             match event_time {
-                EventTime::Ready(time) => self.time_manager_mut().advance(*time),
+                EventTime::Ready(time) => self.time.advance(*time),
                 EventTime::Nothing(time) => {
-                    self.time_manager_mut().advance(*time + 1);
+                    self.time.advance(*time + 1);
                     continue;
                 }
                 EventTime::Closed => unreachable!(),
@@ -213,30 +237,22 @@ impl<T: DAMType, IT: IndexLike> Context for ReadPipeline<T, IT> {
             // so the subsequent dequeue shouldn't actually change the tick time.
             let _ = self.await_writer();
             // At this point, we have advanced to the time of the ready!
-            let deq_reader = self.readers.get_mut(event_ind).unwrap();
-            let elem = dequeue(&mut self.time, &mut deq_reader.addr).unwrap();
+            let deq_reader = self.readers.get(event_ind).unwrap();
+            let elem = deq_reader.addr.dequeue(&self.time).unwrap();
 
             let addr: usize = elem.data.to_usize();
             let cur_time = self.time.tick();
             let rv = self.datastore.read(addr, cur_time);
-            enqueue(
-                &mut self.time,
-                &mut deq_reader.resp,
-                ChannelElement::new(cur_time, rv),
-            )
-            .unwrap();
-            self.time_manager_mut().incr_cycles(1);
+            deq_reader
+                .resp
+                .enqueue(&self.time, ChannelElement::new(cur_time, rv))
+                .unwrap();
+            self.time.incr_cycles(1);
         }
-    }
-
-    #[cleanup(time_managed)]
-    fn cleanup(&mut self) {
-        self.readers.clear();
     }
 }
 
-#[identifiable]
-#[time_managed]
+#[context_internal]
 struct WritePipeline<T: DAMType, IT: DAMType, AT: DAMType> {
     writers: Vec<PMUWriteBundle<T, IT, AT>>,
     datastore: Arc<Datastore<T>>,
@@ -288,27 +304,20 @@ impl<T: DAMType, IT: IndexLike, AT: DAMType> Context for WritePipeline<T, IT, AT
                 EventTime::Closed => unreachable!(),
             }
 
-            let deq_writer = self.writers.get_mut(event_ind).unwrap();
-            let addr_elem = dequeue(&mut self.time, &mut deq_writer.addr).unwrap();
-            let data_elem = dequeue(&mut self.time, &mut deq_writer.data).unwrap();
+            let deq_writer = self.writers.get(event_ind).unwrap();
+            let addr_elem = deq_writer.addr.dequeue(&self.time).unwrap();
+            let data_elem = deq_writer.data.dequeue(&self.time).unwrap();
 
             let addr: usize = addr_elem.data.to_usize();
             let cur_time = self.time.tick();
             self.datastore.write(addr, data_elem.data, self.time.tick());
-            enqueue(
-                &mut self.time,
-                &mut deq_writer.ack,
-                ChannelElement::new(cur_time, AT::default()),
-            )
-            .unwrap();
+            deq_writer
+                .ack
+                .enqueue(&self.time, ChannelElement::new(cur_time, AT::default()))
+                .unwrap();
 
             self.time.incr_cycles(1);
         }
-    }
-
-    #[cleanup(time_managed)]
-    fn cleanup(&mut self) {
-        self.writers.clear();
     }
 }
 
@@ -316,19 +325,13 @@ impl<T: DAMType, IT: IndexLike, AT: DAMType> Context for WritePipeline<T, IT, AT
 mod tests {
 
     use crate::{
-        channel::{
-            utils::{dequeue, enqueue},
-            ChannelElement,
-        },
-        context::{
-            checker_context::CheckerContext, function_context::FunctionContext,
-            generator_context::GeneratorContext,
-        },
-        simulation::Program,
+        channel::ChannelElement,
+        simulation::*,
         templates::{
             datastore::Behavior,
             pmu::{PMUReadBundle, PMUWriteBundle},
         },
+        utility_contexts::*,
     };
 
     use super::PMU;
@@ -336,7 +339,7 @@ mod tests {
     #[test]
     fn simple_pmu_test() {
         const TEST_SIZE: usize = 1024 * 64;
-        let mut parent = Program::default();
+        let mut parent = ProgramBuilder::default();
         const CHAN_SIZE: usize = TEST_SIZE;
 
         let mut pmu = PMU::<u16, u16, bool>::new(
@@ -349,7 +352,7 @@ mod tests {
 
         let (wr_addr_send, wr_addr_recv) = parent.bounded(CHAN_SIZE);
         let (wr_data_send, wr_data_recv) = parent.bounded(CHAN_SIZE);
-        let (wr_ack_send, mut wr_ack_recv) = parent.bounded(CHAN_SIZE);
+        let (wr_ack_send, wr_ack_recv) = parent.bounded(CHAN_SIZE);
 
         let write_addr_gen = GeneratorContext::new(
             move || (0..TEST_SIZE).map(|x| u16::try_from(x).unwrap()),
@@ -370,7 +373,7 @@ mod tests {
             ack: wr_ack_send,
         });
 
-        let (mut rd_addr_send, rd_addr_recv) = parent.bounded(CHAN_SIZE);
+        let (rd_addr_send, rd_addr_recv) = parent.bounded(CHAN_SIZE);
         let (rd_data_send, rd_data_recv) = parent.bounded(CHAN_SIZE);
         pmu.add_reader(PMUReadBundle {
             addr: rd_addr_recv,
@@ -382,17 +385,17 @@ mod tests {
         rd_addr_send.attach_sender(&rd_addr_gen);
         rd_addr_gen.set_run(move |time| {
             for ind in 0..TEST_SIZE {
-                dequeue(time, &mut wr_ack_recv).unwrap();
+                wr_ack_recv.dequeue(time).unwrap();
                 let send_time = time.tick();
-                enqueue(
-                    time,
-                    &mut rd_addr_send,
-                    ChannelElement {
-                        time: send_time,
-                        data: u16::try_from(ind).unwrap(),
-                    },
-                )
-                .unwrap();
+                rd_addr_send
+                    .enqueue(
+                        time,
+                        ChannelElement {
+                            time: send_time,
+                            data: u16::try_from(ind).unwrap(),
+                        },
+                    )
+                    .unwrap();
             }
         });
 
@@ -405,13 +408,30 @@ mod tests {
         parent.add_child(checker);
 
         parent.add_child(pmu);
-        parent.init();
-        parent.run();
-        parent.print_graph();
-        let finish_time = parent.elapsed_cycles();
-        dbg!(finish_time);
-        // dbg!(finish_time);
-        // assert!(finish_time.is_infinite());
-        // assert_eq!(finish_time.time(), u64::try_from(TEST_SIZE).unwrap() + 1);
+        let initialized = parent.initialize(InitializationOptions::default()).unwrap();
+        #[cfg(feature = "dot")]
+        println!("{}", initialized.to_dot_string());
+
+        let run_options = RunOptionsBuilder::default().log_filter(LogFilterKind::Blanket(
+            crate::logging::LogFilter::Some(["TimeEvent".to_string()].into()),
+        ));
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "test-log-mongo")] {
+                let run_options = run_options.logging(LoggingOptions::Mongo(
+                    MongoOptionsBuilder::default()
+                        .db("pmu_log".to_string())
+                        .uri("mongodb://127.0.0.1:27017".to_string())
+                        .build()
+                        .unwrap(),
+                ));
+            }
+        }
+
+        let summary = initialized.run(run_options.build().unwrap());
+        dbg!(summary.elapsed_cycles());
+        #[cfg(feature = "dot")]
+        {
+            println!("{}", summary.to_dot_string());
+        }
     }
 }

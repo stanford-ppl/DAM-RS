@@ -1,34 +1,28 @@
-use dam_core::identifier::Identifier;
-use dam_macros::{cleanup, identifiable, time_managed};
+use dam_macros::context_internal;
 
 use crate::{
-    channel::{
-        utils::{dequeue, enqueue},
-        Receiver, Sender,
-    },
-    types::{Cleanable, DAMType},
+    channel::{Receiver, Sender},
+    types::DAMType,
 };
 
-use super::Context;
+use crate::context::Context;
 
-#[time_managed]
-#[identifiable]
+/// Since DAM channels are single-producer single-consumer, Broadcasts can be used to send from a single channel to multiple channels.
+#[context_internal]
 pub struct BroadcastContext<T: Clone> {
     receiver: Receiver<T>,
     targets: Vec<Sender<T>>,
 }
 
 impl<T: DAMType> Context for BroadcastContext<T> {
-    fn init(&mut self) {} // No-op
-
     fn run(&mut self) {
         loop {
-            let value = dequeue(&mut self.time, &mut self.receiver);
+            let value = self.receiver.dequeue(&self.time);
             match value {
                 Ok(mut data) => {
                     data.time = self.time.tick() + 1;
-                    self.targets.iter_mut().for_each(|target| {
-                        enqueue(&mut self.time, target, data.clone()).unwrap();
+                    self.targets.iter().for_each(|target| {
+                        target.enqueue(&self.time, data.clone()).unwrap();
                     });
                     self.time.incr_cycles(1);
                 }
@@ -36,27 +30,21 @@ impl<T: DAMType> Context for BroadcastContext<T> {
             }
         }
     }
-
-    #[cleanup(time_managed)]
-    fn cleanup(&mut self) {
-        self.receiver.cleanup();
-        self.targets.iter_mut().for_each(|target| target.cleanup());
-    }
 }
 
 impl<T: DAMType> BroadcastContext<T> {
+    /// Sets up a broadcast context with an empty target list.
     pub fn new(receiver: Receiver<T>) -> Self {
         let x = Self {
             receiver,
             targets: vec![],
-
-            identifier: Identifier::new(),
-            time: Default::default(),
+            context_info: Default::default(),
         };
         x.receiver.attach_receiver(&x);
         x
     }
 
+    /// Registers a target for the broadcast
     pub fn add_target(&mut self, target: Sender<T>) {
         target.attach_sender(self);
         self.targets.push(target);
@@ -69,15 +57,15 @@ mod tests {
     use super::BroadcastContext;
 
     use crate::{
-        context::{checker_context::CheckerContext, generator_context::GeneratorContext},
-        simulation::Program,
+        simulation::{InitializationOptions, ProgramBuilder, RunOptions},
+        utility_contexts::{CheckerContext, GeneratorContext},
     };
 
     #[test]
     fn test_broadcast() {
         let test_size = 32;
         let num_checkers = 256;
-        let mut parent = Program::default();
+        let mut parent = ProgramBuilder::default();
         let (init_send, init_recv) = parent.bounded(8);
 
         let generator = GeneratorContext::new(move || (0..test_size), init_send);
@@ -89,7 +77,7 @@ mod tests {
             .map(|_| {
                 let (send, recv) = parent.bounded(8);
                 broadcast.add_target(send);
-                
+
                 CheckerContext::new(move || 0..test_size, recv)
             })
             .collect();
@@ -99,7 +87,9 @@ mod tests {
             .for_each(|checker| parent.add_child(checker));
         parent.add_child(broadcast);
 
-        parent.init();
-        parent.run();
+        parent
+            .initialize(InitializationOptions::default())
+            .unwrap()
+            .run(RunOptions::default());
     }
 }

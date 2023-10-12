@@ -1,4 +1,9 @@
+//! Channels in DAM are Single-Producer Single-Consumer (SPSC) constructs, and are the primary form of communication between [super::context::Context]s.
+//! Blocking operations automatically handle time manipulation when used with blocking operations such as dequeue and enqueue.
+
 mod channel_id;
+
+/// Utility functions and constructs for interacting with channels.
 pub mod utils;
 pub use channel_id::*;
 
@@ -6,110 +11,124 @@ mod events;
 
 mod flavors;
 
-pub use flavors::*;
+pub(crate) use flavors::*;
 
-pub mod channel_spec;
+pub(crate) mod channel_spec;
 mod receiver;
 mod sender;
 
 pub(crate) mod handle;
 
 use std::sync::Arc;
+use thiserror::Error;
 
 use crate::context::Context;
-use crate::types::Cleanable;
-use crate::types::DAMType;
-use dam_core::*;
 
-use dam_core::time::Time;
-use dam_macros::log_producer;
+use crate::datastructures::Time;
+use crate::logging::log_event;
+use crate::types::DAMType;
+use crate::view::TimeManager;
 
 use self::events::ReceiverEvent;
 use self::events::SendEvent;
 use self::handle::ChannelData;
 use self::handle::ChannelHandle;
-use self::receiver::terminated::TerminatedReceiver;
 
+use self::receiver::terminated::TerminatedReceiver;
 use self::receiver::{ReceiverFlavor, ReceiverImpl};
 use self::sender::terminated::TerminatedSender;
-use dam_core::metric::LogProducer;
 
 use self::sender::{SenderFlavor, SenderImpl};
 
+/// An item with an associated timestamp -- used for sending/receiving objects on channels and modifying contexts' owned times.
 #[derive(Clone, Debug)]
 pub struct ChannelElement<T> {
+    /// The element's timestamp
     pub time: Time,
+    /// The contained data
     pub data: T,
 }
 
-impl<T: Clone> ChannelElement<T> {
+impl<T> ChannelElement<T> {
+    // TODO: Is this actually necessary?
+    /// Constructs a new timestamp.
     pub fn new(time: Time, data: T) -> ChannelElement<T> {
         ChannelElement { time, data }
     }
-}
 
-impl<T> ChannelElement<T> {
+    /// Updates the timestamp with a later timestamp. This is used for emulating stalls.
     pub fn update_time(&mut self, new_time: Time) {
         self.time = std::cmp::max(self.time, new_time);
     }
 }
 
+/// The result of a Peek operation
 #[derive(Clone, Debug)]
 pub enum PeekResult<T> {
+    /// We found an element. Note: The timestamp MAY be in the future.
     Something(ChannelElement<T>),
+
+    /// Nothing was available at a particular time -- also serves as proof that no element will arrive prior to or at the timestamp.
     Nothing(Time),
+
+    /// Channel was closed. Roughly equivalent to Nothing(Infinity)
     Closed,
 }
 
-#[derive(Clone, Debug)]
-pub enum DequeueResult<T> {
-    Something(ChannelElement<T>),
-    Closed,
-}
-
-impl<T> TryInto<DequeueResult<T>> for PeekResult<T> {
+impl<T> TryInto<Result<ChannelElement<T>, DequeueError>> for PeekResult<T> {
     type Error = ();
 
-    fn try_into(self) -> Result<DequeueResult<T>, Self::Error> {
+    fn try_into(self) -> Result<Result<ChannelElement<T>, DequeueError>, Self::Error> {
         match self {
-            PeekResult::Something(data) => Ok(DequeueResult::Something(data)),
+            PeekResult::Something(data) => Ok(Ok(data)),
             PeekResult::Nothing(_) => Err(()),
-            PeekResult::Closed => Ok(DequeueResult::Closed),
+            PeekResult::Closed => Ok(Err(DequeueError::Closed)),
         }
     }
 }
 
-#[log_producer]
+/// The send side of a channel, modelled after std::mpsc, crossbeam, and the like.
 pub struct Sender<T: Clone> {
     pub(crate) underlying: Arc<ChannelData<T>>,
 }
 
 impl<T: DAMType> Sender<T> {
+    /// Gets the ID of the channel.
     pub fn id(&self) -> ChannelID {
         self.underlying.id()
     }
 
+    /// Registers a context for the sender.
     pub fn attach_sender(&self, sender: &dyn Context) {
-        // Self::log(SendEvent::AttachSender(self.id, sender.id()));
+        // log_event(&{SendEvent::AttachSender(self.id, sender.id())});
         if let SenderImpl::Uninitialized(uninit) = self.under() {
             uninit.attach_sender(sender);
         } else {
             panic!("Cannot attach a context to an initialized sender!");
         }
     }
+
+    /// Writes to a channel. This will error if the receive side has already been closed.
     pub fn enqueue(
-        &mut self,
-        manager: &mut TimeManager,
+        &self,
+        manager: &TimeManager,
         data: ChannelElement<T>,
     ) -> Result<(), EnqueueError> {
-        Self::log(SendEvent::EnqueueStart(self.id()));
+        log_event(&SendEvent::EnqueueStart(self.id())).unwrap();
         let res = self.under().enqueue(manager, data);
-        Self::log(SendEvent::EnqueueFinish(self.id()));
+        log_event(&SendEvent::EnqueueFinish(self.id())).unwrap();
         res
     }
 
+    /// Advances time forward until the channel is not full.
     pub fn wait_until_available(&mut self, manager: &mut TimeManager) -> Result<(), EnqueueError> {
         self.under().wait_until_available(manager)
+    }
+}
+
+impl<T: Clone> Drop for Sender<T> {
+    fn drop(&mut self) {
+        *self.under() = TerminatedSender::default().into();
     }
 }
 
@@ -119,30 +138,20 @@ impl<T: Clone> Sender<T> {
     }
 }
 
-impl<T: Clone> Cleanable for Sender<T> {
-    fn cleanup(&mut self) {
-        *self.under() = TerminatedSender::default().into()
-        // Self::log(SendEvent::Cleanup(self.id));
-    }
-}
-impl<T: Clone> Drop for Sender<T> {
-    fn drop(&mut self) {
-        self.cleanup();
-    }
-}
-
-#[log_producer]
+/// The receive side of a channel, modelled after std::mpsc, crossbeam, and the like.
 pub struct Receiver<T: Clone> {
     pub(crate) underlying: Arc<ChannelData<T>>,
 }
 
 impl<T: DAMType> Receiver<T> {
+    /// Gets the ID of the channel.
     pub fn id(&self) -> ChannelID {
         self.underlying.id()
     }
 
+    /// Registers a context for the receiver.
     pub fn attach_receiver(&self, receiver: &dyn Context) {
-        Self::log(ReceiverEvent::AttachReceiver(self.id(), receiver.id()));
+        log_event(&ReceiverEvent::AttachReceiver(self.id(), receiver.id())).unwrap();
         if let ReceiverImpl::Uninitialized(recv) = self.under() {
             recv.attach_receiver(receiver);
         } else {
@@ -150,55 +159,55 @@ impl<T: DAMType> Receiver<T> {
         }
     }
 
-    pub fn peek(&mut self) -> PeekResult<T> {
-        Self::log(ReceiverEvent::Peek(self.id()));
+    /// Peeks the channel. Note: It is possible to see a value in the future when peeking, as noted by [PeekResult].
+    pub fn peek(&self) -> PeekResult<T> {
+        log_event(&ReceiverEvent::Peek(self.id())).unwrap();
         self.under().peek()
     }
-    pub fn peek_next(&mut self, manager: &mut TimeManager) -> DequeueResult<T> {
-        Self::log(ReceiverEvent::PeekNextStart(self.id()));
+
+    /// Advances forward in time until there is an element in the channel, and returns that value.
+    /// If the channel is closed before another element is sent, then it returns a DequeueError instead.
+    pub fn peek_next(&self, manager: &TimeManager) -> Result<ChannelElement<T>, DequeueError> {
+        log_event(&ReceiverEvent::PeekNextStart(self.id())).unwrap();
         let result = self.under().peek_next(manager);
-        Self::log(ReceiverEvent::PeekNextFinish(self.id()));
+        log_event(&ReceiverEvent::PeekNextFinish(self.id())).unwrap();
         result
     }
 
-    pub fn dequeue(&mut self, manager: &mut TimeManager) -> DequeueResult<T> {
-        Self::log(ReceiverEvent::DequeueStart(self.id()));
+    /// Advances forward in time until there is an element in the channel, and pops that value.
+    /// If the channel is closed before another element is sent, then it returns a DequeueError instead.
+    pub fn dequeue(&self, manager: &TimeManager) -> Result<ChannelElement<T>, DequeueError> {
+        log_event(&ReceiverEvent::DequeueStart(self.id())).unwrap();
         let result = self.under().dequeue(manager);
-        Self::log(ReceiverEvent::DequeueFinish(self.id()));
+        log_event(&ReceiverEvent::DequeueFinish(self.id())).unwrap();
         result
     }
 }
 
-impl<T: DAMType> Cleanable for Receiver<T> {
-    fn cleanup(&mut self) {
-        Self::log(ReceiverEvent::Cleanup(self.id()));
-        *self.under() = ReceiverImpl::Terminated(TerminatedReceiver {});
-    }
-}
-
-impl<T: DAMType> Receiver<T> {
+impl<T: Clone> Receiver<T> {
     fn under(&self) -> &mut ReceiverImpl<T> {
         self.underlying.receiver()
     }
 }
 
-#[derive(Debug)]
-pub struct DequeueError {}
-
-impl std::error::Error for DequeueError {}
-
-impl std::fmt::Display for DequeueError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Attempted to dequeue from simulation-closed channel!")
+impl<T: Clone> Drop for Receiver<T> {
+    fn drop(&mut self) {
+        *self.under() = TerminatedReceiver::default().into();
     }
 }
 
-#[derive(Debug)]
-pub struct EnqueueError {}
-impl std::error::Error for EnqueueError {}
+/// Errors that can occur when dequeueing from a channel.
+#[derive(Error, Debug)]
+pub enum DequeueError {
+    /// Marks that the channel was closed without any further values.
+    #[error("Dequeued from a simulation-closed channel!")]
+    Closed,
+}
 
-impl std::fmt::Display for EnqueueError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Attempted to enqueue to a simulation-closed channel!")
-    }
+/// Errors that can occur when enqueueing into a channel.
+#[derive(Error, Debug)]
+pub enum EnqueueError {
+    /// Marks that the channel was closed without any further values.
+    #[error("Enqueued to a simulation-closed channel!")]
+    Closed,
 }

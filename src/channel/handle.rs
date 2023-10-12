@@ -5,7 +5,8 @@
 use std::sync::Arc;
 
 use crossbeam::channel;
-use dam_core::{identifier::Identifier, sync_unsafe::SyncUnsafeCell, time::Time};
+
+use crate::datastructures::{sync_unsafe::SyncUnsafeCell, Identifier, Time};
 
 use super::{
     channel_spec::ChannelSpec,
@@ -70,7 +71,6 @@ impl<T: Clone> ChannelHandle for ChannelData<T> {
                 let (tx, rx) = channel::bounded::<ChannelElement<T>>(capacity);
                 let (resp_t, resp_r) = channel::bounded::<Time>(capacity);
                 match flavor {
-                    ChannelFlavor::Unknown => panic!("Cannot set flavor to unknown!"),
                     ChannelFlavor::Acyclic => {
                         *self.sender() = BoundedAcyclicSender {
                             data: make_sender_data(tx),
@@ -110,7 +110,6 @@ impl<T: Clone> ChannelHandle for ChannelData<T> {
             None => {
                 //
                 match flavor {
-                    ChannelFlavor::Unknown => panic!("Cannot set flavor to unknown!"),
                     ChannelFlavor::Acyclic => {
                         let (snd, rcv) = channel::unbounded();
 

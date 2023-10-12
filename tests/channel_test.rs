@@ -1,9 +1,8 @@
 #[cfg(test)]
 mod tests {
 
-    use dam_rs::{
-        channel::ChannelElement, context::function_context::FunctionContext, simulation::Program,
-    };
+    use dam::{channel::ChannelElement, simulation::*, utility_contexts::FunctionContext};
+
     use rand::Rng;
 
     // The tests will take TEST_SIZE * MAX_MS_SLEEP / 2 on average.
@@ -31,9 +30,9 @@ mod tests {
     }
 
     fn run_channel_test(test_size: i32, flavor_inference: bool, capacity: Option<usize>) {
-        let mut ctx = Program::default();
+        let mut ctx = ProgramBuilder::default();
 
-        let (mut snd, mut rcv) = match capacity {
+        let (snd, rcv) = match capacity {
             Some(cap) => ctx.bounded(cap),
             None => ctx.unbounded(),
         };
@@ -63,10 +62,10 @@ mod tests {
             for iter in 0..test_size {
                 std::thread::sleep(std::time::Duration::from_millis(rng.gen_range(0..=100)));
                 match rcv.dequeue(time) {
-                    dam_rs::channel::DequeueResult::Something(ChannelElement { time: _, data }) => {
+                    Ok(ChannelElement { time: _, data }) => {
                         assert_eq!(data, iter);
                     }
-                    dam_rs::channel::DequeueResult::Closed => {
+                    Err(_) => {
                         panic!("Premature termination of channel")
                     }
                 }
@@ -75,8 +74,20 @@ mod tests {
         });
         ctx.add_child(receiver);
 
-        ctx.set_inference(flavor_inference);
-        ctx.init();
-        ctx.run();
+        #[allow(unused)]
+        let summary = ctx
+            .initialize(
+                InitializationOptionsBuilder::default()
+                    .run_flavor_inference(flavor_inference)
+                    .build()
+                    .unwrap(),
+            )
+            .unwrap()
+            .run(RunOptions::default());
+
+        #[cfg(feature = "dot")]
+        {
+            println!("{}", summary.to_dot_string());
+        }
     }
 }

@@ -1,32 +1,48 @@
+//! An implementation of a simple multi-stage processing pipeline, named after the Pattern Compute Units from Plasticine.
+
 use crate::{
-    channel::{
-        utils::{dequeue, enqueue},
-        ChannelElement, Receiver, Sender,
-    },
+    channel::{ChannelElement, Receiver, Sender},
     context::Context,
-    types::{Cleanable, DAMType},
+    datastructures::Time,
+    types::DAMType,
+    view::TimeManager,
 };
 
 use super::ops::{ALUOp, PipelineRegister};
-use dam_core::{identifier::Identifier, time::Time, TimeManager};
-use dam_macros::{cleanup, identifiable, time_managed};
+use dam_macros::context_internal;
 
-#[derive(Debug)]
+/// The configuration for a specific PCU.
+/// Each PCU can have its own configuration
+#[derive(Debug, Copy, Clone)]
 pub struct PCUConfig {
+    /// The number of stages in the PCU
     pub pipeline_depth: usize,
+
+    /// The number of registers per stage.
     pub num_registers: usize,
 }
 
+/// A single pipeline stage inside a PCU
 #[derive(Debug)]
 pub struct PipelineStage<ET> {
+    /// The operation to perform in that stage
     pub op: ALUOp<ET>,
+
+    /// Register values to be forwarded from the input registers
     pub forward: Vec<(usize, usize)>,
+
+    /// Register values that need to be read and passed into the operation from the previous layer of registers
     pub prev_register_ids: Vec<usize>,
+
+    /// Register values which need to be read from the next layer of registers.
     pub next_register_ids: Vec<usize>,
+
+    /// The output registers for the operation.
     pub output_register_ids: Vec<usize>,
 }
 
 impl<ET: DAMType> PipelineStage<ET> {
+    /// Executes the PipelineStage given the previous registers and the next registers.
     pub fn run(
         &self,
         prev_registers: &[PipelineRegister<ET>],
@@ -67,20 +83,17 @@ impl<ET: DAMType> PipelineStage<ET> {
 type InputChannelsType<ElementType> = Vec<Receiver<ElementType>>;
 type OutputChannelsType<ElementType> = Vec<Sender<ElementType>>;
 type IngressOpType<ElementType> = fn(
-    &mut InputChannelsType<ElementType>,
+    &InputChannelsType<ElementType>,
     &mut Vec<PipelineRegister<ElementType>>,
-    &mut TimeManager,
+    &TimeManager,
 ) -> bool;
 
-type EgressOpType<ElementType> = fn(
-    &mut OutputChannelsType<ElementType>,
-    &Vec<PipelineRegister<ElementType>>,
-    Time,
-    &mut TimeManager,
-);
+type EgressOpType<ElementType> =
+    fn(&OutputChannelsType<ElementType>, &Vec<PipelineRegister<ElementType>>, Time, &TimeManager);
 
-#[time_managed]
-#[identifiable]
+/// The basic PCU structure from the Plasticine paper.
+/// The PCU is an N-stage pipeline with M registers per stage.
+#[context_internal]
 pub struct PCU<ElementType: Clone> {
     configuration: PCUConfig,
     registers: Vec<Vec<PipelineRegister<ElementType>>>,
@@ -97,6 +110,7 @@ pub struct PCU<ElementType: Clone> {
 }
 
 impl<ElementType: DAMType> PCU<ElementType> {
+    /// Constructs a PCU given a configuration, and its input/output behaviors.
     pub fn new(
         configuration: PCUConfig,
         ingress_op: IngressOpType<ElementType>,
@@ -117,48 +131,55 @@ impl<ElementType: DAMType> PCU<ElementType> {
             output_channels: vec![],
             ingress_op,
             egress_op,
-            time: Default::default(),
-            identifier: Identifier::new(),
+            context_info: Default::default(),
         }
     }
 
+    /// A Basic ingress implementation which reads all input channels, and terminates if any inputs are closed.
     pub const READ_ALL_INPUTS: IngressOpType<ElementType> = |ics, regs, time| {
-        let mut reads: Vec<_> = ics.iter_mut().map(|recv| dequeue(time, recv)).collect();
+        ics.iter().for_each(|recv| {
+            let _ = recv.peek_next(time);
+        });
+        let reads: Vec<_> = ics.iter().map(|recv| recv.dequeue(time)).collect();
 
-        for (ind, read) in reads.iter_mut().enumerate() {
-            if read.is_err() {
-                return false;
+        for (ind, read) in reads.into_iter().enumerate() {
+            match read {
+                Ok(data) => regs[ind].data = data.data,
+                Err(_) => return false,
             }
-            regs[ind].data = read.as_ref().unwrap().data.clone();
         }
 
         true
     };
 
+    /// Writes out `register[i]` into `channel[i]` for all output channels.
     pub const WRITE_ALL_RESULTS: EgressOpType<ElementType> = |ocs, regs, out_time, manager| {
-        ocs.iter_mut().enumerate().for_each(|(ind, out_chan)| {
-            enqueue(
-                manager,
-                out_chan,
-                ChannelElement {
-                    time: out_time,
-                    data: regs[ind].data.clone(),
-                },
-            )
-            .unwrap();
+        ocs.iter().enumerate().for_each(|(ind, out_chan)| {
+            out_chan
+                .enqueue(
+                    manager,
+                    ChannelElement {
+                        time: out_time,
+                        data: regs[ind].data.clone(),
+                    },
+                )
+                .unwrap();
         });
     };
 
+    /// Appends another stage to the PCU. Unfilled stages are no-ops and forward all of their values.
     pub fn push_stage(&mut self, stage: PipelineStage<ElementType>) {
         self.stages.push(stage);
         assert!(self.stages.len() <= self.configuration.pipeline_depth);
     }
 
+    /// Registers an input channel
     pub fn add_input_channel(&mut self, recv: Receiver<ElementType>) {
         recv.attach_receiver(self);
         self.input_channels.push(recv);
     }
 
+    /// Registers an output channel
     pub fn add_output_channel(&mut self, send: Sender<ElementType>) {
         send.attach_sender(self);
         self.output_channels.push(send);
@@ -171,13 +192,13 @@ impl<ElementType: DAMType> Context for PCU<ElementType> {
     fn run(&mut self) {
         loop {
             // Run the entire pipeline from front to back
-            if !(self.ingress_op)(
-                &mut self.input_channels,
-                &mut self.registers[0],
-                &mut self.time,
-            ) {
+
+            // We temporarily move the first registers out to avoid a mutable/immutable borrow conflict on self.
+            let mut tmp_regs = std::mem::take(&mut self.registers[0]);
+            if !(self.ingress_op)(&self.input_channels, &mut tmp_regs, &self.time) {
                 return;
             }
+            self.registers[0] = tmp_regs;
 
             for stage_index in 0..self.configuration.pipeline_depth {
                 match self.stages.get(stage_index) {
@@ -195,41 +216,27 @@ impl<ElementType: DAMType> Context for PCU<ElementType> {
 
             // Need to provide a notion of time as to when this result is ready.
             (self.egress_op)(
-                &mut self.output_channels,
-                &mut self.registers[self.configuration.pipeline_depth],
+                &self.output_channels,
+                &self.registers[self.configuration.pipeline_depth],
                 self.time.tick() + Time::new(latency),
-                &mut self.time,
+                &self.time,
             );
             self.time.incr_cycles(1);
         }
-    }
-
-    #[cleanup(time_managed)]
-    fn cleanup(&mut self) {
-        self.input_channels.iter_mut().for_each(|chan| {
-            chan.cleanup();
-        });
-        self.output_channels.iter_mut().for_each(|chan| {
-            chan.cleanup();
-        });
     }
 }
 
 #[cfg(test)]
 mod tests {
 
-    use crate::{
-        context::{checker_context::CheckerContext, generator_context::GeneratorContext},
-        simulation::Program,
-        templates::ops::*,
-    };
+    use crate::{simulation::*, templates::ops::*, utility_contexts::*};
 
     use super::PCU;
 
     #[test]
     fn pcu_test() {
         // two-stage PCU on scalars, with the third stage a no-op.
-        let mut parent = Program::default();
+        let mut parent = ProgramBuilder::default();
 
         const CHAN_SIZE: usize = 8;
         let ingress_op = PCU::<u16>::READ_ALL_INPUTS;
@@ -271,13 +278,13 @@ mod tests {
         pcu.add_output_channel(pcu_out_send);
 
         let gen1 = GeneratorContext::new(|| (0u16..32), arg1_send);
-        let gen2 = GeneratorContext::new(|| (33u16..64), arg2_send);
-        let gen3 = GeneratorContext::new(|| (65u16..96), arg3_send);
+        let gen2 = GeneratorContext::new(|| (32u16..64), arg2_send);
+        let gen3 = GeneratorContext::new(|| (64u16..96), arg3_send);
         let checker = CheckerContext::new(
             || {
                 (0u16..32)
-                    .zip(33u16..64)
-                    .zip(65u16..96)
+                    .zip(32u16..64)
+                    .zip(64u16..96)
                     .map(|((a, b), c)| (a * b) + c)
             },
             pcu_out_recv,
@@ -288,7 +295,9 @@ mod tests {
         parent.add_child(gen3);
         parent.add_child(pcu);
         parent.add_child(checker);
-        parent.init();
-        parent.run();
+        parent
+            .initialize(InitializationOptionsBuilder::default().build().unwrap())
+            .unwrap()
+            .run(RunOptions::default());
     }
 }

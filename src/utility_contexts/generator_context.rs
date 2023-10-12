@@ -1,15 +1,12 @@
-use dam_core::identifier::Identifier;
-use dam_macros::{cleanup, identifiable, time_managed};
+use dam_macros::context_internal;
 
-use crate::{
-    channel::{utils::enqueue, ChannelElement, Sender},
-    types::{Cleanable, DAMType},
-};
+use crate::context_tools::*;
 
-use super::Context;
+use crate::context::Context;
 
-#[identifiable]
-#[time_managed]
+/// A context which writes to a channel with elements taken from an iterator.
+/// This is used for sending pre-defined values, or for reading from files.
+#[context_internal]
 pub struct GeneratorContext<T: Clone, IType, FType>
 where
     IType: Iterator<Item = T>,
@@ -30,22 +27,14 @@ where
         if let Some(func) = self.iterator.take() {
             for val in (func)() {
                 let current_time = self.time.tick();
-                enqueue(
-                    &mut self.time,
-                    &mut self.output,
-                    ChannelElement::new(current_time, val),
-                )
-                .unwrap();
+                self.output
+                    .enqueue(&self.time, ChannelElement::new(current_time + 1, val))
+                    .unwrap();
                 self.time.incr_cycles(1);
             }
         } else {
             panic!("Can't run a generator twice!");
         }
-    }
-
-    #[cleanup(time_managed)]
-    fn cleanup(&mut self) {
-        self.output.cleanup();
     }
 }
 
@@ -54,12 +43,12 @@ where
     IType: Iterator<Item = T>,
     FType: FnOnce() -> IType + Send + Sync,
 {
+    /// Constructs a GeneratorContext from an iterator and the output channel
     pub fn new(iterator: FType, output: Sender<T>) -> GeneratorContext<T, IType, FType> {
         let gc = GeneratorContext {
             iterator: Some(iterator),
             output,
-            identifier: Identifier::new(),
-            time: Default::default(),
+            context_info: Default::default(),
         };
         gc.output.attach_sender(&gc);
         gc

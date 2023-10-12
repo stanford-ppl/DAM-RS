@@ -1,17 +1,14 @@
 use std::collections::VecDeque;
 
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
-use dam_macros::{identifiable, time_managed};
-use dam_rs::channel::*;
-use dam_rs::context::checker_context::CheckerContext;
-use dam_rs::context::consumer_context::ConsumerContext;
-use dam_rs::context::generator_context::GeneratorContext;
-use dam_rs::context::Context;
-use dam_rs::simulation::Program;
-use dam_rs::types::{Cleanable, DAMType};
+use dam::channel::*;
+use dam::context::Context;
+use dam::context_tools::*;
+use dam::simulation::*;
+use dam::types::DAMType;
+use dam::utility_contexts::*;
 
-#[identifiable]
-#[time_managed]
+#[context_macro]
 struct MergeUnit<T: DAMType> {
     input_a: Receiver<T>,
     input_b: Receiver<T>,
@@ -23,41 +20,34 @@ impl<T: DAMType + std::cmp::Ord> Context for MergeUnit<T> {
 
     fn run(&mut self) {
         loop {
-            let a = self.input_a.peek_next(&mut self.time);
-            let b = self.input_b.peek_next(&mut self.time);
+            let a = self.input_a.peek_next(&self.time);
+            let b = self.input_b.peek_next(&self.time);
             match (a, b) {
-                (DequeueResult::Something(ce_a), DequeueResult::Something(ce_b)) => {
+                (Ok(ce_a), Ok(ce_b)) => {
                     let min = std::cmp::min(ce_a.data.clone(), ce_b.data.clone());
                     if ce_a.data == min {
-                        self.input_a.dequeue(&mut self.time);
+                        self.input_a.dequeue(&self.time).unwrap();
                     }
                     if ce_b.data == min {
-                        self.input_b.dequeue(&mut self.time);
+                        self.input_b.dequeue(&self.time).unwrap();
                     }
                     let time = self.time.tick() + 1;
                     self.output
-                        .enqueue(&mut self.time, ChannelElement::new(time, min))
+                        .enqueue(&self.time, ChannelElement::new(time, min))
                         .unwrap();
                 }
-                (DequeueResult::Something(ce_a), DequeueResult::Closed) => {
-                    self.input_a.dequeue(&mut self.time);
-                    self.output.enqueue(&mut self.time, ce_a).unwrap();
+                (Ok(ce_a), Err(_)) => {
+                    self.input_a.dequeue(&self.time).unwrap();
+                    self.output.enqueue(&self.time, ce_a).unwrap();
                 }
-                (DequeueResult::Closed, DequeueResult::Something(ce_b)) => {
-                    self.input_b.dequeue(&mut self.time);
-                    self.output.enqueue(&mut self.time, ce_b).unwrap();
+                (Err(_), Ok(ce_b)) => {
+                    self.input_b.dequeue(&self.time).unwrap();
+                    self.output.enqueue(&self.time, ce_b).unwrap();
                 }
-                (DequeueResult::Closed, DequeueResult::Closed) => return,
+                (Err(_), Err(_)) => return,
             }
             self.time.incr_cycles(1);
         }
-    }
-
-    fn cleanup(&mut self) {
-        self.input_a.cleanup();
-        self.input_b.cleanup();
-        self.output.cleanup();
-        self.time.cleanup();
     }
 }
 
@@ -67,8 +57,7 @@ impl<T: DAMType + Ord> MergeUnit<T> {
             input_a: a,
             input_b: b,
             output: out,
-            identifier: Default::default(),
-            time: Default::default(),
+            context_info: Default::default(),
         };
         mu.input_a.attach_receiver(&mu);
         mu.input_b.attach_receiver(&mu);
@@ -91,7 +80,7 @@ pub fn merge_benchmark(c: &mut Criterion) {
             |b, &copies| {
                 b.iter_with_large_drop(|| {
                     // two-stage PCU on scalars, with the third stage a no-op.
-                    let mut parent = Program::default();
+                    let mut parent = ProgramBuilder::default();
 
                     for _ in 0..copies {
                         let (a_send, a_recv) = parent.bounded(CHAN_SIZE);
@@ -107,11 +96,20 @@ pub fn merge_benchmark(c: &mut Criterion) {
                         parent.add_child(checker);
                     }
 
-                    parent.set_inference(true);
-                    parent.set_mode(dam_rs::simulation::RunMode::FIFO);
-                    parent.init();
-                    parent.run();
                     parent
+                        .initialize(
+                            InitializationOptionsBuilder::default()
+                                .run_flavor_inference(true)
+                                .build()
+                                .unwrap(),
+                        )
+                        .unwrap()
+                        .run(
+                            RunOptionsBuilder::default()
+                                .mode(RunMode::FIFO)
+                                .build()
+                                .unwrap(),
+                        );
                 })
             },
         );
@@ -119,8 +117,7 @@ pub fn merge_benchmark(c: &mut Criterion) {
     group.finish();
 }
 
-#[identifiable]
-#[time_managed]
+#[context_macro]
 struct AddUnit<T: DAMType> {
     input_a: Receiver<T>,
     input_b: Receiver<T>,
@@ -135,30 +132,20 @@ where
 
     fn run(&mut self) {
         loop {
-            let a = self.input_a.dequeue(&mut self.time);
-            let b = self.input_b.dequeue(&mut self.time);
+            let a = self.input_a.dequeue(&self.time);
+            let b = self.input_b.dequeue(&self.time);
             match (a, b) {
-                (DequeueResult::Something(ce_a), DequeueResult::Something(ce_b)) => {
+                (Ok(ce_a), Ok(ce_b)) => {
                     let time = self.time.tick() + 1;
                     self.output
-                        .enqueue(
-                            &mut self.time,
-                            ChannelElement::new(time, ce_a.data + ce_b.data),
-                        )
+                        .enqueue(&self.time, ChannelElement::new(time, ce_a.data + ce_b.data))
                         .unwrap();
                 }
-                (DequeueResult::Closed, DequeueResult::Closed) => return,
+                (Err(_), Err(_)) => return,
                 _ => panic!(),
             }
             self.time.incr_cycles(1);
         }
-    }
-
-    fn cleanup(&mut self) {
-        self.input_a.cleanup();
-        self.input_b.cleanup();
-        self.output.cleanup();
-        self.time.cleanup();
     }
 }
 
@@ -171,8 +158,7 @@ where
             input_a: a,
             input_b: b,
             output: out,
-            identifier: Default::default(),
-            time: Default::default(),
+            context_info: Default::default(),
         };
         mu.input_a.attach_receiver(&mu);
         mu.input_b.attach_receiver(&mu);
@@ -192,7 +178,7 @@ pub fn add_benchmark(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::from_parameter(width), &width, |b, &width| {
             b.iter_with_large_drop(|| {
                 // two-stage PCU on scalars, with the third stage a no-op.
-                let mut parent = Program::default();
+                let mut parent = ProgramBuilder::default();
 
                 let mut cur_inputs: VecDeque<Receiver<i32>> = VecDeque::with_capacity(width);
                 for _ in 0..width {
@@ -224,11 +210,20 @@ pub fn add_benchmark(c: &mut Criterion) {
                 let cap = ConsumerContext::new(last);
                 parent.add_child(cap);
 
-                parent.set_inference(true);
-                parent.set_mode(dam_rs::simulation::RunMode::FIFO);
-                parent.init();
-                parent.run();
                 parent
+                    .initialize(
+                        InitializationOptionsBuilder::default()
+                            .run_flavor_inference(true)
+                            .build()
+                            .unwrap(),
+                    )
+                    .unwrap()
+                    .run(
+                        RunOptionsBuilder::default()
+                            .mode(RunMode::FIFO)
+                            .build()
+                            .unwrap(),
+                    );
             })
         });
     }

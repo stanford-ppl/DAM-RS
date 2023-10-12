@@ -1,7 +1,10 @@
+//! Support for [Unevaluated] types, including implementations of common ops.
 use std::{marker::PhantomData, str::FromStr};
 
 use super::StaticallySized;
 
+/// Unevaluated types represent an abstract value which is never computed.
+/// This allows simple bookkeeping without the runtime computation and costs associated with actually performing operations.
 #[derive(Debug, Copy, Clone)]
 pub struct Unevaluated<T> {
     _phantom: PhantomData<T>,

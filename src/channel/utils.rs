@@ -1,76 +1,37 @@
-use crate::types::DAMType;
-use dam_core::time::Time;
-use dam_core::TimeManager;
-
 use super::*;
+use crate::types::DAMType;
 
 use std::cmp::Ordering;
 
-pub struct RecvBundle<T: DAMType> {
-    receivers: Vec<Receiver<T>>,
-}
-
-impl<T: DAMType> Peekable for RecvBundle<T> {
-    fn next_event(&mut self) -> EventTime {
-        let events = self.receivers.iter_mut().map(|recv| recv.next_event());
-        events.max().unwrap_or(EventTime::Closed)
-    }
-}
-
-impl<T: DAMType> RecvBundle<T> {
-    fn dequeue(
-        &mut self,
-        manager: &mut TimeManager,
-    ) -> Vec<Result<ChannelElement<T>, DequeueError>> {
-        self.receivers
-            .iter_mut()
-            .map(|recv| dequeue(manager, recv))
-            .collect()
-    }
-}
-
+/// Shim for recv.dequeue
+#[deprecated(
+    since = "0.1.0",
+    note = "This should be replaced in favor of the receiver.dequeue operation."
+)]
 pub fn dequeue<T: DAMType>(
     manager: &mut TimeManager,
     recv: &mut Receiver<T>,
 ) -> Result<ChannelElement<T>, DequeueError> {
-    match recv.dequeue(manager) {
-        DequeueResult::Something(ce) => Ok(ce),
-        DequeueResult::Closed => Err(DequeueError {}),
-    }
+    recv.dequeue(manager)
 }
 
+/// Shim for recv.peek_next
+#[deprecated(
+    since = "0.1.0",
+    note = "This should be replaced in favor of the receiver.peek_next operation."
+)]
 pub fn peek_next<T: DAMType>(
     manager: &mut TimeManager,
     recv: &mut Receiver<T>,
 ) -> Result<ChannelElement<T>, DequeueError> {
-    match recv.peek_next(manager) {
-        DequeueResult::Something(ce) => Ok(ce),
-        DequeueResult::Closed => Err(DequeueError {}),
-    }
+    recv.peek_next(manager)
 }
 
-pub fn dequeue_bundle<T: DAMType>(
-    manager: &mut TimeManager,
-    bundles: &mut [RecvBundle<T>],
-) -> Result<(Vec<ChannelElement<T>>, usize), DequeueError> {
-    let next_events = bundles.iter_mut().map(|bundle| bundle.next_event());
-    let earliest_event = next_events.enumerate().min_by_key(|(_, evt)| *evt);
-    match earliest_event {
-        Some((ind, _)) => {
-            let dequeued = bundles[ind].dequeue(manager);
-            let mut result = Vec::<ChannelElement<T>>::with_capacity(dequeued.len());
-            for sub_result in dequeued {
-                match sub_result {
-                    Ok(elem) => result.push(elem),
-                    Err(e) => return Err(e),
-                }
-            }
-            Ok((result, ind))
-        }
-        None => Err(DequeueError {}),
-    }
-}
-
+/// Shim for sender.enqueue
+#[deprecated(
+    since = "0.1.0",
+    note = "This should be replaced in favor of the sender.enqueue operation."
+)]
 pub fn enqueue<T: DAMType>(
     manager: &mut TimeManager,
     send: &mut Sender<T>,
@@ -79,10 +40,16 @@ pub fn enqueue<T: DAMType>(
     send.enqueue(manager, data)
 }
 
+/// When a channel will have a meaningful event. This is useful when it is possible to read/write to one of many channels
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub enum EventTime {
+    /// Event will happen at given timestamp
     Ready(Time),
+
+    /// Event won't happen up to timestamp -- useful if we wish to determine the first event in a list.
     Nothing(Time),
+
+    /// Event will never happen, roughly equivalent to Nothing(Infinity)
     Closed,
 }
 
@@ -108,7 +75,9 @@ impl PartialOrd for EventTime {
     }
 }
 
+/// Objects which can can have their next event queried -- mostly used for channel-type objects.
 pub trait Peekable {
+    /// Gets a timestamp of the next possible event.
     fn next_event(&mut self) -> EventTime;
 }
 
