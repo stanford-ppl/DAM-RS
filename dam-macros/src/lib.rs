@@ -1,14 +1,20 @@
 use proc_macro::{self, TokenStream};
 use proc_macro2::{Ident, Span};
 use quote::quote;
-use syn::{parse::Parser, parse_macro_input, DeriveInput, Path, token::PathSep, punctuated::Punctuated, PathSegment};
+use syn::{
+    parse::Parser, parse_macro_input, punctuated::Punctuated, token::PathSep, DeriveInput, Path,
+    PathSegment,
+};
 
 fn make_dam_path(path: &str, fqn: bool) -> Path {
     let mut segments = Punctuated::new();
-    segments.push(PathSegment { ident: Ident::new(path, Span::call_site()), arguments: syn::PathArguments::None });
+    segments.push(PathSegment {
+        ident: Ident::new(path, Span::call_site()),
+        arguments: syn::PathArguments::None,
+    });
     Path {
-        leading_colon: (if fqn { Some(PathSep::default()) } else {None}),
-        segments
+        leading_colon: (if fqn { Some(PathSep::default()) } else { None }),
+        segments,
     }
 }
 
@@ -105,14 +111,13 @@ fn event_type_impl(_attrs: TokenStream, item: TokenStream, dam_path: Path) -> To
     quote! {
         #ast
 
-        impl #impl_generics #dam_path::macro_support::logging::LogEvent for super::#name #ty_generics #where_clause {
-            const NAME: &'static str = #ident_string;
-        }
-
         #[allow(non_snake_case)]
         mod #mod_name {
             use #dam_path::macro_support::logging::registry::*;
-            
+
+            impl #impl_generics #dam_path::macro_support::logging::LogEvent for super::#name #ty_generics #where_clause {
+                const NAME: &'static str = #ident_string;
+            }
 
             #[distributed_slice(METRICS)]
             static EVENT_NAME: &'static str = #ident_string;

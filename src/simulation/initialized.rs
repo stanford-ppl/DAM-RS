@@ -1,6 +1,9 @@
 use std::sync::Arc;
 
-use crate::logging::{initialize_log, LogEntry, LogInterface, LogProcessor};
+use crate::{
+    datastructures::Time,
+    logging::{initialize_log, LogEntry, LogInterface, LogProcessor},
+};
 use crossbeam::queue::SegQueue;
 
 #[cfg(feature = "log-mongo")]
@@ -70,6 +73,7 @@ impl<'a> Initialized<'a> {
                                 sender,
                                 base_time,
                                 active_filter,
+                                Time::new(0),
                             ));
                         }
                         child.run();

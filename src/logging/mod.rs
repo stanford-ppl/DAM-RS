@@ -21,6 +21,8 @@ pub use log_interface::LogInterface;
 mod log_functions;
 pub use log_functions::*;
 
+use crate::datastructures::Time;
+
 use self::registry::{get_metrics_vec, METRICS};
 
 /// Handles the registering/checking of LogEntry names
@@ -57,6 +59,9 @@ pub struct LogEntry {
 
     /// Identity of the current context
     pub(crate) context: usize,
+
+    /// Number of ticks elapsed PRIOR to this event
+    pub(crate) ticks: Time,
 
     /// String name of the logging event type
     pub(crate) event_type: String,

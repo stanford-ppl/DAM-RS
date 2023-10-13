@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 
-use crate::logging::LogInterface;
+use crate::{datastructures::Time, logging::LogInterface};
 
 use super::{LogError, LogEvent};
 
@@ -40,4 +40,12 @@ pub fn initialize_log(logger: LogInterface) {
 /// Gets the current logger, used for 'inheriting' loggers from a parent context.
 pub fn copy_log() -> Option<LogInterface> {
     LOGGER.with_borrow(|cur_logger| cur_logger.clone())
+}
+
+pub(crate) fn update_ticks(time: Time) {
+    LOGGER.with_borrow_mut(|cur_logger| {
+        if let Some(lg) = cur_logger {
+            lg.update_ticks(time);
+        }
+    })
 }
