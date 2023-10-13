@@ -40,7 +40,7 @@ test-log-mongo = ["log-mongo"]
 
 [dependencies.mongodb]
 version = "2.7.0"
-default_features = false
+default-features = false
 optional = true
 ## Have to use openssl-tls for cross compilation and wsl2.
 features = ["sync", "openssl-tls"]
