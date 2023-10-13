@@ -2,6 +2,7 @@ pub mod scalar;
 pub mod tensor;
 pub mod tuple;
 pub mod unevaluated;
+pub mod vector;
 
 //Sync + Send + Default + core::fmt::Debug + std::cmp::PartialEq + Clone;
 pub trait DAMType: Sync + Send + Default + core::fmt::Debug + std::cmp::PartialEq + Clone {
