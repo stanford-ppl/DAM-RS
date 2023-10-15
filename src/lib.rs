@@ -1,5 +1,5 @@
 #![warn(missing_docs)]
-#![cfg_attr(docsrs, cfg(feature = "doc_cfg"))]
+// #![cfg_attr(docsrs, cfg(feature = "doc_cfg"))]
 
 //! The Dataflow Abstract Machine is a simulation framework designed for simulating dataflow-like systems.
 //! In particular, DAM optimizes for complex nodes connected by statically known channels.

@@ -37,6 +37,7 @@ default = ["dot", "log-mongo"]
 dot = ["dep:graphviz-rust"]
 log-mongo = ["dep:mongodb"]
 test-log-mongo = ["log-mongo"]
+doc-cfg = []
 
 [dependencies.mongodb]
 version = "2.7.0"

@@ -11,7 +11,7 @@ use thiserror::Error;
 mod null_logger;
 pub use null_logger::*;
 
-#[cfg_attr(docsrs, doc(cfg(feature = "log-mongo")))]
+// #[cfg_attr(docsrs, doc(cfg(feature = "log-mongo")))]
 #[cfg(feature = "log-mongo")]
 pub mod mongo_logger;
 
