@@ -18,22 +18,34 @@ pub trait RecvAdapter<U> {
 
 impl<T: DAMType, U> RecvAdapter<U> for Receiver<T>
 where
-    T: Into<U>,
+    T: TryInto<U>,
 {
     fn peek(&self) -> PeekResult<U> {
         match Receiver::peek(self) {
-            PeekResult::Something(ce) => PeekResult::Something(ce.convert()),
+            PeekResult::Something(ce) => {
+                PeekResult::Something(ce.try_convert().unwrap_or_else(|_| {
+                    panic!("Failed to convert the peek value into the desired type")
+                }))
+            }
             PeekResult::Nothing(time) => PeekResult::Nothing(time),
             PeekResult::Closed => PeekResult::Closed,
         }
     }
 
     fn peek_next(&self, manager: &TimeManager) -> Result<ChannelElement<U>, DequeueError> {
-        Receiver::peek_next(self, manager).map(|val| val.convert())
+        Receiver::peek_next(self, manager).map(|val| {
+            val.try_convert().unwrap_or_else(|_| {
+                panic!("Failed to convert the peek_next value into the desired type")
+            })
+        })
     }
 
     fn dequeue(&self, manager: &TimeManager) -> Result<ChannelElement<U>, DequeueError> {
-        Receiver::dequeue(self, manager).map(|val| val.convert())
+        Receiver::dequeue(self, manager).map(|val| {
+            val.try_convert().unwrap_or_else(|_| {
+                panic!("Failed to convert the dequeued value into the desired type")
+            })
+        })
     }
 }
 
@@ -51,7 +63,13 @@ where
     T: From<U>,
 {
     fn enqueue(&self, manager: &TimeManager, data: ChannelElement<U>) -> Result<(), EnqueueError> {
-        Sender::enqueue(&self, manager, data.convert())
+        Sender::enqueue(
+            &self,
+            manager,
+            data.try_convert().unwrap_or_else(|_| {
+                panic!("Failed to convert the enqueued value into the desired type")
+            }),
+        )
     }
 
     fn wait_until_available(&self, manager: &mut TimeManager) -> Result<(), EnqueueError> {

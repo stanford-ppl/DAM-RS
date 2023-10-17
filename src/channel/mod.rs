@@ -74,6 +74,17 @@ impl<T> ChannelElement<T> {
             data: self.data.into(),
         }
     }
+
+    /// Attempts to convert between ChannelElement types.
+    pub fn try_convert<U>(self) -> Result<ChannelElement<U>, <T as TryInto<U>>::Error>
+    where
+        T: TryInto<U>,
+    {
+        Ok(ChannelElement {
+            time: self.time,
+            data: self.data.try_into()?,
+        })
+    }
 }
 
 /// The result of a Peek operation
