@@ -2,12 +2,15 @@
 //! In particular, these are useful when some memory may contain elements of different types
 //! And so channels of different types may be connected to the memory.
 
-use crate::{context_tools::DAMType, structures::TimeManager};
+use crate::{context::Context, context_tools::DAMType, structures::TimeManager};
 
 use super::{ChannelElement, DequeueError, EnqueueError, PeekResult, Receiver, Sender};
 
 /// An adapter for Receivers, delegating and converting all underlying operations
 pub trait RecvAdapter<U> {
+    /// See: [Receiver::attach_receiver]
+    fn attach_receiver(&self, ctx: &dyn Context);
+
     /// See: [Receiver::peek]
     fn peek(&self) -> PeekResult<U>;
     /// See: [Receiver::peek_next]
@@ -20,6 +23,10 @@ impl<T: DAMType, U> RecvAdapter<U> for Receiver<T>
 where
     T: TryInto<U>,
 {
+    fn attach_receiver(&self, ctx: &dyn Context) {
+        Receiver::attach_receiver(&self, ctx)
+    }
+
     fn peek(&self) -> PeekResult<U> {
         match Receiver::peek(self) {
             PeekResult::Something(ce) => {
@@ -51,6 +58,9 @@ where
 
 /// An adapter for Senders, delegating and converting all underlying operations.
 pub trait SendAdapter<U> {
+    /// See: [Sender::attach_sender]
+    fn attach_sender(&self, ctx: &dyn Context);
+
     /// See: [Sender::enqueue]
     fn enqueue(&self, manager: &TimeManager, data: ChannelElement<U>) -> Result<(), EnqueueError>;
 
@@ -74,5 +84,9 @@ where
 
     fn wait_until_available(&self, manager: &mut TimeManager) -> Result<(), EnqueueError> {
         Sender::wait_until_available(self, manager)
+    }
+
+    fn attach_sender(&self, ctx: &dyn Context) {
+        Sender::attach_sender(&self, ctx)
     }
 }
