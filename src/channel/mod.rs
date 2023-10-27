@@ -146,7 +146,7 @@ impl<T: DAMType> Sender<T> {
     }
 
     /// Advances time forward until the channel is not full.
-    pub fn wait_until_available(&self, manager: &mut TimeManager) -> Result<(), EnqueueError> {
+    pub fn wait_until_available(&self, manager: &TimeManager) -> Result<(), EnqueueError> {
         self.under().wait_until_available(manager)
     }
 }

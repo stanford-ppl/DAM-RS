@@ -65,7 +65,7 @@ pub trait SendAdapter<U> {
     fn enqueue(&self, manager: &TimeManager, data: ChannelElement<U>) -> Result<(), EnqueueError>;
 
     /// See: [Sender::wait_until_available]
-    fn wait_until_available(&self, manager: &mut TimeManager) -> Result<(), EnqueueError>;
+    fn wait_until_available(&self, manager: &TimeManager) -> Result<(), EnqueueError>;
 }
 
 impl<T: DAMType, U> SendAdapter<U> for Sender<T>
@@ -82,7 +82,7 @@ where
         )
     }
 
-    fn wait_until_available(&self, manager: &mut TimeManager) -> Result<(), EnqueueError> {
+    fn wait_until_available(&self, manager: &TimeManager) -> Result<(), EnqueueError> {
         Sender::wait_until_available(self, manager)
     }
 
