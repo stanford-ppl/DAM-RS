@@ -78,17 +78,17 @@ impl PartialOrd for EventTime {
 /// Objects which can can have their next event queried -- mostly used for channel-type objects.
 pub trait Peekable {
     /// Gets a timestamp of the next possible event.
-    fn next_event(&mut self) -> EventTime;
+    fn next_event(self) -> EventTime;
 }
 
 impl Peekable for EventTime {
-    fn next_event(&mut self) -> EventTime {
-        *self
+    fn next_event(self) -> EventTime {
+        self
     }
 }
 
-impl<T: DAMType> Peekable for Receiver<T> {
-    fn next_event(&mut self) -> EventTime {
+impl<T: DAMType> Peekable for &Receiver<T> {
+    fn next_event(self) -> EventTime {
         match self.peek() {
             PeekResult::Closed => EventTime::Closed,
             PeekResult::Something(time) => EventTime::Ready(time.time),
@@ -98,8 +98,12 @@ impl<T: DAMType> Peekable for Receiver<T> {
     }
 }
 
-impl<T: Peekable> Peekable for dyn Iterator<Item = &mut T> {
-    fn next_event(&mut self) -> EventTime {
+impl<'a, T: Peekable, It> Peekable for It
+where
+    It: Iterator<Item = T>,
+    T: 'a,
+{
+    fn next_event(self) -> EventTime {
         let events = self.map(|thing| thing.next_event());
         events.max().unwrap_or(EventTime::Closed)
     }
