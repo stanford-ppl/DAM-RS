@@ -3,43 +3,6 @@ use crate::types::DAMType;
 
 use std::cmp::Ordering;
 
-/// Shim for recv.dequeue
-#[deprecated(
-    since = "0.1.0",
-    note = "This should be replaced in favor of the receiver.dequeue operation."
-)]
-pub fn dequeue<T: DAMType>(
-    manager: &mut TimeManager,
-    recv: &mut Receiver<T>,
-) -> Result<ChannelElement<T>, DequeueError> {
-    recv.dequeue(manager)
-}
-
-/// Shim for recv.peek_next
-#[deprecated(
-    since = "0.1.0",
-    note = "This should be replaced in favor of the receiver.peek_next operation."
-)]
-pub fn peek_next<T: DAMType>(
-    manager: &mut TimeManager,
-    recv: &mut Receiver<T>,
-) -> Result<ChannelElement<T>, DequeueError> {
-    recv.peek_next(manager)
-}
-
-/// Shim for sender.enqueue
-#[deprecated(
-    since = "0.1.0",
-    note = "This should be replaced in favor of the sender.enqueue operation."
-)]
-pub fn enqueue<T: DAMType>(
-    manager: &mut TimeManager,
-    send: &mut Sender<T>,
-    data: ChannelElement<T>,
-) -> Result<(), EnqueueError> {
-    send.enqueue(manager, data)
-}
-
 /// When a channel will have a meaningful event. This is useful when it is possible to read/write to one of many channels
 #[derive(PartialEq, Eq, Debug, Clone, Copy)]
 pub enum EventTime {
