@@ -55,6 +55,24 @@ impl Time {
     }
 }
 
+impl From<u64> for Time {
+    fn from(value: u64) -> Self {
+        Time {
+            time: value,
+            done: false,
+        }
+    }
+}
+
+impl From<(bool, u64)> for Time {
+    fn from(value: (bool, u64)) -> Self {
+        Time {
+            time: value.1,
+            done: value.0,
+        }
+    }
+}
+
 impl PartialEq for Time {
     fn eq(&self, other: &Self) -> bool {
         if self.done && other.done {

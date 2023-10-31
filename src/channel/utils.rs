@@ -61,13 +61,131 @@ impl<T: DAMType> Peekable for &Receiver<T> {
     }
 }
 
-impl<'a, T: Peekable, It> Peekable for It
+/// A utility structure whose next event is dictated by ALL sub-events being ready
+pub struct EventAll<T> {
+    under: T,
+}
+
+impl<T, It> Peekable for EventAll<It>
 where
     It: Iterator<Item = T>,
-    T: 'a,
+    T: Peekable,
 {
     fn next_event(self) -> EventTime {
-        let events = self.map(|thing| thing.next_event());
+        let events = self.under.map(|thing| thing.next_event());
         events.max().unwrap_or(EventTime::Closed)
+    }
+}
+
+/// A utility structure whose next event is dictated by ANY sub-event being ready
+pub struct EventAny<T> {
+    under: T,
+}
+
+impl<T, It> Peekable for EventAny<It>
+where
+    It: Iterator<Item = T>,
+    T: Peekable,
+{
+    fn next_event(self) -> EventTime {
+        let events = self.under.map(|thing| thing.next_event());
+        events.min().unwrap_or(EventTime::Closed)
+    }
+}
+
+/// Shim trait for creating [EventAny] and [EventAll] from iterators
+pub trait EventCollection<T> {
+    /// Shim for creating [EventAll]
+    fn all_events(self) -> EventAll<T>;
+
+    /// Shim for creating [EventAny]
+    fn any_event(self) -> EventAny<T>;
+}
+
+impl<II, T> EventCollection<II::IntoIter> for II
+where
+    II: IntoIterator<Item = T>,
+    T: Peekable,
+{
+    fn all_events(self) -> EventAll<II::IntoIter> {
+        EventAll {
+            under: self.into_iter(),
+        }
+    }
+
+    fn any_event(self) -> EventAny<II::IntoIter> {
+        EventAny {
+            under: self.into_iter(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        simulation::ProgramBuilder,
+        utility_contexts::{random_trace, FunctionContext, TraceContext},
+    };
+
+    use super::{EventTime, Peekable};
+
+    /// Puts stuff in a channel and checks when it's available.
+    #[test]
+    fn test_receiver() {
+        let mut ctx = ProgramBuilder::default();
+        let (snd, rcv) = ctx.unbounded();
+        ctx.add_child(TraceContext::new(
+            // (Value, Time) pairs
+            || random_trace::<u32>(4096, 0, 16),
+            snd,
+        ));
+
+        let mut fc = FunctionContext::default();
+        rcv.attach_receiver(&fc);
+        fc.set_run(move |time| loop {
+            let pre_peek = rcv.next_event();
+            let peek_next = rcv.peek_next(&time);
+            let post_peek = rcv.next_event();
+            match (pre_peek, post_peek, peek_next) {
+                (prev, EventTime::Ready(post_time), Ok(ce)) if post_time == ce.time => {
+                    match prev {
+                        EventTime::Ready(pre_time) if pre_time == post_time => {}
+                        EventTime::Nothing(pre_time) if pre_time < post_time => {}
+                        _ => {
+                            panic!("Pre-peek event: {prev:?} was not compatible with post-peek {post_peek:?}");
+                        }
+                    };
+                    // Pop the value off the stream
+                    let _ = rcv.dequeue(&time);
+                },
+
+                (_, EventTime::Ready(post_time), Ok(ce)) => {
+                    // Mismatched case
+                    panic!(
+                        "Mismatched ready and post times: {post_time:?} != {:?}",
+                        ce.time
+                    );
+                }
+
+                (EventTime::Nothing(_), EventTime::Closed, Err(_)) => {
+                    // Originally was just nothing, but now we've found out that it's closed.
+                    // For completeness, delegate it to the next iteration
+                    // Otherwise it's possible to never test the next case.
+                    continue;
+                }
+                (EventTime::Closed, EventTime::Closed, Err(_)) => {
+                    // Next events both said closed, was closed
+                    return;
+                }
+
+                (_, _, pn) => {
+                    panic!("Incompatible state found: Pre [{pre_peek:?}], Post [{post_peek:?}], Received [{pn:?}]");
+                }
+            }
+        });
+        ctx.add_child(fc);
+        ctx.initialize(Default::default())
+            .unwrap()
+            .run(Default::default());
     }
 }
