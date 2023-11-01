@@ -24,7 +24,7 @@ where
 }
 impl<RT> FunctionContext<RT>
 where
-    RT: FnOnce(&mut TimeManager) + Send + Sync,
+    Self: Context,
 {
     /// Constructs an empty FunctionContext
     pub fn new() -> Self {
@@ -42,7 +42,7 @@ where
 
 impl<RT> Default for FunctionContext<RT>
 where
-    RT: FnOnce(&mut TimeManager) + Send + Sync,
+    Self: Context,
 {
     fn default() -> Self {
         Self::new()

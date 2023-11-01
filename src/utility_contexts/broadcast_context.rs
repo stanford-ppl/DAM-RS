@@ -24,7 +24,6 @@ impl<T: DAMType> Context for BroadcastContext<T> {
                     self.targets.iter().for_each(|target| {
                         target.enqueue(&self.time, data.clone()).unwrap();
                     });
-                    self.time.incr_cycles(1);
                 }
                 Err(_) => return,
             }
