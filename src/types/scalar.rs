@@ -24,11 +24,7 @@ builtin_ss!(u64, 64);
 builtin_ss!(f32, 32);
 builtin_ss!(f64, 64);
 
-impl<A, B> StaticallySized for (A, B)
-where
-    A: Clone + StaticallySized,
-    B: Clone + StaticallySized,
-{
+impl<A: StaticallySized, B: StaticallySized> StaticallySized for (A, B) {
     const SIZE: usize = A::SIZE + B::SIZE;
 }
 
