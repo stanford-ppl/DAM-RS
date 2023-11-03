@@ -24,19 +24,13 @@ builtin_ss!(u64, 64);
 builtin_ss!(f32, 32);
 builtin_ss!(f64, 64);
 
-macro_rules! builtin_tup {
-    ($tp1: tt, $tp2: tt, $tup: tt) => {
-        impl<$tp1, $tp2> StaticallySized for $tup
-        where
-            A: Clone + StaticallySized,
-            B: Clone + StaticallySized,
-        {
-            const SIZE: usize = $tp1::SIZE + $tp2::SIZE;
-        }
-    };
+impl<A, B> StaticallySized for (A, B)
+where
+    A: Clone + StaticallySized,
+    B: Clone + StaticallySized,
+{
+    const SIZE: usize = A::SIZE + B::SIZE;
 }
-
-builtin_tup!(A, B, (A, B));
 
 #[cfg(test)]
 mod tests {
