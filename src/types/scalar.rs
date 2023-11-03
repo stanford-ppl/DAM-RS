@@ -23,3 +23,38 @@ builtin_ss!(u64, 64);
 
 builtin_ss!(f32, 32);
 builtin_ss!(f64, 64);
+
+macro_rules! builtin_tup {
+    ($tp1: tt, $tp2: tt, $tup: tt) => {
+        impl<$tp1, $tp2> StaticallySized for $tup
+        where
+            A: Clone + StaticallySized,
+            B: Clone + StaticallySized,
+        {
+            const SIZE: usize = $tp1::SIZE + $tp2::SIZE;
+        }
+    };
+}
+
+builtin_tup!(A, B, (A, B));
+
+#[cfg(test)]
+mod tests {
+    use crate::types::{DAMType, StaticallySized};
+
+    #[test]
+    fn test_ndarray() {
+        let tup_a: (i32, i32) = (5, 5);
+
+        let tup_b: (i32, i64) = (5, 5);
+
+        let i32_size = i32::SIZE;
+        let i64_size = i64::SIZE;
+
+        assert!(tup_a.dam_size() == (i32_size + i32_size));
+        assert!(tup_b.dam_size() == (i32_size + i64_size));
+
+        dbg!(tup_a);
+        dbg!(tup_b);
+    }
+}
