@@ -27,7 +27,7 @@ builtin_ss!(f64, 64);
 impl StaticallySized for usize {
     const SIZE: usize = unimplemented!();
     // usize is a type with a static size, but the value of the size is platform-dependent.
-    // Therfore, we implement the trait StaticallySized but keep SIZE unimplemented.
+    // Therefore, we implement the trait StaticallySized but keep SIZE unimplemented.
 }
 
 impl<A: StaticallySized, B: StaticallySized> StaticallySized for (A, B) {
