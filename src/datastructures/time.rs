@@ -166,7 +166,7 @@ impl AtomicTime {
 
     /// Reads the underlying time with Acquire semantics, used by other threads.
     pub fn load(&self) -> Time {
-        let time = self.time.load(std::sync::atomic::Ordering::Relaxed);
+        let time = self.time.load(std::sync::atomic::Ordering::Acquire);
         let done = self.done.load(std::sync::atomic::Ordering::Acquire);
         Time { time, done }
     }
