@@ -1,9 +1,6 @@
 use std::sync::Arc;
 
-use crate::{
-    channel::handle::ChannelHandle, context::ContextSummary,
-    view::ContextView,
-};
+use crate::{channel::handle::ChannelHandle, context::ContextSummary, view::ContextView};
 
 /// Represents a program graph which has been executed.
 /// This still stores all of the edges in the graph, but each node is replaced with its summary.
