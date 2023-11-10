@@ -20,8 +20,8 @@ pub struct ContextSummary {
 impl ContextSummary {
     /// Gets the max time of the summary.
     /// This is probably overkill as the view itself should return the time.
-    pub fn max_time(&self) -> Time {
-        [self.time.tick_lower_bound()]
+    pub fn max_time(&self) -> u64 {
+        [self.time.tick_lower_bound().time()]
             .into_iter()
             .chain(self.children.iter().map(|child| child.max_time()))
             .max()
