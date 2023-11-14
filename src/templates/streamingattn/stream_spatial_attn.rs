@@ -119,9 +119,9 @@ where
         self.qkt_exp_data.cleanup();
         self.time.cleanup();
 
-        //let curr_time = self.time.tick();
-        //println!("QKT exp");
-        //dbg!(curr_time);
+        let curr_time = self.time.tick();
+        println!("QKT exp");
+        dbg!(curr_time);
     }
 }
 
@@ -208,9 +208,9 @@ where
         self.mat_vec_data.cleanup();
         self.time.cleanup();
 
-        //let curr_time = self.time.tick();
-        //println!("Mat_Vec");
-        //dbg!(curr_time);
+        let curr_time = self.time.tick();
+        println!("Mat_Vec");
+        dbg!(curr_time);
     }
 }
 
@@ -313,6 +313,8 @@ mod tests {
         parent.add_child(gen2);
         parent.add_child(stream_mat_vec_prod);
         parent.add_child(out_checker);
+
+        parent.print_graph_with_names();
         parent.init();
         parent.run();
     }

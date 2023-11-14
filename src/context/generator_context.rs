@@ -46,6 +46,9 @@ where
     #[cleanup(time_managed)]
     fn cleanup(&mut self) {
         self.output.cleanup();
+        let curr_time = self.time.tick();
+        println!("Generator");
+        dbg!(curr_time);
     }
 }
 

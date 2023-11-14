@@ -274,9 +274,9 @@ where
         self.binary_data.cleanup();
         self.time.cleanup();
 
-        // let curr_time = self.time.tick();
-        // println!("Binary");
-        // dbg!(curr_time);
+        let curr_time = self.time.tick();
+        println!("Binary");
+        dbg!(curr_time);
     }
 }
 

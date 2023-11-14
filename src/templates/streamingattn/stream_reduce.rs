@@ -251,9 +251,9 @@ where
     fn cleanup(&mut self) {
         self.reduce_data.cleanup();
         self.time.cleanup();
-        // let curr_time = self.time.tick();
-        // println!("Reduce Op");
-        // dbg!(curr_time);
+        let curr_time = self.time.tick();
+        println!("Reduce Op");
+        dbg!(curr_time);
     }
 }
 
