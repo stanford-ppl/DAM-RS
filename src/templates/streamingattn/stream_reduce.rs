@@ -204,7 +204,9 @@ where
     fn init(&mut self) {}
 
     fn run(&mut self) -> () {
+        self.time.incr_cycles(4);
         for _i in 0..self.reduce_data.outer_loop_bound {
+            self.time.incr_cycles(4);
             let first_peek = dequeue(&mut self.time, &mut self.reduce_data.in_stream);
             match first_peek {
                 Ok(first_elem) => {
