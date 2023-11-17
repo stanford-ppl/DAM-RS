@@ -208,9 +208,9 @@ where
         self.mat_vec_data.cleanup();
         self.time.cleanup();
 
-        let curr_time = self.time.tick();
-        println!("Mat_Vec");
-        dbg!(curr_time);
+        // let curr_time = self.time.tick();
+        // println!("Mat_Vec");
+        // dbg!(curr_time);
     }
 }
 

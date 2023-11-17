@@ -38,24 +38,24 @@ mod tests {
         let v_gen = GeneratorContext::new(v_iter, v_sender); // KT: [D,1] shaped vectors
 
         // QKT & Exp block
-        let (qkt_exp_short_sender, qkt_exp_short_receiver) = parent.bounded::<f64>(chan_size);
+        let (qkt_exp_short_sender, qkt_exp_short_receiver) = parent.bounded::<f64>(chan_size + 11);
         let (qkt_exp_long_sender, qkt_exp_long_receiver) = parent.bounded::<f64>(chan_size_long);
         let qkt_exp_data = QKTExpData::<f64> {
             q: q_receiver,
             kt: kt_receiver,
             out_fifo: vec![qkt_exp_short_sender, qkt_exp_long_sender],
-            latency: LATENCY,
+            latency: 11,
             init_inverval: INIT_INTERVAL,
             seq_len: SEQ_LEN,
         };
         let stream_qkt_exp = QKTExp::new(qkt_exp_data);
 
         // Reduce
-        let (rowsum_sender, rowsum_receiver) = parent.bounded::<f64>(chan_size);
+        let (rowsum_sender, rowsum_receiver) = parent.bounded::<f64>(chan_size + 2);
         let reduce_data = ReduceData::<f64> {
             in_stream: qkt_exp_short_receiver,
             out_stream: rowsum_sender,
-            latency: LATENCY,
+            latency: 2,
             init_inverval: INIT_INTERVAL,
             inner_loop_bound: SEQ_LEN,
             outer_loop_bound: SEQ_LEN,
@@ -63,12 +63,12 @@ mod tests {
         let stream_reduce = ReduceOp::new(reduce_data, ReduceOpType::Sum);
 
         // Div
-        let (div_sender, div_receiver) = parent.bounded::<f64>(chan_size);
+        let (div_sender, div_receiver) = parent.bounded::<f64>(chan_size + 8);
         let div_data = BinaryDataOut1::<f64> {
             in1_stream: qkt_exp_long_receiver,
             in2_stream: rowsum_receiver,
             out1_stream: div_sender,
-            latency: LATENCY,
+            latency: 8,
             init_inverval: INIT_INTERVAL,
             inner_loop_bound: SEQ_LEN,
             outer_loop_bound: SEQ_LEN,
@@ -76,12 +76,12 @@ mod tests {
         let stream_div = BinaryOpOut1::new(div_data, BinaryOpType::Div);
 
         // Multiply with V
-        let (out_sender, out_receiver) = parent.bounded::<f64>(chan_size);
+        let (out_sender, out_receiver) = parent.bounded::<f64>(chan_size_long + 12);
         let mat_vec_data = BinaryDataOut1::<f64> {
             in1_stream: div_receiver,
             in2_stream: v_receiver,
             out1_stream: out_sender,
-            latency: LATENCY,
+            latency: 12,
             init_inverval: INIT_INTERVAL,
             inner_loop_bound: SEQ_LEN,
             outer_loop_bound: SEQ_LEN,
