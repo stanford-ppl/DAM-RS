@@ -23,7 +23,7 @@ pub(super) trait CyclicReceiver<T: Clone>: ReceiverCommon<T> {
         let result = self.peek_next(manager);
         match result {
             Ok(data) => {
-                self.register_recv(data.time);
+                self.register_recv(data.time.max(manager.tick()));
                 self.data().head = None;
                 Ok(data)
             }
