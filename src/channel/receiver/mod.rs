@@ -98,8 +98,12 @@ trait ReceiverCommon<T: Clone>: Responsive + DataProvider<T> {
             Some(data @ PeekResult::Something(_)) => return data.clone(),
         }
         self.try_update_head(Time::new(0));
-        if let Some(result) = &self.data().head {
-            return result.clone();
+        match &self.data().head {
+            Some(x @ PeekResult::Closed) | Some(x @ PeekResult::Something(_)) => return x.clone(),
+
+            // This is speculative, so we should continue if it's nothing.
+            Some(PeekResult::Nothing(_)) => {}
+            None => unreachable!(),
         }
 
         let sig_time = self.data().spec.wait_until_sender(recv_time);

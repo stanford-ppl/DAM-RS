@@ -73,7 +73,7 @@ impl<T> BoundedCyclicSender<T> {
     fn update_srd(&mut self) -> bool {
         let send_time = self.data.spec.sender_tlb();
         // We don't know when it'll be available.
-        self.next_available = None;
+        assert!(self.next_available.is_none());
 
         let mut retval = false;
 
