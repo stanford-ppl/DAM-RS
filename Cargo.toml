@@ -35,8 +35,9 @@ bson = "2.7.0"
 [features]
 default = ["dot", "log-mongo"]
 dot = ["dep:graphviz-rust"]
-log-mongo = ["dep:mongodb"]
+log-mongo = ["dep:mongodb", "logging"]
 test-log-mongo = ["log-mongo"]
+logging = []
 doc-cfg = []
 
 [dependencies.mongodb]

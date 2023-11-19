@@ -1,3 +1,4 @@
+#![allow(unused)] // Marked as allow(unused) for when logging is off.
 use crossbeam::channel::Sender;
 
 use super::{LogEntry, LogError, LogEvent, LogFilter};
