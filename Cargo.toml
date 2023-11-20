@@ -40,6 +40,10 @@ test-log-mongo = ["log-mongo"]
 logging = []
 doc-cfg = []
 
+## Executes in a cycle-by-cycle manner, terrible for performance.
+## The only point of this flag is to pretend like we're executing cycle-by-cycle.
+cycle-like = []
+
 [dependencies.mongodb]
 version = "2.7.0"
 default-features = false

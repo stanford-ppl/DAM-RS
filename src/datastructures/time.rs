@@ -3,6 +3,7 @@ use std::{
     sync::atomic::{AtomicBool, AtomicU64},
 };
 
+use cfg_if::cfg_if;
 use serde::{Deserialize, Serialize};
 
 /// An immutable timestamp.
@@ -200,6 +201,16 @@ impl AtomicTime {
                 // If we weren't done, and neither were they.
                 let old_time = self.time.load(std::sync::atomic::Ordering::Relaxed);
                 if old_time < rhs.time {
+                    cfg_if! {
+                        // This is an incredibly stupid thing to do, but it's for the purpose of comparing against tick-based simulation.
+                        // This way we force switching to a different context every cycle
+                        if #[cfg(feature = "cycle-like")] {
+                            let diff = rhs.time - old_time;
+                            for _ in 0..diff {
+                                std::thread::yield_now();
+                            }
+                        }
+                    }
                     self.time
                         .store(rhs.time, std::sync::atomic::Ordering::Release);
                     return true;
@@ -210,6 +221,15 @@ impl AtomicTime {
     }
 
     pub fn incr_cycles(&self, rhs: u64) {
+        cfg_if! {
+            if #[cfg(feature = "cycle-like")] {
+                // This is an incredibly stupid thing to do, but it's for the purpose of comparing against tick-based simulation.
+                // This way we force switching to a different context every cycle
+                for _ in 0..rhs {
+                    std::thread::yield_now();
+                }
+            }
+        }
         self.time.fetch_add(rhs, Self::UPDATE_ORDERING);
     }
 }
