@@ -40,6 +40,9 @@ test-log-mongo = ["log-mongo"]
 logging = []
 doc-cfg = []
 
+## Backs channels with unbounded channels instead of bounded channels
+unbounded-channels = []
+
 ## Executes in a cycle-by-cycle manner, terrible for performance.
 ## The only point of this flag is to pretend like we're executing cycle-by-cycle.
 cycle-like = []
