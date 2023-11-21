@@ -92,7 +92,7 @@ pub fn event_type_internal(_attrs: TokenStream, item: TokenStream) -> TokenStrea
 
 #[proc_macro_attribute]
 pub fn event_type(_attrs: TokenStream, item: TokenStream) -> TokenStream {
-    event_type_impl(_attrs, item, make_dam_path("dan_rs", false))
+    event_type_impl(_attrs, item, make_dam_path("dam", false))
 }
 
 fn event_type_impl(_attrs: TokenStream, item: TokenStream, dam_path: Path) -> TokenStream {
