@@ -11,7 +11,6 @@ rustdoc-args = ["--cfg", "docsrs"]
 crossbeam = "0.8.2"
 num = "0.4.0"
 ndarray = "0.15.6"
-ntest = "0.9.0"
 dam-macros = { version = "0.1.0", path = "dam-macros" }
 linkme = "0.3.12"
 serde = "1.0.171"
@@ -36,12 +35,21 @@ bson = "2.7.0"
 [features]
 default = ["dot", "log-mongo"]
 dot = ["dep:graphviz-rust"]
-log-mongo = ["dep:mongodb"]
+log-mongo = ["dep:mongodb", "logging"]
 test-log-mongo = ["log-mongo"]
+logging = []
+doc-cfg = []
+
+## Backs channels with unbounded channels instead of bounded channels
+unbounded-channels = []
+
+## Executes in a cycle-by-cycle manner, terrible for performance.
+## The only point of this flag is to pretend like we're executing cycle-by-cycle.
+cycle-like = []
 
 [dependencies.mongodb]
 version = "2.7.0"
-default_features = false
+default-features = false
 optional = true
 ## Have to use openssl-tls for cross compilation and wsl2.
 features = ["sync", "openssl-tls"]

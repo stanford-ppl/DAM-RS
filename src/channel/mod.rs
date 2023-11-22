@@ -19,6 +19,8 @@ mod sender;
 
 pub(crate) mod handle;
 
+pub mod adapters;
+
 use std::sync::Arc;
 use thiserror::Error;
 
@@ -59,6 +61,29 @@ impl<T> ChannelElement<T> {
     /// Updates the timestamp with a later timestamp. This is used for emulating stalls.
     pub fn update_time(&mut self, new_time: Time) {
         self.time = std::cmp::max(self.time, new_time);
+    }
+
+    /// Converts between ChannelElement types, where the underlying types are compatible.
+    /// We can't blanket implement this via From/Into because there are existing impls
+    pub fn convert<U>(self) -> ChannelElement<U>
+    where
+        T: Into<U>,
+    {
+        ChannelElement {
+            time: self.time,
+            data: self.data.into(),
+        }
+    }
+
+    /// Attempts to convert between ChannelElement types.
+    pub fn try_convert<U>(self) -> Result<ChannelElement<U>, <T as TryInto<U>>::Error>
+    where
+        T: TryInto<U>,
+    {
+        Ok(ChannelElement {
+            time: self.time,
+            data: self.data.try_into()?,
+        })
     }
 }
 
@@ -121,7 +146,7 @@ impl<T: DAMType> Sender<T> {
     }
 
     /// Advances time forward until the channel is not full.
-    pub fn wait_until_available(&mut self, manager: &mut TimeManager) -> Result<(), EnqueueError> {
+    pub fn wait_until_available(&self, manager: &TimeManager) -> Result<(), EnqueueError> {
         self.under().wait_until_available(manager)
     }
 }

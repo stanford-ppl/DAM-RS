@@ -29,7 +29,7 @@ pub(super) trait AcyclicReceiver<T: Clone>: ReceiverCommon<T> {
             Some(PeekResult::Something(element)) => {
                 let cloned = element.clone();
                 self.data().head = None;
-                self.register_recv(cloned.time);
+                self.register_recv(cloned.time.max(manager.tick()));
                 manager.advance(cloned.time);
                 return Ok(cloned);
             }
@@ -39,7 +39,7 @@ pub(super) trait AcyclicReceiver<T: Clone>: ReceiverCommon<T> {
         // At this point, we can just block!
         match self.data().underlying.recv() {
             Ok(ce) => {
-                self.register_recv(ce.time);
+                self.register_recv(ce.time.max(manager.tick()));
                 manager.advance(ce.time);
                 Ok(ce)
             }

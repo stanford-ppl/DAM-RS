@@ -3,6 +3,7 @@ use std::{
     sync::atomic::{AtomicBool, AtomicU64},
 };
 
+use cfg_if::cfg_if;
 use serde::{Deserialize, Serialize};
 
 /// An immutable timestamp.
@@ -51,6 +52,24 @@ impl Time {
             Ordering::Less
         } else {
             self.time.cmp(&other.time)
+        }
+    }
+}
+
+impl From<u64> for Time {
+    fn from(value: u64) -> Self {
+        Time {
+            time: value,
+            done: false,
+        }
+    }
+}
+
+impl From<(bool, u64)> for Time {
+    fn from(value: (bool, u64)) -> Self {
+        Time {
+            time: value.1,
+            done: value.0,
         }
     }
 }
@@ -148,7 +167,7 @@ impl AtomicTime {
 
     /// Reads the underlying time with Acquire semantics, used by other threads.
     pub fn load(&self) -> Time {
-        let time = self.time.load(std::sync::atomic::Ordering::Relaxed);
+        let time = self.time.load(std::sync::atomic::Ordering::Acquire);
         let done = self.done.load(std::sync::atomic::Ordering::Acquire);
         Time { time, done }
     }
@@ -182,6 +201,16 @@ impl AtomicTime {
                 // If we weren't done, and neither were they.
                 let old_time = self.time.load(std::sync::atomic::Ordering::Relaxed);
                 if old_time < rhs.time {
+                    cfg_if! {
+                        // This is an incredibly stupid thing to do, but it's for the purpose of comparing against tick-based simulation.
+                        // This way we force switching to a different context every cycle
+                        if #[cfg(feature = "cycle-like")] {
+                            let diff = rhs.time - old_time;
+                            for _ in 0..diff {
+                                std::thread::yield_now();
+                            }
+                        }
+                    }
                     self.time
                         .store(rhs.time, std::sync::atomic::Ordering::Release);
                     return true;
@@ -192,6 +221,15 @@ impl AtomicTime {
     }
 
     pub fn incr_cycles(&self, rhs: u64) {
+        cfg_if! {
+            if #[cfg(feature = "cycle-like")] {
+                // This is an incredibly stupid thing to do, but it's for the purpose of comparing against tick-based simulation.
+                // This way we force switching to a different context every cycle
+                for _ in 0..rhs {
+                    std::thread::yield_now();
+                }
+            }
+        }
         self.time.fetch_add(rhs, Self::UPDATE_ORDERING);
     }
 }

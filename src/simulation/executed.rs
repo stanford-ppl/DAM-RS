@@ -1,9 +1,6 @@
 use std::sync::Arc;
 
-use crate::{
-    channel::handle::ChannelHandle, context::ContextSummary, datastructures::Time,
-    view::ContextView,
-};
+use crate::{channel::handle::ChannelHandle, context::ContextSummary, view::ContextView};
 
 /// Represents a program graph which has been executed.
 /// This still stores all of the edges in the graph, but each node is replaced with its summary.
@@ -24,7 +21,7 @@ use super::dot::DotConvertibleHelper;
 impl Executed<'_> {
     /// Gets the total number of cycles taken by the graph, defined as the maximum number of cycles taken by any node.
     /// This is a slight underapproximation in the event that the last nodes scheduled their output for a time in the future.
-    pub fn elapsed_cycles(&self) -> Option<Time> {
+    pub fn elapsed_cycles(&self) -> Option<u64> {
         self.nodes.iter().map(|node| node.max_time()).max()
     }
 }

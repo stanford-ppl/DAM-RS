@@ -23,3 +23,34 @@ builtin_ss!(u64, 64);
 
 builtin_ss!(f32, 32);
 builtin_ss!(f64, 64);
+
+impl StaticallySized for usize {
+    const SIZE: usize = unimplemented!();
+    // usize is a type with a static size, but the value of the size is platform-dependent.
+    // Therefore, we implement the trait StaticallySized but keep SIZE unimplemented.
+}
+
+impl<A: StaticallySized, B: StaticallySized> StaticallySized for (A, B) {
+    const SIZE: usize = A::SIZE + B::SIZE;
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::types::{DAMType, StaticallySized};
+
+    #[test]
+    fn test_ndarray() {
+        let tup_a: (i32, i32) = (5, 5);
+
+        let tup_b: (i32, i64) = (5, 5);
+
+        let i32_size = i32::SIZE;
+        let i64_size = i64::SIZE;
+
+        assert!(tup_a.dam_size() == (i32_size + i32_size));
+        assert!(tup_b.dam_size() == (i32_size + i64_size));
+
+        dbg!(tup_a);
+        dbg!(tup_b);
+    }
+}

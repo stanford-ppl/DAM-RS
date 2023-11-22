@@ -1,29 +1,21 @@
 use std::sync::{Arc, Mutex};
 
+use dam_macros::event_type_internal;
 use linkme::distributed_slice;
 use serde::{Deserialize, Serialize};
 
 use crate::{
     datastructures::*,
-    logging::{log_event, registry::METRICS, LogEvent},
+    logging::{log_event, registry::METRICS, update_ticks, LogEvent},
 };
 
 use super::ContextView;
 
+#[event_type_internal]
 #[derive(Serialize, Deserialize, Debug)]
 enum TimeEvent {
-    Incr(u64),
-    Advance(Time),
-    ScanAndWrite(Time, Vec<Identifier>),
     Finish(Time),
 }
-
-impl LogEvent for TimeEvent {
-    const NAME: &'static str = "TimeEvent";
-}
-
-#[distributed_slice(METRICS)]
-static TIME_EVENT: &'static str = TimeEvent::NAME;
 
 /// The basic "owned" time construct.
 /// All time mutations should be performed through a TimeManager.
@@ -57,7 +49,6 @@ impl Drop for TimeManager {
 impl TimeManager {
     /// Increments time by a non-negative number of cycles.
     pub fn incr_cycles(&self, incr: u64) {
-        let _ = log_event(&TimeEvent::Incr(incr));
         self.underlying.time.incr_cycles(incr);
         self.scan_and_write_signals();
     }
@@ -65,7 +56,6 @@ impl TimeManager {
     /// Advances to a new time. If the new time is in the past, this is a no-op.
     pub fn advance(&self, new: Time) {
         if self.underlying.time.try_advance(new) {
-            let _ = log_event(&TimeEvent::Advance(new));
             self.scan_and_write_signals();
         }
     }
@@ -73,6 +63,8 @@ impl TimeManager {
     fn scan_and_write_signals(&self) {
         let mut signal_buffer = self.underlying.signal_buffer.lock().unwrap();
         let tlb = self.underlying.time.load();
+        // Log the updated time
+        update_ticks(tlb);
         signal_buffer.retain(|signal| {
             if signal.when <= tlb {
                 signal.thread.unpark();

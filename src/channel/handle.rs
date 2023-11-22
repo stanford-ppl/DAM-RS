@@ -68,8 +68,17 @@ impl<T: Clone> ChannelHandle for ChannelData<T> {
         };
         match self.channel_spec.capacity() {
             Some(capacity) => {
-                let (tx, rx) = channel::bounded::<ChannelElement<T>>(capacity);
-                let (resp_t, resp_r) = channel::bounded::<Time>(capacity);
+                cfg_if::cfg_if! {
+                    if #[cfg(feature = "unbounded-channels")] {
+                        let (tx, rx) = channel::unbounded::<ChannelElement<T>>();
+                        let (resp_t, resp_r) = channel::unbounded::<Time>();
+                        // So that Rust doesn't complain about capacity being unused
+                        let _ = capacity;
+                    } else {
+                        let (tx, rx) = channel::bounded::<ChannelElement<T>>(capacity);
+                        let (resp_t, resp_r) = channel::bounded::<Time>(capacity);
+                    }
+                }
                 match flavor {
                     ChannelFlavor::Acyclic => {
                         *self.sender() = BoundedAcyclicSender {

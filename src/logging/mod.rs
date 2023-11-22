@@ -11,7 +11,7 @@ use thiserror::Error;
 mod null_logger;
 pub use null_logger::*;
 
-#[cfg_attr(docsrs, doc(cfg(feature = "log-mongo")))]
+// #[cfg_attr(docsrs, doc(cfg(feature = "log-mongo")))]
 #[cfg(feature = "log-mongo")]
 pub mod mongo_logger;
 
@@ -20,6 +20,8 @@ pub use log_interface::LogInterface;
 
 mod log_functions;
 pub use log_functions::*;
+
+use crate::datastructures::Time;
 
 use self::registry::{get_metrics_vec, METRICS};
 
@@ -57,6 +59,9 @@ pub struct LogEntry {
 
     /// Identity of the current context
     pub(crate) context: usize,
+
+    /// Number of ticks elapsed PRIOR to this event
+    pub(crate) ticks: Time,
 
     /// String name of the logging event type
     pub(crate) event_type: String,

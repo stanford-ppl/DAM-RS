@@ -1,7 +1,7 @@
-#[cfg_attr(docsrs, doc(cfg(feature = "log-mongo")))]
+// #[cfg_attr(docsrs, doc(cfg(feature = "log-mongo")))]
 #[cfg(feature = "log-mongo")]
 mod mongo;
-#[cfg_attr(docsrs, doc(cfg(feature = "log-mongo")))]
+// #[cfg_attr(docsrs, doc(cfg(feature = "log-mongo")))]
 #[cfg(feature = "log-mongo")]
 pub use mongo::*;
 
@@ -13,7 +13,7 @@ pub enum LoggingOptions {
     None,
 
     /// Log to MongoDB
-    #[cfg_attr(docsrs, doc(cfg(feature = "log-mongo")))]
+    // #[cfg_attr(docsrs, doc(cfg(feature = "log-mongo")))]
     #[cfg(feature = "log-mongo")]
     Mongo(MongoOptions),
 }

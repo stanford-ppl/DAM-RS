@@ -31,8 +31,8 @@ pub struct DRAMReadBundle<IT: Clone, DT: Clone> {
     data: Sender<DT>,
 }
 
-impl<IT: DAMType, DT: Clone> Peekable for DRAMReadBundle<IT, DT> {
-    fn next_event(&mut self) -> crate::channel::utils::EventTime {
+impl<IT: DAMType, DT: Clone> Peekable for &DRAMReadBundle<IT, DT> {
+    fn next_event(self) -> crate::channel::utils::EventTime {
         [self.addr.next_event(), self.req_size.next_event()]
             .into_iter()
             .max()
@@ -48,8 +48,8 @@ pub struct DRAMWriteBundle<IT: DAMType, DT: DAMType, AT: Clone> {
     ack: Sender<AT>,
 }
 
-impl<IT: DAMType, DT: DAMType, AT: Clone> Peekable for DRAMWriteBundle<IT, DT, AT> {
-    fn next_event(&mut self) -> crate::channel::utils::EventTime {
+impl<IT: DAMType, DT: DAMType, AT: Clone> Peekable for &DRAMWriteBundle<IT, DT, AT> {
+    fn next_event(self) -> crate::channel::utils::EventTime {
         [
             self.addr.next_event(),
             self.data.next_event(),
@@ -66,8 +66,8 @@ enum AccessBundle<IT: DAMType, DT: DAMType, AT: Clone> {
     Read(DRAMReadBundle<IT, DT>),
 }
 
-impl<IT: DAMType, DT: DAMType, AT: Clone> Peekable for AccessBundle<IT, DT, AT> {
-    fn next_event(&mut self) -> crate::channel::utils::EventTime {
+impl<IT: DAMType, DT: DAMType, AT: Clone> Peekable for &AccessBundle<IT, DT, AT> {
+    fn next_event(self) -> crate::channel::utils::EventTime {
         match self {
             AccessBundle::Write(wr) => wr.next_event(),
             AccessBundle::Read(rd) => rd.next_event(),
