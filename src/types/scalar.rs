@@ -34,6 +34,11 @@ impl<A: StaticallySized, B: StaticallySized> StaticallySized for (A, B) {
     const SIZE: usize = A::SIZE + B::SIZE;
 }
 
+impl StaticallySized for () {
+    const SIZE: usize = 0;
+    // This type is used to make it explicit that we don't care about the value.
+}
+
 #[cfg(test)]
 mod tests {
     use crate::types::{DAMType, StaticallySized};
