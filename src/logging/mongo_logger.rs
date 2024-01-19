@@ -3,6 +3,7 @@
 //! The MongoLogger takes in a [crossbeam::channel::Receiver] containing [LogEntry] and writes them to the database in as large a chunk as it can.
 
 use crossbeam::channel::TryRecvError;
+use mongodb::options::{InsertManyOptions, WriteConcern};
 
 use super::LogEntry;
 use derive_more::Constructor;
@@ -20,6 +21,8 @@ pub struct MongoLogger {
     queue: crossbeam::channel::Receiver<LogEntry>,
 }
 
+const BATCH_SIZE: usize = 100000;
+
 impl super::LogProcessor for MongoLogger {
     fn spawn(&mut self) {
         let database = self
@@ -35,7 +38,9 @@ impl super::LogProcessor for MongoLogger {
         let mut should_continue = true;
         let mut batch = vec![];
         while should_continue {
-            std::thread::yield_now();
+            if self.queue.len() < BATCH_SIZE {
+                std::thread::yield_now();
+            }
             loop {
                 match self.queue.try_recv() {
                     Ok(data) => batch.push(data),
@@ -49,7 +54,17 @@ impl super::LogProcessor for MongoLogger {
                 }
             }
             if !batch.is_empty() {
-                collection.insert_many(batch.iter(), None).unwrap();
+                collection
+                    .insert_many(
+                        batch.iter(),
+                        Some(
+                            InsertManyOptions::builder()
+                                .write_concern(WriteConcern::builder().journal(false).build())
+                                .ordered(false)
+                                .build(),
+                        ),
+                    )
+                    .unwrap();
                 batch.clear();
             }
         }

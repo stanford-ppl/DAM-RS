@@ -16,6 +16,8 @@ pub struct Initialized<'a> {
     pub(super) data: ProgramData<'a>,
 }
 
+const NUM_LOGGERS: usize = 4;
+
 impl<'a> Initialized<'a> {
     /// Executes the program with specified options.
     /// Currently will deadlock frequently if there is an error at runtime, due to blocking dequeues.
@@ -35,12 +37,16 @@ impl<'a> Initialized<'a> {
             }
         };
 
-        let (log_sender, log_receiver) = crossbeam::channel::unbounded();
-
-        let exec_logger =
-            Self::make_logger(log_receiver, options.logging).expect("Error creating logger!");
-
-        let has_logger = exec_logger.is_some();
+        // If we should make a log, then we populate this stuff
+        let (log_sender, log_receiver, has_logger) = if let LoggingOptions::None = options.logging {
+            // don't log
+            (None, None, false)
+        } else {
+            // Limit logger size to at most some number of elements at a time to prevent an infinitely growing log.
+            // Sinze the batch size for mongo is 100k, we'll be generous and allow 16 batches in the channel at a time.
+            let (log_sender, log_receiver) = crossbeam::channel::bounded(100000 * 16);
+            (Some(log_sender), Some(log_receiver), true)
+        };
 
         let summaries = Arc::new(SegQueue::new());
 
@@ -68,13 +74,15 @@ impl<'a> Initialized<'a> {
                                 super::LogFilterKind::Blanket(filter) => filter,
                                 super::LogFilterKind::PerChild(func) => func(child.id()),
                             };
-                            initialize_log(LogInterface::new(
-                                child.id(),
-                                sender,
-                                base_time,
-                                active_filter,
-                                Time::new(0),
-                            ));
+                            if let Some(snd) = sender {
+                                initialize_log(LogInterface::new(
+                                    child.id(),
+                                    snd,
+                                    base_time,
+                                    active_filter,
+                                    Time::new(0),
+                                ));
+                            }
                         }
                         child.run();
                         summary_queue.push(child.summarize());
@@ -84,10 +92,17 @@ impl<'a> Initialized<'a> {
 
             drop(log_sender);
 
-            if let Some(mut logger) = exec_logger {
-                builder
-                    .spawn_scoped_careless(s, move || logger.spawn())
-                    .unwrap_or_else(|_| panic!("Failed to start logging thread!"));
+            if let Some(receiver) = log_receiver {
+                for _ in 0..NUM_LOGGERS {
+                    Self::make_logger(receiver.clone(), options.logging.clone())
+                        .expect("Error creating logger!")
+                        .map(|mut exec_logger| {
+                            builder
+                                .clone()
+                                .spawn_scoped_careless(s, move || exec_logger.spawn())
+                                .unwrap_or_else(|_| panic!("Failed to start logging thread!"));
+                        });
+                }
             }
         });
 
