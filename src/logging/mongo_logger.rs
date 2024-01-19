@@ -2,7 +2,7 @@
 //!
 //! The MongoLogger takes in a [crossbeam::channel::Receiver] containing [LogEntry] and writes them to the database in as large a chunk as it can.
 
-use crossbeam::channel::TryRecvError;
+use crate::shim::channel;
 use mongodb::options::{InsertManyOptions, WriteConcern};
 
 use super::LogEntry;
@@ -18,7 +18,7 @@ pub struct MongoLogger {
     db_options: mongodb::options::DatabaseOptions,
     collection_name: String,
     collection_options: mongodb::options::CreateCollectionOptions,
-    queue: crossbeam::channel::Receiver<LogEntry>,
+    queue: channel::Receiver<LogEntry>,
 }
 
 const BATCH_SIZE: usize = 100000;
@@ -30,7 +30,7 @@ impl super::LogProcessor for MongoLogger {
             .database_with_options(self.database_name.as_str(), self.db_options.clone());
         database
             .create_collection(
-                &self.collection_name.as_str(),
+                self.collection_name.as_str(),
                 self.collection_options.clone(),
             )
             .expect("Error setting collection options");
@@ -44,10 +44,10 @@ impl super::LogProcessor for MongoLogger {
             loop {
                 match self.queue.try_recv() {
                     Ok(data) => batch.push(data),
-                    Err(TryRecvError::Empty) => {
+                    Err(channel::TryRecvError::Empty) => {
                         break;
                     }
-                    Err(TryRecvError::Disconnected) => {
+                    Err(channel::TryRecvError::Disconnected) => {
                         should_continue = false;
                         break;
                     }

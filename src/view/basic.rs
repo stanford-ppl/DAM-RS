@@ -125,7 +125,7 @@ impl ContextView for BasicContextView {
         let mut signal_buffer = self.under.signal_buffer.lock().unwrap();
         let mut cur_time = self.under.time.load();
         if cur_time >= when {
-            return cur_time;
+            cur_time
         } else {
             signal_buffer.push(SignalElement {
                 when,
@@ -143,7 +143,7 @@ impl ContextView for BasicContextView {
             }
             let _ = log_event(&ContextViewEvent::Unpark);
 
-            return self.under.time.load();
+            self.under.time.load()
         }
     }
 

@@ -9,6 +9,7 @@ pub mod channel;
 pub mod context;
 mod datastructures;
 pub mod logging;
+pub mod shim;
 pub mod simulation;
 pub mod types;
 pub mod utility_contexts;

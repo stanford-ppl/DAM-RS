@@ -4,7 +4,7 @@
 
 use std::sync::Arc;
 
-use crossbeam::channel;
+use crate::shim::channel;
 
 use crate::datastructures::{sync_unsafe::SyncUnsafeCell, Identifier, Time};
 

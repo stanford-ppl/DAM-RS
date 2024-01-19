@@ -90,7 +90,7 @@ impl Eq for Time {}
 
 impl PartialOrd for Time {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
+        Some(std::cmp::Ord::cmp(self, other))
     }
 }
 
@@ -215,7 +215,7 @@ impl AtomicTime {
                         .store(rhs.time, std::sync::atomic::Ordering::Release);
                     return true;
                 }
-                return false;
+                false
             }
         }
     }

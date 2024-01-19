@@ -1,5 +1,5 @@
 #![allow(unused)] // Marked as allow(unused) for when logging is off.
-use crossbeam::channel::Sender;
+use crate::shim::channel::Sender;
 
 use super::{LogEntry, LogError, LogEvent, LogFilter};
 use crate::datastructures::{Identifier, Time};
@@ -29,12 +29,12 @@ impl LogInterface {
                     .elapsed()
                     .as_micros()
                     .try_into()
-                    .map_err(|err| LogError::TimeConversionError(err))?,
+                    .map_err(LogError::TimeConversionError)?,
                 context: self.id.id,
                 ticks: self.current_ticks,
                 event_type: T::NAME.to_string(),
                 event_data: bson::to_bson(event)
-                    .map_err(|err| LogError::SerializationError(err))?,
+                    .map_err(LogError::SerializationError)?,
             })
             .map_err(|_| LogError::SendError)?;
 

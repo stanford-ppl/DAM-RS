@@ -144,7 +144,7 @@ mod tests {
         rcv.attach_receiver(&fc);
         fc.set_run(move |time| loop {
             let pre_peek = rcv.next_event();
-            let peek_next = rcv.peek_next(&time);
+            let peek_next = rcv.peek_next(time);
             let post_peek = rcv.next_event();
             match (pre_peek, post_peek, peek_next) {
                 (prev, EventTime::Ready(post_time), Ok(ce)) if post_time == ce.time => {
@@ -156,7 +156,7 @@ mod tests {
                         }
                     };
                     // Pop the value off the stream
-                    let _ = rcv.dequeue(&time);
+                    let _ = rcv.dequeue(time);
                 },
 
                 (_, EventTime::Ready(post_time), Ok(ce)) => {

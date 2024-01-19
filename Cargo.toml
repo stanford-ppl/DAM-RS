@@ -8,7 +8,6 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
-crossbeam = "0.8.2"
 num = "0.4.0"
 ndarray = "0.15.6"
 dam-macros = { version = "0.1.0", path = "dam-macros" }
@@ -31,9 +30,10 @@ cfg-if = "1.0.0"
 enum_delegate = "0.2.0"
 derive_more = "0.99.17"
 bson = "2.7.0"
+crossbeam = {version = "0.8.4", optional = true}
 
 [features]
-default = ["dot", "log-mongo"]
+default = ["dot", "log-mongo", "os-threads"]
 dot = ["dep:graphviz-rust"]
 log-mongo = ["dep:mongodb", "logging"]
 test-log-mongo = ["log-mongo"]
@@ -46,6 +46,9 @@ unbounded-channels = []
 ## Executes in a cycle-by-cycle manner, terrible for performance.
 ## The only point of this flag is to pretend like we're executing cycle-by-cycle.
 cycle-like = []
+
+## use os-threads as the form of parallelism
+os-threads = ["dep:crossbeam"] 
 
 [dependencies.mongodb]
 version = "2.7.0"

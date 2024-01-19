@@ -81,8 +81,7 @@ impl DotConvertibleHelper for Executed<'_> {
     fn generate_edges(&self) -> Vec<Stmt> {
         self.edges
             .iter()
-            .map(|edge| Self::generate_edge(edge.clone()))
-            .flatten()
+            .flat_map(|edge| Self::generate_edge(edge.clone()))
             .collect()
     }
 }

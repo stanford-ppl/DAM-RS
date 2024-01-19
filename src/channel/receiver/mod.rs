@@ -1,4 +1,4 @@
-use crossbeam::channel::TryRecvError;
+use crate::shim::channel::TryRecvError;
 
 use enum_dispatch::enum_dispatch;
 
@@ -77,7 +77,7 @@ macro_rules! RegisterReceiver {
 // Holds the basic data for a receiver
 pub(super) struct ReceiverData<T> {
     pub(super) spec: InlineSpec,
-    pub(super) underlying: crossbeam::channel::Receiver<ChannelElement<T>>,
+    pub(super) underlying: crate::shim::channel::Receiver<ChannelElement<T>>,
     pub(super) head: Option<PeekResult<T>>,
 }
 
@@ -150,7 +150,7 @@ pub(super) struct InfiniteAcyclicReceiver<T> {
 impl<T> Unresponsive for InfiniteAcyclicReceiver<T> {}
 RegisterReceiver!(InfiniteAcyclicReceiver, AcyclicReceiver);
 
-type ResponseChannel = crossbeam::channel::Sender<Time>;
+type ResponseChannel = crate::shim::channel::Sender<Time>;
 
 pub(super) struct BoundedCyclicReceiver<T> {
     pub(super) data: ReceiverData<T>,
