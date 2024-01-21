@@ -22,6 +22,9 @@ impl<'a> Initialized<'a> {
     /// Currently will deadlock frequently if there is an error at runtime, due to blocking dequeues.
     pub fn run(mut self, options: RunOptions) -> Executed<'a> {
         // If we should make a log, then we populate this stuff
+
+        // This guard is necessary because when logging is off, then the LoggingOptions enum is always None.
+        #[allow(irrefutable_let_patterns)]
         let (log_sender, log_receiver, has_logger) = if let LoggingOptions::None = options.logging {
             // don't log
             (None, None, false)

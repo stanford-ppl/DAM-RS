@@ -1,5 +1,3 @@
-use std::ops::{Deref, DerefMut};
-
 use cfg_if::cfg_if;
 
 use super::{LogError, LogEvent};
@@ -30,6 +28,7 @@ cfg_if! {
 
 cfg_if! {
     if #[cfg(feature = "logging")] {
+        use std::ops::{Deref, DerefMut};
 
         /// Logs with a callback. This should be used when constructing the event is particularly expensive, as it does require extra overhead.
         /// The callback is only invoked if the logger is set AND the filter permits the event.
