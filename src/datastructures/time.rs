@@ -207,7 +207,7 @@ impl AtomicTime {
                         if #[cfg(feature = "cycle-like")] {
                             let diff = rhs.time - old_time;
                             for _ in 0..diff {
-                                std::thread::yield_now();
+                                crate::shim::yield_now();
                             }
                         }
                     }
@@ -226,7 +226,7 @@ impl AtomicTime {
                 // This is an incredibly stupid thing to do, but it's for the purpose of comparing against tick-based simulation.
                 // This way we force switching to a different context every cycle
                 for _ in 0..rhs {
-                    std::thread::yield_now();
+                    crate::shim::yield_now();
                 }
             }
         }

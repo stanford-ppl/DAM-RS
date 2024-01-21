@@ -4,7 +4,11 @@ pub mod channel {
 }
 
 pub use std::thread::current;
+pub use std::thread::park;
 pub use std::thread::scope;
+pub use std::thread::sleep;
+pub use std::thread::yield_now;
+pub use std::thread::Thread;
 pub use thread_priority::ThreadBuilder as Builder;
 
 /// Options available when using os threads
@@ -39,16 +43,17 @@ pub fn make_builder(mode: RunMode) -> Builder {
         .policy(policy)
 }
 
-/// Shim around builder
-pub fn spawn<'scope, 'env, F, T>(
-    scope: &'scope std::thread::Scope<'scope, 'env>,
-    builder: Builder,
-    f: F,
-) -> Result<std::thread::ScopedJoinHandle<'scope, T>, std::io::Error>
-where
-    F: FnOnce() -> T,
-    F: Send + 'scope,
-    T: Send + 'scope,
-{
-    builder.spawn_scoped_careless(scope, f)
+/// Spawns a coroutine, without the builder because
+#[macro_export]
+macro_rules! spawn {
+    ($scope: expr, $builder: expr, $f: expr) => {
+        ($builder).spawn_scoped_careless($scope, $f)
+    };
+
+    ($scope: expr, $f: expr) => {{
+        ($scope).spawn($f);
+        Result::<(), ()>::Ok(())
+    }};
 }
+
+pub use spawn;

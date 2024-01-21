@@ -7,4 +7,8 @@ cfg_if::cfg_if! {
         pub use os_threads::*;
 
     }
+    else if #[cfg(feature = "coroutines")] {
+        mod coroutines;
+        pub use coroutines::*;
+    }
 }

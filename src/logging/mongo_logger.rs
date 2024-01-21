@@ -38,9 +38,7 @@ impl super::LogProcessor for MongoLogger {
         let mut should_continue = true;
         let mut batch = vec![];
         while should_continue {
-            if self.queue.len() < BATCH_SIZE {
-                std::thread::yield_now();
-            }
+            let mut sleep_next = false;
             loop {
                 match self.queue.try_recv() {
                     Ok(data) => batch.push(data),
@@ -52,6 +50,9 @@ impl super::LogProcessor for MongoLogger {
                         break;
                     }
                 }
+            }
+            if batch.len() < BATCH_SIZE {
+                sleep_next = true;
             }
             if !batch.is_empty() {
                 collection
@@ -66,6 +67,10 @@ impl super::LogProcessor for MongoLogger {
                     )
                     .unwrap();
                 batch.clear();
+            }
+
+            if sleep_next {
+                crate::shim::yield_now();
             }
         }
         self.client.clone().shutdown();

@@ -2,6 +2,7 @@ use crate::{
     datastructures::Time,
     logging::{initialize_log, LogEntry, LogInterface, LogProcessor},
     shim::channel,
+    shim::spawn,
 };
 
 #[cfg(feature = "log-mongo")]
@@ -33,23 +34,23 @@ impl<'a> Initialized<'a> {
 
         let summaries = std::sync::Arc::new(std::sync::Mutex::new(vec![]));
 
-        std::thread::scope(|s| {
-            let builder = crate::shim::make_builder(options.mode);
-
+        crate::shim::scope(|s| {
             let base_time = std::time::Instant::now();
 
             self.data.nodes.drain(..).for_each(|mut child| {
                 let id = child.id();
                 let name = child.name();
-                let builder = builder
-                    .clone()
-                    .name(format!("{}({})", child.id(), child.name()));
+                let builder = crate::shim::make_builder(options.mode).name(format!(
+                    "{}({})",
+                    child.id(),
+                    child.name()
+                ));
                 let filter_copy = options.log_filter.clone();
 
                 let sender = log_sender.clone();
                 let summary_queue = summaries.clone();
 
-                crate::shim::spawn(s, builder, move || {
+                spawn!(s, builder, move || {
                     if has_logger {
                         let active_filter = match filter_copy {
                             super::LogFilterKind::Blanket(filter) => filter,
@@ -77,11 +78,10 @@ impl<'a> Initialized<'a> {
 
             if let Some(receiver) = log_receiver {
                 for _ in 0..NUM_LOGGERS {
+                    let builder = crate::shim::make_builder(options.mode);
                     Self::make_logger(receiver.clone(), options.logging.clone())
                         .expect("Error creating logger!")
-                        .map(|mut exec_logger| {
-                            crate::shim::spawn(s, builder.clone(), move || exec_logger.spawn())
-                        });
+                        .map(|mut exec_logger| spawn!(s, builder, move || exec_logger.spawn()));
                 }
             }
         });
@@ -173,12 +173,8 @@ mod inner {
 
     impl DotConvertibleHelper for super::Initialized<'_> {
         fn add_nodes(&self) -> Vec<Stmt> {
-            let node_graph: HashMap<_, _> = self
-                .data
-                .nodes
-                .iter()
-                .flat_map(|node| node.ids())
-                .collect();
+            let node_graph: HashMap<_, _> =
+                self.data.nodes.iter().flat_map(|node| node.ids()).collect();
 
             let mut stmts = vec![];
             let mut visited = FxHashSet::default();

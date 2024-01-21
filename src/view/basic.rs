@@ -129,7 +129,7 @@ impl ContextView for BasicContextView {
         } else {
             signal_buffer.push(SignalElement {
                 when,
-                thread: std::thread::current(),
+                thread: crate::shim::current(),
             });
             // Unlock the signal buffer
             drop(signal_buffer);
@@ -138,7 +138,7 @@ impl ContextView for BasicContextView {
 
             while cur_time < when {
                 // Park is Acquire, so the load can be relaxed
-                std::thread::park();
+                crate::shim::park();
                 cur_time = self.under.time.load_relaxed();
             }
             let _ = log_event(&ContextViewEvent::Unpark);
@@ -157,7 +157,7 @@ impl ContextView for BasicContextView {
 #[derive(Debug, Clone)]
 struct SignalElement {
     when: Time,
-    thread: std::thread::Thread,
+    thread: crate::shim::Thread,
 }
 
 /// Encapsulates the callback backlog and the current tick info to make BasicContextView work.

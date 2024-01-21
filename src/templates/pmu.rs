@@ -41,23 +41,23 @@ impl<T: DAMType, IT: IndexLike, AT: DAMType> Context for PMU<T, IT, AT> {
     fn run(&mut self) {
         let read_log = copy_log();
         let write_log = copy_log();
-        std::thread::scope(|s| {
-            s.spawn(|| {
+        crate::shim::scope(|s| {
+            crate::shim::spawn!(s, || {
                 if let Some(mut logger) = read_log {
                     logger.id = self.reader.id();
                     initialize_log(logger);
                 }
                 self.reader.run();
                 self.reader.cleanup();
-            });
-            s.spawn(|| {
+            }).unwrap();
+            crate::shim::spawn!(s, || {
                 if let Some(mut logger) = write_log {
                     logger.id = self.writer.id();
                     initialize_log(logger);
                 }
                 self.writer.run();
                 self.writer.cleanup();
-            });
+            }).unwrap();
         });
     }
 

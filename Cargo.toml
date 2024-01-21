@@ -31,6 +31,7 @@ enum_delegate = "0.2.0"
 derive_more = "0.99.17"
 bson = "2.7.0"
 crossbeam = {version = "0.8.4", optional = true}
+may = {version = "0.3.42", optional = true}
 
 [features]
 default = ["dot", "log-mongo", "os-threads"]
@@ -49,6 +50,9 @@ cycle-like = []
 
 ## use os-threads as the form of parallelism
 os-threads = ["dep:crossbeam"] 
+
+## use may coroutines as the primary form of parallelism
+coroutines = ["dep:may"]
 
 [dependencies.mongodb]
 version = "2.7.0"
