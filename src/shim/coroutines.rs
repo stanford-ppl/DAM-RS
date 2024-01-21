@@ -19,6 +19,7 @@ pub use may::coroutine::park;
 pub use may::coroutine::sleep;
 pub use may::coroutine::yield_now;
 pub use may::coroutine::Coroutine as Thread;
+pub use may::coroutine_local as local_storage;
 
 /// Options available when using os threads
 /// Execution mode for each thread

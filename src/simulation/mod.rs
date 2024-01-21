@@ -28,6 +28,8 @@ use crate::datastructures::Identifier;
 use crate::logging::LogFilter;
 use thiserror::Error;
 
+pub use crate::shim::RunMode;
+
 /// Options for executing an [Initialized] program.
 #[derive(Builder, Default)]
 #[builder(pattern = "owned")]
