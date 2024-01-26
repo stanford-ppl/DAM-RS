@@ -106,6 +106,11 @@ impl<'a> ProgramBuilder<'a> {
         self.add_node(Box::new(child));
     }
 
+    /// Returns how many children there are in the constructed graph
+    pub fn num_children(&self) -> usize {
+        self.data.nodes.len()
+    }
+
     /// Initializes the program, and returns an [Initialized] program if successful.
     /// On error, returns a [InitializationError], which encodes the first error that occurred.
     pub fn initialize(
