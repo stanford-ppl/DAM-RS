@@ -34,7 +34,7 @@ crossbeam = {version = "0.8.4"}
 may = {version = "0.3.42", optional = true}
 
 [features]
-default = ["dot", "log-mongo", "coroutines"]
+default = ["dot", "log-mongo", "os-threads"]
 dot = ["dep:graphviz-rust"]
 log-mongo = ["dep:mongodb", "logging"]
 test-log-mongo = ["log-mongo"]

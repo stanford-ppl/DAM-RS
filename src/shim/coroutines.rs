@@ -21,20 +21,8 @@ pub use may::coroutine::yield_now;
 pub use may::coroutine::Coroutine as Thread;
 pub use may::coroutine_local as local_storage;
 
-/// Options available when using os threads
-/// Execution mode for each thread
-#[derive(Debug, Default, Clone, Copy)]
-pub enum RunMode {
-    /// Execute under the default OS scheduler, such as CFS for Linux
-    #[default]
-    Simple,
-
-    /// Use FIFO (real-time) scheduling. This is higher performance, but may lead to starvation of other processes.
-    FIFO,
-}
-
 /// Constructs a thread builder based on the options specified in the [RunMode]
-pub fn make_builder(_mode: RunMode) -> Builder {
+pub fn make_builder(_mode: super::RunMode) -> Builder {
     may::coroutine::Builder::new()
 }
 
