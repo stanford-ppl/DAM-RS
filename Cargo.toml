@@ -30,11 +30,11 @@ cfg-if = "1.0.0"
 enum_delegate = "0.2.0"
 derive_more = "0.99.17"
 bson = "2.7.0"
-crossbeam = {version = "0.8.4", optional = true}
+crossbeam = {version = "0.8.4"}
 may = {version = "0.3.42", optional = true}
 
 [features]
-default = ["dot", "log-mongo", "os-threads"]
+default = ["dot", "log-mongo", "coroutines"]
 dot = ["dep:graphviz-rust"]
 log-mongo = ["dep:mongodb", "logging"]
 test-log-mongo = ["log-mongo"]
@@ -49,7 +49,7 @@ unbounded-channels = []
 cycle-like = []
 
 ## use os-threads as the form of parallelism
-os-threads = ["dep:crossbeam"] 
+os-threads = [] 
 
 ## use may coroutines as the primary form of parallelism
 coroutines = ["dep:may"]

@@ -1,6 +1,3 @@
-#![allow(unused)] // Marked as allow(unused) for when logging is off.
-use crate::shim::channel::Sender;
-
 use super::{LogEntry, LogError, LogEvent, LogFilter};
 use crate::datastructures::{Identifier, Time};
 use derive_more::Constructor;
@@ -11,7 +8,7 @@ use derive_more::Constructor;
 pub struct LogInterface {
     /// The Identifier for the currently executing context
     pub id: Identifier,
-    comm: Sender<LogEntry>,
+    comm: crossbeam::channel::Sender<LogEntry>,
     base_time: std::time::Instant,
     pub(crate) log_filter: LogFilter,
 
@@ -33,8 +30,7 @@ impl LogInterface {
                 context: self.id.id,
                 ticks: self.current_ticks,
                 event_type: T::NAME.to_string(),
-                event_data: bson::to_bson(event)
-                    .map_err(LogError::SerializationError)?,
+                event_data: bson::to_bson(event).map_err(LogError::SerializationError)?,
             })
             .map_err(|_| LogError::SendError)?;
 

@@ -1,11 +1,11 @@
 /// Re-exports for channel behaviors
 pub mod channel {
-    pub use may::sync::mpmc::channel as unbounded;
-    pub use may::sync::mpmc::*;
+    pub use may::sync::spsc::channel as unbounded;
+    pub use may::sync::spsc::*;
 
     /// Simple shim for bounded around unbounded.
     pub fn bounded<T>(_: usize) -> (Sender<T>, Receiver<T>) {
-        may::sync::mpmc::channel()
+        may::sync::spsc::channel()
     }
 
     pub use std::sync::mpsc::TryRecvError;

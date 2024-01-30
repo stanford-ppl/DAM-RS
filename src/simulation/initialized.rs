@@ -1,7 +1,6 @@
 use crate::{
     datastructures::Time,
     logging::{initialize_log, LogEntry, LogInterface, LogProcessor},
-    shim::channel,
     shim::spawn,
 };
 
@@ -31,11 +30,11 @@ impl<'a> Initialized<'a> {
         } else {
             // Limit logger size to at most some number of elements at a time to prevent an infinitely growing log.
             // Sinze the batch size for mongo is 100k, we'll be generous and allow 16 batches in the channel at a time.
-            let (log_sender, log_receiver) = channel::bounded(100000 * 16);
+            let (log_sender, log_receiver) = crossbeam::channel::bounded(100000 * 16);
             (Some(log_sender), Some(log_receiver), true)
         };
 
-        let summaries = std::sync::Arc::new(std::sync::Mutex::new(vec![]));
+        let summaries = std::sync::Arc::new(crossbeam::queue::SegQueue::new());
 
         crate::shim::scope(|s| {
             let base_time = std::time::Instant::now();
@@ -51,7 +50,7 @@ impl<'a> Initialized<'a> {
                 let filter_copy = options.log_filter.clone();
 
                 let sender = log_sender.clone();
-                let summary_queue = summaries.clone();
+                let summary_handle = summaries.clone();
 
                 spawn!(s, builder, move || {
                     if has_logger {
@@ -70,9 +69,7 @@ impl<'a> Initialized<'a> {
                         }
                     }
                     child.run();
-                    let _ = summary_queue
-                        .lock()
-                        .map(|mut queue| queue.push(child.summarize()));
+                    summary_handle.push(child.summarize());
                 })
                 .unwrap_or_else(|_| panic!("Failed to spawn child {name:?} {id:?}"));
             });
@@ -90,15 +87,17 @@ impl<'a> Initialized<'a> {
         });
 
         Executed {
-            nodes: std::sync::Mutex::into_inner(std::sync::Arc::into_inner(summaries).unwrap())
-                .unwrap(),
+            nodes: std::sync::Arc::into_inner(summaries)
+                .expect("Could not obtain unique access to summaries")
+                .into_iter()
+                .collect(),
             edges: self.data.edges,
         }
     }
 
     // The queue is sometimes unused when no logger is set.
     fn make_logger(
-        #[allow(unused)] queue: channel::Receiver<LogEntry>,
+        #[allow(unused)] queue: crossbeam::channel::Receiver<LogEntry>,
         options: LoggingOptions,
     ) -> Result<Option<Box<dyn LogProcessor>>, ()> {
         Ok(match options {
