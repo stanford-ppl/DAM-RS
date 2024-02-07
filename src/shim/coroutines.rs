@@ -11,6 +11,7 @@ pub mod channel {
     pub use std::sync::mpsc::TryRecvError;
 }
 
+use may::config;
 pub use may::coroutine::current;
 pub use may::coroutine::scope;
 pub use may::coroutine::Builder;
@@ -21,8 +22,32 @@ pub use may::coroutine::yield_now;
 pub use may::coroutine::Coroutine as Thread;
 pub use may::coroutine_local as local_storage;
 
+/// Options available when using os threads
+/// Execution mode for each thread
+#[derive(Debug, Default, Clone, Copy)]
+pub enum RunMode {
+    /// Execute under the default OS scheduler, such as CFS for Linux
+    #[default]
+    Simple,
+
+    /// Deprecated, supported for compatibility purposes.
+    #[deprecated(
+        note = "FIFO mode is a language-level compatibility shim for existing applications. New applications should use Simple."
+    )]
+    FIFO,
+
+    /// Use a fixed maximum number of workers
+    Constrained(usize),
+}
+
 /// Constructs a thread builder based on the options specified in the [RunMode]
-pub fn make_builder(_mode: super::RunMode) -> Builder {
+pub fn make_builder(mode: super::RunMode) -> Builder {
+    match mode {
+        RunMode::Constrained(workers) => {
+            config().set_workers(workers);
+        }
+        _ => (),
+    }
     may::coroutine::Builder::new()
 }
 
