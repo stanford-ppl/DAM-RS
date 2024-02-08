@@ -14,15 +14,3 @@ cfg_if::cfg_if! {
 }
 
 
-/// Options available when using os threads
-/// Execution mode for each thread
-#[derive(Debug, Default, Clone, Copy)]
-pub enum RunMode {
-    /// Execute under the default OS scheduler, such as CFS for Linux
-    #[default]
-    Simple,
-
-    /// Use FIFO (real-time) scheduling. This is higher performance, but may lead to starvation of other processes.
-    FIFO,
-}
-

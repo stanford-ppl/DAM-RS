@@ -11,6 +11,18 @@ pub use std::thread::yield_now;
 pub use std::thread::Thread;
 pub use thread_priority::ThreadBuilder as Builder;
 
+/// Options available when using os threads
+/// Execution mode for each thread
+#[derive(Debug, Default, Clone, Copy)]
+pub enum RunMode {
+    /// Execute under the default OS scheduler, such as CFS for Linux
+    #[default]
+    Simple,
+
+    /// Use FIFO (real-time) scheduling. This is higher performance, but may lead to starvation of other processes.
+    FIFO,
+}
+
 /// Constructs a thread builder based on the options specified in the [RunMode]
 pub fn make_builder(mode: super::RunMode) -> Builder {
     let (priority, policy) = match mode {
