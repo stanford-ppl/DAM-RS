@@ -1,4 +1,4 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use dam_macros::event_type_internal;
 use linkme::distributed_slice;
@@ -164,5 +164,5 @@ struct SignalElement {
 #[derive(Default, Debug)]
 struct TimeInfo {
     time: AtomicTime,
-    signal_buffer: Mutex<Vec<SignalElement>>,
+    signal_buffer: crate::shim::Mutex<Vec<SignalElement>>,
 }
