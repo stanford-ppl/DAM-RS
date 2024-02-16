@@ -73,8 +73,6 @@ impl TimeManager {
                 true
             }
         });
-
-        drop(signal_buffer);
     }
 
     /// Reads the current time.
