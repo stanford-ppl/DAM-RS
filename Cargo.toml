@@ -32,6 +32,7 @@ derive_more = "0.99.17"
 bson = "2.7.0"
 crossbeam = {version = "0.8.4"}
 may = { git = "https://github.com/pyprogrammer/may.git", optional = true}
+parking_lot = "0.12.1"
 
 [features]
 default = ["dot", "log-mongo", "coroutines"]

@@ -61,7 +61,7 @@ impl TimeManager {
     }
 
     fn scan_and_write_signals(&self) {
-        let mut signal_buffer = self.underlying.signal_buffer.lock().unwrap();
+        let mut signal_buffer = self.underlying.signal_buffer.lock();
         let tlb = self.underlying.time.load();
         // Log the updated time
         update_ticks(tlb);
@@ -122,7 +122,7 @@ impl ContextView for BasicContextView {
             return cur_time;
         }
 
-        let mut signal_buffer = self.under.signal_buffer.lock().unwrap();
+        let mut signal_buffer = self.under.signal_buffer.lock();
         let mut cur_time = self.under.time.load();
         if cur_time >= when {
             cur_time
@@ -164,5 +164,5 @@ struct SignalElement {
 #[derive(Default, Debug)]
 struct TimeInfo {
     time: AtomicTime,
-    signal_buffer: crate::shim::Mutex<Vec<SignalElement>>,
+    signal_buffer: parking_lot::Mutex<Vec<SignalElement>>,
 }

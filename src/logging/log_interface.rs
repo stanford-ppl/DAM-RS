@@ -4,6 +4,7 @@ use derive_more::Constructor;
 
 /// A logging interface, which simply pushes data into a communication channel.
 /// Actual logging is done by the log processor.
+#[allow(dead_code, unused)]
 #[derive(Clone, Constructor)]
 pub struct LogInterface {
     /// The Identifier for the currently executing context
@@ -18,6 +19,7 @@ pub struct LogInterface {
 impl LogInterface {
     /// Logs an event into the communication channel.
     /// May return an error if either the channel was prematurely closed, or if some aspect of serialization failed.
+    #[allow(dead_code, unused)]
     pub fn log<T: LogEvent>(&self, event: &T) -> Result<(), LogError> {
         self.comm
             .send(LogEntry {
@@ -38,6 +40,7 @@ impl LogInterface {
     }
 
     /// Updates the number of ticks elapsed so far, to reduce the number of logging events.
+    #[allow(dead_code, unused)]
     pub(crate) fn update_ticks(&mut self, new_time: Time) {
         self.current_ticks = new_time;
     }
