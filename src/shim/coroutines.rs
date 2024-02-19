@@ -11,7 +11,7 @@ pub mod channel {
     pub use std::sync::mpsc::TryRecvError;
 }
 
-use may::config;
+pub use may::config;
 pub use may::coroutine::current;
 pub use may::coroutine::scope;
 pub use may::coroutine::Builder;
