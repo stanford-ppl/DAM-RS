@@ -11,6 +11,8 @@ pub use std::thread::yield_now;
 pub use std::thread::Thread;
 pub use thread_priority::ThreadBuilder as Builder;
 
+pub use std::sync::{Condvar, Mutex, RwLock};
+
 /// Options available when using os threads
 /// Execution mode for each thread
 #[derive(Debug, Default, Clone, Copy)]

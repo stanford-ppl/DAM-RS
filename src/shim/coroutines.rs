@@ -11,7 +11,7 @@ pub mod channel {
     pub use std::sync::mpsc::TryRecvError;
 }
 
-use may::config;
+pub use may::config;
 pub use may::coroutine::current;
 pub use may::coroutine::scope;
 pub use may::coroutine::Builder;
@@ -21,6 +21,7 @@ pub use may::coroutine::sleep;
 pub use may::coroutine::yield_now;
 pub use may::coroutine::Coroutine as Thread;
 pub use may::coroutine_local as local_storage;
+pub use may::sync::{Condvar, Mutex, RwLock};
 
 /// Options available when using os threads
 /// Execution mode for each thread
@@ -42,21 +43,19 @@ pub enum RunMode {
 
 /// Constructs a thread builder based on the options specified in the [RunMode]
 pub fn make_builder(mode: super::RunMode) -> Builder {
-    match mode {
-        RunMode::Constrained(workers) => {
-            config().set_workers(workers);
-        }
-        _ => (),
+    if let RunMode::Constrained(workers) = mode {
+        config().set_workers(workers);
     }
-    may::coroutine::Builder::new()
+    let num_workers = config().get_workers();
+    let target = fastrand::usize(0..num_workers);
+    may::coroutine::Builder::new().id(target)
 }
 
 /// Spawns a coroutine, without the builder because
 #[macro_export]
 macro_rules! spawn {
     ($scope: expr, $builder: expr, $f: expr) => {{
-        let _ = $builder;
-        unsafe { ($scope).spawn($f) };
+        unsafe { ($scope).spawn_with_builder($f, $builder) };
         Result::<(), ()>::Ok(())
     }};
     ($scope: expr, $f: expr) => {{

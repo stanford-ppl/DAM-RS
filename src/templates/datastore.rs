@@ -1,6 +1,6 @@
 //! Datastores are not real contexts, but can be used to compose more advanced constructs.
 
-use std::sync::RwLock;
+use crate::shim::RwLock;
 
 use crate::{datastructures::Time, types::DAMType};
 #[derive(Clone, Copy, Debug)]
