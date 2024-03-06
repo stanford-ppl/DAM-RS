@@ -46,16 +46,16 @@ pub fn make_builder(mode: super::RunMode) -> Builder {
     if let RunMode::Constrained(workers) = mode {
         config().set_workers(workers);
     }
-
-    may::coroutine::Builder::new()
+    let num_workers = config().get_workers();
+    let target = fastrand::usize(0..num_workers);
+    may::coroutine::Builder::new().id(target)
 }
 
 /// Spawns a coroutine, without the builder because
 #[macro_export]
 macro_rules! spawn {
     ($scope: expr, $builder: expr, $f: expr) => {{
-        let _ = $builder;
-        unsafe { ($scope).spawn($f) };
+        unsafe { ($scope).spawn_with_builder($f, $builder) };
         Result::<(), ()>::Ok(())
     }};
     ($scope: expr, $f: expr) => {{
