@@ -48,12 +48,14 @@ impl Drop for TimeManager {
 
 impl TimeManager {
     /// Increments time by a non-negative number of cycles.
+    #[inline(always)]
     pub fn incr_cycles(&self, incr: u64) {
         self.underlying.time.incr_cycles(incr);
         self.scan_and_write_signals();
     }
 
     /// Advances to a new time. If the new time is in the past, this is a no-op.
+    #[inline(always)]
     pub fn advance(&self, new: Time) {
         if self.underlying.time.try_advance(new) {
             self.scan_and_write_signals();
@@ -62,7 +64,7 @@ impl TimeManager {
 
     fn scan_and_write_signals(&self) {
         let mut signal_buffer = self.underlying.signal_buffer.lock();
-        let tlb = self.underlying.time.load();
+        let tlb = self.underlying.time.load_relaxed();
         // Log the updated time
         update_ticks(tlb);
         signal_buffer.retain(|signal| {
@@ -77,6 +79,7 @@ impl TimeManager {
 
     /// Reads the current time.
     /// Since this is only available on the owning context, it does not need to be ordered w.r.t. anything else.
+    #[inline(always)]
     pub fn tick(&self) -> Time {
         self.underlying.time.load_relaxed()
     }
@@ -120,28 +123,33 @@ impl ContextView for BasicContextView {
             return cur_time;
         }
 
-        let mut signal_buffer = self.under.signal_buffer.lock();
-        let mut cur_time = self.under.time.load();
-        if cur_time >= when {
-            cur_time
-        } else {
-            signal_buffer.push(SignalElement {
-                when,
-                thread: crate::shim::current(),
-            });
-            // Unlock the signal buffer
-            drop(signal_buffer);
-
-            let _ = log_event(&ContextViewEvent::Park);
-
-            while cur_time < when {
-                // Park is Acquire, so the load can be relaxed
-                crate::shim::park();
-                cur_time = self.under.time.load_relaxed();
+        loop {
+            // Try to lock the signal buffer
+            let try_lock = self.under.signal_buffer.try_lock();
+            let mut cur_time = self.under.time.load();
+            if cur_time >= when {
+                // Fast exit, also drops the lock if there was one.
+                return cur_time;
             }
-            let _ = log_event(&ContextViewEvent::Unpark);
+            if let Some(mut signal_buffer) = try_lock {
+                signal_buffer.push(SignalElement {
+                    when,
+                    thread: crate::shim::current(),
+                });
+                // Unlock the signal buffer
+                drop(signal_buffer);
 
-            self.under.time.load()
+                let _ = log_event(&ContextViewEvent::Park);
+
+                while cur_time < when {
+                    // Park is Acquire, so the load can be relaxed
+                    crate::shim::park();
+                    cur_time = self.under.time.load_relaxed();
+                }
+                let _ = log_event(&ContextViewEvent::Unpark);
+
+                return self.under.time.load();
+            }
         }
     }
 
@@ -161,6 +169,6 @@ struct SignalElement {
 /// Encapsulates the callback backlog and the current tick info to make BasicContextView work.
 #[derive(Default, Debug)]
 struct TimeInfo {
-    time: AtomicTime,
-    signal_buffer: parking_lot::Mutex<Vec<SignalElement>>,
+    time: crossbeam::utils::CachePadded<AtomicTime>,
+    signal_buffer: crossbeam::utils::CachePadded<parking_lot::Mutex<Vec<SignalElement>>>,
 }
