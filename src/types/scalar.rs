@@ -2,6 +2,7 @@
 //! This registers the common datatypes as statically sized DAMTypes, such as u64, f32, etc.
 
 use super::StaticallySized;
+use half::bf16;
 
 macro_rules! builtin_ss {
     ($tp: tt, $nbits: literal) => {
@@ -23,6 +24,7 @@ builtin_ss!(u64, 64);
 
 builtin_ss!(f32, 32);
 builtin_ss!(f64, 64);
+builtin_ss!(bf16, 16);
 
 impl StaticallySized for usize {
     const SIZE: usize = unimplemented!();
