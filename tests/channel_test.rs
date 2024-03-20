@@ -30,6 +30,8 @@ mod tests {
     }
 
     fn run_channel_test(test_size: i32, flavor_inference: bool, capacity: Option<usize>) {
+        #[cfg(feature = "coroutines")]
+        dam::shim::config().set_stack_size(1 << 16);
         let mut ctx = ProgramBuilder::default();
 
         let (snd, rcv) = match capacity {
