@@ -1,4 +1,4 @@
-use std::sync::Mutex;
+use crate::shim::Mutex;
 
 use crate::{
     context::Context,
@@ -59,10 +59,13 @@ impl ChannelSpec {
         *self.sender_id.lock().unwrap()
     }
 
+    // These might be unused if dot graph generation is off.
+    #[allow(unused)]
     pub fn latency(&self) -> u64 {
         self.send_latency
     }
 
+    #[allow(unused)]
     pub fn resp_latency(&self) -> u64 {
         self.response_latency
     }

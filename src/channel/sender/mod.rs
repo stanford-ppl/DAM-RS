@@ -47,7 +47,7 @@ impl<T: Clone> Default for SenderImpl<T> {
 
 pub(crate) struct SenderData<T> {
     pub(crate) spec: InlineSpec,
-    pub(crate) underlying: crossbeam::channel::Sender<ChannelElement<T>>,
+    pub(crate) underlying: crate::shim::channel::Sender<ChannelElement<T>>,
 }
 
 trait DataProvider<T> {

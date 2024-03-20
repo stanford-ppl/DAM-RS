@@ -1,4 +1,5 @@
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
+use dam::shim::RunMode;
 use dam::templates::ops::*;
 use dam::utility_contexts::*;
 use dam::{simulation::*, templates::pcu::*};

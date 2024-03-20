@@ -24,7 +24,7 @@ where
     T: TryInto<U>,
 {
     fn attach_receiver(&self, ctx: &dyn Context) {
-        Receiver::attach_receiver(&self, ctx)
+        Receiver::attach_receiver(self, ctx)
     }
 
     fn peek(&self) -> PeekResult<U> {
@@ -74,7 +74,7 @@ where
 {
     fn enqueue(&self, manager: &TimeManager, data: ChannelElement<U>) -> Result<(), EnqueueError> {
         Sender::enqueue(
-            &self,
+            self,
             manager,
             data.try_convert().unwrap_or_else(|_| {
                 panic!("Failed to convert the enqueued value into the desired type")
@@ -87,6 +87,6 @@ where
     }
 
     fn attach_sender(&self, ctx: &dyn Context) {
-        Sender::attach_sender(&self, ctx)
+        Sender::attach_sender(self, ctx)
     }
 }

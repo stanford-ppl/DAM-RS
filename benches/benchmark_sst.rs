@@ -4,6 +4,7 @@ use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use dam::channel::*;
 use dam::context::Context;
 use dam::context_tools::*;
+use dam::shim::RunMode;
 use dam::simulation::*;
 use dam::types::DAMType;
 use dam::utility_contexts::*;

@@ -1,9 +1,9 @@
+use crate::shim::channel;
 use crate::{
     channel::{ChannelElement, EnqueueError},
     datastructures::Time,
     view::TimeManager,
 };
-use crossbeam::channel;
 
 use super::{BoundedProvider, DataProvider, SenderCommon, SenderData, SenderFlavor};
 

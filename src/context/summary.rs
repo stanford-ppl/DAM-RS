@@ -1,5 +1,5 @@
 use crate::{
-    datastructures::{VerboseIdentifier},
+    datastructures::VerboseIdentifier,
     view::{ContextView, TimeView},
 };
 

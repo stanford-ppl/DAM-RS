@@ -8,7 +8,6 @@ all-features = true
 rustdoc-args = ["--cfg", "docsrs"]
 
 [dependencies]
-crossbeam = "0.8.2"
 num = "0.4.0"
 ndarray = "0.15.6"
 dam-macros = { version = "0.1.0", path = "dam-macros" }
@@ -25,15 +24,20 @@ thread-priority = "0.13.1"
 # For running tests
 rand = "0.8.5"
 thiserror = "1.0.49"
-graphviz-rust = {version = "0.6.6", optional = true}
+graphviz-rust = { version = "0.6.6", optional = true }
 derive_builder = "0.12.0"
 cfg-if = "1.0.0"
 enum_delegate = "0.2.0"
 derive_more = "0.99.17"
 bson = "2.7.0"
+crossbeam = { version = "0.8.4" }
+may = { git = "https://github.com/pyprogrammer/may.git", optional = true }
+parking_lot = "0.12.1"
+fastrand = "2.0.1"
+futures = "0.3.30"
 
 [features]
-default = ["dot", "log-mongo"]
+default = ["dot", "log-mongo", "coroutines"]
 dot = ["dep:graphviz-rust"]
 log-mongo = ["dep:mongodb", "logging"]
 test-log-mongo = ["log-mongo"]
@@ -46,6 +50,12 @@ unbounded-channels = []
 ## Executes in a cycle-by-cycle manner, terrible for performance.
 ## The only point of this flag is to pretend like we're executing cycle-by-cycle.
 cycle-like = []
+
+## use os-threads as the form of parallelism
+os-threads = []
+
+## use may coroutines as the primary form of parallelism
+coroutines = ["dep:may"]
 
 [dependencies.mongodb]
 version = "2.7.0"

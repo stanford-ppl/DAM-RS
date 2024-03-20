@@ -9,6 +9,10 @@ pub mod channel;
 pub mod context;
 mod datastructures;
 pub mod logging;
+
+#[macro_use]
+pub mod shim;
+
 pub mod simulation;
 pub mod types;
 pub mod utility_contexts;

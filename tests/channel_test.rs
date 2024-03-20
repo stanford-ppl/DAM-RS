@@ -43,7 +43,7 @@ mod tests {
             let mut rng = rand::thread_rng();
             for iter in 0..test_size {
                 // sleep for some random amount of time
-                std::thread::sleep(std::time::Duration::from_millis(
+                dam::shim::sleep(std::time::Duration::from_millis(
                     rng.gen_range(0..=MAX_MS_SLEEP),
                 ));
                 let cur_time = time.tick();
@@ -60,7 +60,7 @@ mod tests {
         receiver.set_run(move |time| {
             let mut rng = rand::thread_rng();
             for iter in 0..test_size {
-                std::thread::sleep(std::time::Duration::from_millis(rng.gen_range(0..=100)));
+                dam::shim::sleep(std::time::Duration::from_millis(rng.gen_range(0..=100)));
                 match rcv.dequeue(time) {
                     Ok(ChannelElement { time: _, data }) => {
                         assert_eq!(data, iter);

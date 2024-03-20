@@ -90,7 +90,7 @@ impl Eq for Time {}
 
 impl PartialOrd for Time {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
+        Some(std::cmp::Ord::cmp(self, other))
     }
 }
 
@@ -207,7 +207,7 @@ impl AtomicTime {
                         if #[cfg(feature = "cycle-like")] {
                             let diff = rhs.time - old_time;
                             for _ in 0..diff {
-                                std::thread::yield_now();
+                                crate::shim::yield_now();
                             }
                         }
                     }
@@ -215,7 +215,7 @@ impl AtomicTime {
                         .store(rhs.time, std::sync::atomic::Ordering::Release);
                     return true;
                 }
-                return false;
+                false
             }
         }
     }
@@ -226,7 +226,7 @@ impl AtomicTime {
                 // This is an incredibly stupid thing to do, but it's for the purpose of comparing against tick-based simulation.
                 // This way we force switching to a different context every cycle
                 for _ in 0..rhs {
-                    std::thread::yield_now();
+                    crate::shim::yield_now();
                 }
             }
         }

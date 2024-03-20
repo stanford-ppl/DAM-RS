@@ -1,15 +1,13 @@
-use std::sync::Arc;
-
 use crate::{
     datastructures::Time,
     logging::{initialize_log, LogEntry, LogInterface, LogProcessor},
+    shim::spawn,
 };
-use crossbeam::queue::SegQueue;
 
 #[cfg(feature = "log-mongo")]
 use crate::logging::mongo_logger::{mongodb, MongoLogger};
 
-use super::{executed::Executed, programdata::ProgramData, LoggingOptions, RunMode, RunOptions};
+use super::{executed::Executed, programdata::ProgramData, LoggingOptions, RunOptions};
 
 /// An initialized program, which has passed checking after the [super::ProgramBuilder]
 pub struct Initialized<'a> {
@@ -20,79 +18,72 @@ impl<'a> Initialized<'a> {
     /// Executes the program with specified options.
     /// Currently will deadlock frequently if there is an error at runtime, due to blocking dequeues.
     pub fn run(mut self, options: RunOptions) -> Executed<'a> {
-        let (priority, policy) = match options.mode {
-            RunMode::Simple => (
-                thread_priority::get_current_thread_priority().unwrap(),
-                thread_priority::thread_schedule_policy().unwrap(),
-            ),
-            RunMode::FIFO => {
-                let priority =
-                    thread_priority::ThreadPriority::Crossplatform(10u8.try_into().unwrap());
-                let policy = thread_priority::unix::ThreadSchedulePolicy::Realtime(
-                    thread_priority::RealtimeThreadSchedulePolicy::Fifo,
-                );
-                (priority, policy)
-            }
+        // If we should make a log, then we populate this stuff
+
+        // This guard is necessary because when logging is off, then the LoggingOptions enum is always None.
+        #[allow(irrefutable_let_patterns)]
+        let (log_sender, log_receiver, has_logger) = if let LoggingOptions::None = options.logging {
+            // don't log
+            (None, None, false)
+        } else {
+            // Limit logger size to at most some number of elements at a time to prevent an infinitely growing log.
+            // Sinze the batch size for mongo is 100k, we'll be generous and allow 16 batches in the channel at a time.
+            let (log_sender, log_receiver) = crossbeam::channel::bounded(100000 * 16);
+            (Some(log_sender), Some(log_receiver), true)
         };
 
-        let (log_sender, log_receiver) = crossbeam::channel::unbounded();
+        let summaries = std::sync::Arc::new(crossbeam::queue::SegQueue::new());
 
-        let exec_logger =
-            Self::make_logger(log_receiver, options.logging).expect("Error creating logger!");
-
-        let has_logger = exec_logger.is_some();
-
-        let summaries = Arc::new(SegQueue::new());
-
-        std::thread::scope(|s| {
-            let builder = thread_priority::ThreadBuilder::default()
-                .priority(priority)
-                .policy(policy);
-
+        crate::shim::scope(|s| {
             let base_time = std::time::Instant::now();
 
             self.data.nodes.drain(..).for_each(|mut child| {
                 let id = child.id();
                 let name = child.name();
-                let builder = builder
-                    .clone()
-                    .name(format!("{}({})", child.id(), child.name()));
-                let summary_queue = summaries.clone();
+                let builder = crate::shim::make_builder(options.mode).name(format!(
+                    "{}({})",
+                    child.id(),
+                    child.name()
+                ));
                 let filter_copy = options.log_filter.clone();
 
                 let sender = log_sender.clone();
-                builder
-                    .spawn_scoped_careless(s, move || {
-                        if has_logger {
-                            let active_filter = match filter_copy {
-                                super::LogFilterKind::Blanket(filter) => filter,
-                                super::LogFilterKind::PerChild(func) => func(child.id()),
-                            };
+                let summary_handle = summaries.clone();
+
+                spawn!(s, builder, move || {
+                    if has_logger {
+                        let active_filter = match filter_copy {
+                            super::LogFilterKind::Blanket(filter) => filter,
+                            super::LogFilterKind::PerChild(func) => func(child.id()),
+                        };
+                        if let Some(snd) = sender {
                             initialize_log(LogInterface::new(
                                 child.id(),
-                                sender,
+                                snd,
                                 base_time,
                                 active_filter,
                                 Time::new(0),
                             ));
                         }
-                        child.run();
-                        summary_queue.push(child.summarize());
-                    })
-                    .unwrap_or_else(|_| panic!("Failed to spawn child {name:?} {id:?}"));
+                    }
+                    child.run();
+                    summary_handle.push(child.summarize());
+                })
+                .unwrap_or_else(|_| panic!("Failed to spawn child {name:?} {id:?}"));
             });
 
             drop(log_sender);
-
-            if let Some(mut logger) = exec_logger {
-                builder
-                    .spawn_scoped_careless(s, move || logger.spawn())
-                    .unwrap_or_else(|_| panic!("Failed to start logging thread!"));
-            }
         });
-
+        if let Some(receiver) = log_receiver {
+            Self::make_logger(receiver, options.logging.clone())
+                .expect("Error creating Logger!")
+                .map(|mut exec_logger| std::thread::spawn(move || exec_logger.spawn()).join());
+        }
         Executed {
-            nodes: Arc::into_inner(summaries).unwrap().into_iter().collect(),
+            nodes: std::sync::Arc::into_inner(summaries)
+                .expect("Could not obtain unique access to summaries")
+                .into_iter()
+                .collect(),
             edges: self.data.edges,
         }
     }
@@ -106,7 +97,8 @@ impl<'a> Initialized<'a> {
             super::LoggingOptions::None => None,
             #[cfg(feature = "log-mongo")]
             super::LoggingOptions::Mongo(mongo_opts) => Some(Box::new(MongoLogger::new(
-                mongodb::sync::Client::with_uri_str(mongo_opts.uri).map_err(|_| ())?,
+                futures::executor::block_on(mongodb::Client::with_uri_str(mongo_opts.uri))
+                    .map_err(|_| ())?,
                 mongo_opts.db,
                 mongo_opts.db_options,
                 mongo_opts.collection,
@@ -177,13 +169,8 @@ mod inner {
 
     impl DotConvertibleHelper for super::Initialized<'_> {
         fn add_nodes(&self) -> Vec<Stmt> {
-            let node_graph: HashMap<_, _> = self
-                .data
-                .nodes
-                .iter()
-                .map(|node| node.ids())
-                .flatten()
-                .collect();
+            let node_graph: HashMap<_, _> =
+                self.data.nodes.iter().flat_map(|node| node.ids()).collect();
 
             let mut stmts = vec![];
             let mut visited = FxHashSet::default();
@@ -197,8 +184,7 @@ mod inner {
             self.data
                 .edges
                 .iter()
-                .map(|edge| Self::generate_edge(edge.clone()))
-                .flatten()
+                .flat_map(|edge| Self::generate_edge(edge.clone()))
                 .collect()
         }
     }

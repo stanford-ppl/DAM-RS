@@ -6,7 +6,7 @@ mod mongo;
 pub use mongo::*;
 
 /// This enum serves as a registry of all loggers that are currently enabled, and are gated by feature flags.
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub enum LoggingOptions {
     /// Disabled logs
     #[default]

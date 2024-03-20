@@ -28,13 +28,15 @@ use crate::datastructures::Identifier;
 use crate::logging::LogFilter;
 use thiserror::Error;
 
+pub use crate::shim::RunMode;
+
 /// Options for executing an [Initialized] program.
 #[derive(Builder, Default)]
 #[builder(pattern = "owned")]
 pub struct RunOptions {
     /// Options for how to schedule the child threads
     #[builder(setter(into), default)]
-    mode: RunMode,
+    mode: crate::shim::RunMode,
 
     /// Basic logging options
     #[builder(setter(into), default)]
@@ -57,19 +59,8 @@ pub enum LogFilterKind {
 
 impl Default for LogFilterKind {
     fn default() -> Self {
-        Self::Blanket(LogFilter::default()).into()
+        Self::Blanket(LogFilter::default())
     }
-}
-
-/// Execution mode for each thread
-#[derive(Debug, Default, Clone, Copy)]
-pub enum RunMode {
-    /// Execute under the default OS scheduler, such as CFS for Linux
-    #[default]
-    Simple,
-
-    /// Use FIFO (real-time) scheduling. This is higher performance, but may lead to starvation of other processes.
-    FIFO,
 }
 
 /// Options for how to initialize the [ProgramBuilder] into an [Initialized] object.
