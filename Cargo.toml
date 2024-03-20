@@ -37,7 +37,7 @@ fastrand = "2.0.1"
 futures = "0.3.30"
 
 [features]
-default = ["dot", "log-mongo", "coroutines"]
+default = ["coroutines"]
 dot = ["dep:graphviz-rust"]
 log-mongo = ["dep:mongodb", "logging"]
 test-log-mongo = ["log-mongo"]
