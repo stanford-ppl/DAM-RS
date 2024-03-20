@@ -2,6 +2,7 @@
 //!
 //! The MongoLogger takes in a [crossbeam::channel::Receiver] containing [LogEntry] and writes them to the database in as large a chunk as it can.
 
+use futures::task::LocalSpawnExt;
 use mongodb::options::{InsertManyOptions, WriteConcern};
 
 use super::LogEntry;
@@ -12,7 +13,7 @@ pub use mongodb;
 /// A logger using MongoDB as the backing datastore.
 #[derive(Clone, Constructor)]
 pub struct MongoLogger {
-    client: mongodb::sync::Client,
+    client: mongodb::Client,
     database_name: String,
     db_options: mongodb::options::DatabaseOptions,
     collection_name: String,
@@ -20,24 +21,25 @@ pub struct MongoLogger {
     queue: crossbeam::channel::Receiver<LogEntry>,
 }
 
-const BATCH_SIZE: usize = 100000;
-
 impl super::LogProcessor for MongoLogger {
     fn spawn(&mut self) {
         let database = self
             .client
             .database_with_options(self.database_name.as_str(), self.db_options.clone());
-        database
-            .create_collection(
-                self.collection_name.as_str(),
-                self.collection_options.clone(),
-            )
-            .expect("Error setting collection options");
+
+        futures::executor::block_on(database.create_collection(
+            self.collection_name.as_str(),
+            self.collection_options.clone(),
+        ))
+        .expect("Error setting collection options");
+
         let collection = database.collection::<LogEntry>(self.collection_name.as_str());
+
+        let mut executor = futures::executor::LocalPool::new();
+        let spawner = executor.spawner();
         let mut should_continue = true;
-        let mut batch = vec![];
         while should_continue {
-            let mut sleep_next = false;
+            let mut batch = vec![];
             loop {
                 match self.queue.try_recv() {
                     Ok(data) => batch.push(data),
@@ -50,28 +52,30 @@ impl super::LogProcessor for MongoLogger {
                     }
                 }
             }
-            if batch.len() < BATCH_SIZE {
-                sleep_next = true;
-            }
             if !batch.is_empty() {
-                collection
-                    .insert_many(
-                        batch.iter(),
-                        Some(
-                            InsertManyOptions::builder()
-                                .write_concern(WriteConcern::builder().journal(false).build())
-                                .ordered(false)
-                                .build(),
-                        ),
-                    )
-                    .unwrap();
-                batch.clear();
-            }
+                let col_clone = collection.clone();
+                let boxed = Box::new(col_clone);
+                let fut = async move {
+                    boxed
+                        .insert_many(
+                            batch.iter(),
+                            Some(
+                                InsertManyOptions::builder()
+                                    .write_concern(WriteConcern::builder().journal(false).build())
+                                    .ordered(false)
+                                    .build(),
+                            ),
+                        )
+                        .await
+                        .unwrap();
+                    ()
+                };
 
-            if sleep_next {
-                crate::shim::yield_now();
+                spawner.spawn_local(fut).unwrap();
             }
+            executor.run_until_stalled();
         }
-        self.client.clone().shutdown();
+        executor.run();
+        futures::executor::block_on(self.client.clone().shutdown());
     }
 }

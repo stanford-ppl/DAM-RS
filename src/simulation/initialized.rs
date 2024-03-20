@@ -14,8 +14,6 @@ pub struct Initialized<'a> {
     pub(super) data: ProgramData<'a>,
 }
 
-const NUM_LOGGERS: usize = 4;
-
 impl<'a> Initialized<'a> {
     /// Executes the program with specified options.
     /// Currently will deadlock frequently if there is an error at runtime, due to blocking dequeues.
@@ -75,17 +73,12 @@ impl<'a> Initialized<'a> {
             });
 
             drop(log_sender);
-
-            if let Some(receiver) = log_receiver {
-                for _ in 0..NUM_LOGGERS {
-                    let builder = crate::shim::make_builder(options.mode);
-                    Self::make_logger(receiver.clone(), options.logging.clone())
-                        .expect("Error creating logger!")
-                        .map(|mut exec_logger| spawn!(s, builder, move || exec_logger.spawn()));
-                }
-            }
         });
-
+        if let Some(receiver) = log_receiver {
+            Self::make_logger(receiver, options.logging.clone())
+                .expect("Error creating Logger!")
+                .map(|mut exec_logger| std::thread::spawn(move || exec_logger.spawn()).join());
+        }
         Executed {
             nodes: std::sync::Arc::into_inner(summaries)
                 .expect("Could not obtain unique access to summaries")
@@ -104,7 +97,8 @@ impl<'a> Initialized<'a> {
             super::LoggingOptions::None => None,
             #[cfg(feature = "log-mongo")]
             super::LoggingOptions::Mongo(mongo_opts) => Some(Box::new(MongoLogger::new(
-                mongodb::sync::Client::with_uri_str(mongo_opts.uri).map_err(|_| ())?,
+                futures::executor::block_on(mongodb::Client::with_uri_str(mongo_opts.uri))
+                    .map_err(|_| ())?,
                 mongo_opts.db,
                 mongo_opts.db_options,
                 mongo_opts.collection,
