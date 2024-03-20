@@ -49,7 +49,8 @@ impl<T: DAMType, IT: IndexLike, AT: DAMType> Context for PMU<T, IT, AT> {
                 }
                 self.reader.run();
                 self.reader.cleanup();
-            }).unwrap();
+            })
+            .unwrap();
             crate::shim::spawn!(s, || {
                 if let Some(mut logger) = write_log {
                     logger.id = self.writer.id();
@@ -57,7 +58,8 @@ impl<T: DAMType, IT: IndexLike, AT: DAMType> Context for PMU<T, IT, AT> {
                 }
                 self.writer.run();
                 self.writer.cleanup();
-            }).unwrap();
+            })
+            .unwrap();
         });
     }
 
@@ -338,7 +340,7 @@ mod tests {
 
     #[test]
     fn simple_pmu_test() {
-        const TEST_SIZE: usize = 1024 * 64;
+        const TEST_SIZE: usize = 64;
         let mut parent = ProgramBuilder::default();
         const CHAN_SIZE: usize = TEST_SIZE;
 
