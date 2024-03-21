@@ -133,12 +133,10 @@ mod tests {
     #[test]
     fn test_receiver() {
         let mut ctx = ProgramBuilder::default();
-        #[cfg(feature = "coroutines")]
-        crate::shim::config().set_stack_size(1 << 16);
         let (snd, rcv) = ctx.unbounded();
         ctx.add_child(TraceContext::new(
             // (Value, Time) pairs
-            || random_trace::<u32>(2, 0, 16),
+            || random_trace(1024, 0, 16),
             snd,
         ));
 

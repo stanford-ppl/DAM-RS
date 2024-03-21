@@ -1,6 +1,4 @@
 use dam_macros::context_internal;
-use rand::prelude::Distribution;
-use rand::{thread_rng, Rng};
 
 use crate::context_tools::*;
 
@@ -57,18 +55,15 @@ where
 }
 
 /// A function to generate a random trace w/ monotonically non-decreasing timestamps.
-pub fn random_trace<T: DAMType>(
+pub fn random_trace(
     length: usize,
     min_step: u64,
     max_step: u64,
-) -> impl Iterator<Item = (T, Time)>
-where
-    rand::distributions::Standard: Distribution<T>,
-{
-    let mut trng = thread_rng();
+) -> impl Iterator<Item = (usize, Time)> {
+    let mut trng = fastrand::Rng::new();
     let mut cur_time = Time::new(0);
-    (0..length).map(move |_| {
-        cur_time += trng.gen_range(min_step..=max_step);
-        (trng.gen(), cur_time)
+    (0..length).map(move |i| {
+        cur_time += trng.u64(min_step..=max_step);
+        (i, cur_time)
     })
 }
