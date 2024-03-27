@@ -32,6 +32,13 @@ impl<'a> Initialized<'a> {
             (Some(log_sender), Some(log_receiver), true)
         };
 
+        let handle = log_receiver
+            .and_then(|receiver| {
+                Self::make_logger(receiver, options.logging.clone())
+                    .expect("Error creating Logger!")
+                    .map(|mut exec_logger| std::thread::spawn(move || exec_logger.spawn()))
+            });
+
         let summaries = std::sync::Arc::new(crossbeam::queue::SegQueue::new());
 
         crate::shim::scope(|s| {
@@ -74,11 +81,9 @@ impl<'a> Initialized<'a> {
 
             drop(log_sender);
         });
-        if let Some(receiver) = log_receiver {
-            Self::make_logger(receiver, options.logging.clone())
-                .expect("Error creating Logger!")
-                .map(|mut exec_logger| std::thread::spawn(move || exec_logger.spawn()).join());
-        }
+
+        handle.map(|jh| jh.join());
+
         Executed {
             nodes: std::sync::Arc::into_inner(summaries)
                 .expect("Could not obtain unique access to summaries")
