@@ -19,7 +19,7 @@ petgraph = "0.6.3"
 rustc-hash = "1.1.0"
 
 # For running different thread priorities and enabling FIFO Execution
-thread-priority = "0.13.1"
+thread-priority = "0.15"
 thiserror = "1.0.49"
 graphviz-rust = { version = "0.6.6", optional = true }
 derive_builder = "0.12.0"

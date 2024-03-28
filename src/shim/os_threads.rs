@@ -27,22 +27,18 @@ pub enum RunMode {
 
 /// Constructs a thread builder based on the options specified in the [RunMode]
 pub fn make_builder(mode: super::RunMode) -> Builder {
-    let (priority, policy) = match mode {
-        super::RunMode::Simple => (
-            thread_priority::get_current_thread_priority().unwrap(),
-            thread_priority::thread_schedule_policy().unwrap(),
-        ),
+    match mode {
+        super::RunMode::Simple => thread_priority::ThreadBuilder::default(),
         super::RunMode::FIFO => {
             let priority = thread_priority::ThreadPriority::Crossplatform(10u8.try_into().unwrap());
             let policy = thread_priority::unix::ThreadSchedulePolicy::Realtime(
                 thread_priority::RealtimeThreadSchedulePolicy::Fifo,
             );
-            (priority, policy)
+            thread_priority::ThreadBuilder::default()
+                .priority(priority)
+                .policy(policy)
         }
-    };
-    thread_priority::ThreadBuilder::default()
-        .priority(priority)
-        .policy(policy)
+    }
 }
 
 /// Spawns a coroutine, without the builder because
