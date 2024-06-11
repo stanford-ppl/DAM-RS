@@ -136,7 +136,7 @@ mod tests {
         let (snd, rcv) = ctx.unbounded();
         ctx.add_child(TraceContext::new(
             // (Value, Time) pairs
-            || random_trace::<u32>(4096, 0, 16),
+            || random_trace(1024, 0, 16),
             snd,
         ));
 
