@@ -34,6 +34,7 @@ may = { git = "https://github.com/pyprogrammer/may.git", optional = true, featur
 parking_lot = "0.12.1"
 fastrand = "2.0.1"
 futures = "0.3.30"
+anyhow = "1.0.86"
 
 [features]
 default = ["coroutines"]

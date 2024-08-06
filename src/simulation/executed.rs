@@ -2,10 +2,13 @@ use std::sync::Arc;
 
 use crate::{channel::handle::ChannelHandle, context::ContextSummary};
 
+use super::SimulationError;
+
 /// Represents a program graph which has been executed.
 /// This still stores all of the edges in the graph, but each node is replaced with its summary.
 pub struct Executed<'a> {
     pub(super) nodes: Vec<ContextSummary>,
+    pub(super) failures: Vec<SimulationError>,
 
     // Edges might not be used if the dot cfg isn't enabled.
     #[allow(unused)]
@@ -17,6 +20,21 @@ impl Executed<'_> {
     /// This is a slight underapproximation in the event that the last nodes scheduled their output for a time in the future.
     pub fn elapsed_cycles(&self) -> Option<u64> {
         self.nodes.iter().map(|node| node.max_time()).max()
+    }
+
+    /// Returns if simulation was successful with no errors.
+    pub fn passed(&self) -> bool {
+        self.failures.is_empty()
+    }
+
+    /// Executes a given function on program failures.
+    pub fn run_failures<R>(&self, f: impl FnOnce(&Vec<SimulationError>) -> R) -> R {
+        f(&self.failures)
+    }
+
+    /// Prints all of the failures in the program
+    pub fn dump_failures(&self) {
+        println!("{:?}", self.failures);
     }
 }
 

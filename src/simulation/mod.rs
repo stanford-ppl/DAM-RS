@@ -86,3 +86,20 @@ pub enum InitializationError {
     #[error("Unregistered Node: {0}")]
     UnregisteredNode(Identifier),
 }
+
+/// Various ways a program can fail
+#[derive(Error, Debug)]
+pub struct SimulationError {
+    id: usize,
+    underlying: anyhow::Error,
+}
+
+impl std::fmt::Display for SimulationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Simulation of {} failed with message {}",
+            self.id, self.underlying
+        )
+    }
+}

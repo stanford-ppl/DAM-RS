@@ -32,14 +32,14 @@ impl<'a> Initialized<'a> {
             (Some(log_sender), Some(log_receiver), true)
         };
 
-        let handle = log_receiver
-            .and_then(|receiver| {
-                Self::make_logger(receiver, options.logging.clone())
-                    .expect("Error creating Logger!")
-                    .map(|mut exec_logger| std::thread::spawn(move || exec_logger.spawn()))
-            });
+        let handle = log_receiver.and_then(|receiver| {
+            Self::make_logger(receiver, options.logging.clone())
+                .expect("Error creating Logger!")
+                .map(|mut exec_logger| std::thread::spawn(move || exec_logger.spawn()))
+        });
 
         let summaries = std::sync::Arc::new(crossbeam::queue::SegQueue::new());
+        let failures = std::sync::Arc::new(crossbeam::queue::SegQueue::new());
 
         crate::shim::scope(|s| {
             let base_time = std::time::Instant::now();
@@ -56,6 +56,7 @@ impl<'a> Initialized<'a> {
 
                 let sender = log_sender.clone();
                 let summary_handle = summaries.clone();
+                let failure_handle = failures.clone();
 
                 spawn!(s, builder, move || {
                     if has_logger {
@@ -73,8 +74,17 @@ impl<'a> Initialized<'a> {
                             ));
                         }
                     }
-                    child.run();
-                    summary_handle.push(child.summarize());
+                    match child.run_falliable() {
+                        Ok(()) => {
+                            summary_handle.push(child.summarize());
+                        }
+                        Err(error) => {
+                            failure_handle.push(super::SimulationError {
+                                id: child.id().id,
+                                underlying: error,
+                            });
+                        }
+                    }
                 })
                 .unwrap_or_else(|_| panic!("Failed to spawn child {name:?} {id:?}"));
             });
@@ -87,6 +97,10 @@ impl<'a> Initialized<'a> {
         Executed {
             nodes: std::sync::Arc::into_inner(summaries)
                 .expect("Could not obtain unique access to summaries")
+                .into_iter()
+                .collect(),
+            failures: std::sync::Arc::into_inner(failures)
+                .expect("Could not obtain unique access to failures")
                 .into_iter()
                 .collect(),
             edges: self.data.edges,
