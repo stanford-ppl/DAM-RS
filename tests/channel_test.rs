@@ -1,7 +1,6 @@
 #[cfg(test)]
 mod tests {
 
-    use cfg_if::cfg_if;
     use dam::{channel::ChannelElement, simulation::*, utility_contexts::FunctionContext};
 
     // The tests will take TEST_SIZE * MAX_MS_SLEEP / 2 on average.
