@@ -5,6 +5,8 @@ use crate::context_tools::*;
 use crate::context::Context;
 use crate::datastructures::{SyncSendMarker, Time};
 
+use super::UtilityError;
+
 /// A context which writes to a channel with elements and timings taken from an iterator.
 /// If only elements are desired, use a [super::GeneratorContext].
 /// This is used for sending pre-defined values, or for reading from files.
@@ -22,18 +24,18 @@ where
     FType: FnOnce() -> IType + Send + Sync,
     TimeType: Into<Time>,
 {
-    fn run(&mut self) {
+    fn run_falliable(&mut self) -> anyhow::Result<()> {
         if let Some(func) = self.iterator.take() {
             for (data, time) in (func)() {
                 self.time.advance(time.into() - 1);
                 self.output
-                    .enqueue(&self.time, ChannelElement::new(self.time.tick() + 1, data))
-                    .unwrap();
+                    .enqueue(&self.time, ChannelElement::new(self.time.tick() + 1, data))?;
                 // Don't need an incr_cycles in case the generator wants to emit multiple values on the same cycle.
             }
         } else {
-            panic!("Can't run a trace twice!");
+            Err(UtilityError::DuplicateExec)?
         }
+        Ok(())
     }
 }
 

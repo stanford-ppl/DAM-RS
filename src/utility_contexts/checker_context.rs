@@ -3,9 +3,12 @@ use dam_macros::context_internal;
 use crate::{
     channel::{ChannelElement, Receiver},
     types::DAMType,
+    utility_contexts::CheckerError,
 };
 
 use crate::context::Context;
+
+use super::UtilityError;
 
 /// An exact validation context for checking a channel against an iterator.
 #[context_internal]
@@ -25,22 +28,27 @@ where
 {
     fn init(&mut self) {}
 
-    fn run(&mut self) {
+    fn run_falliable(&mut self) -> anyhow::Result<()> {
         if let Some(iter) = self.iterator.take() {
             for (ind, val) in iter().enumerate() {
                 match self.input.dequeue(&self.time) {
                     Ok(ChannelElement { time, data }) if data != val => {
-                        panic!("Mismatch on iteration {ind} at time {time:?}: Expected {val:?} but found {data:?}")
+                        Err(CheckerError::Mismatch {
+                            ind,
+                            msg: format!("{:?} vs {:?} at time {:?}", val, data, time),
+                        })?
                     }
                     Ok(_) => {}
-                    Err(_) => {
-                        panic!("Ran out of things to read on iteration {ind}, expected {val:?}")
-                    }
+                    Err(_) => Err(UtilityError::Receiver {
+                        iteration: ind,
+                        channel: self.input.id(),
+                    })?,
                 }
             }
         } else {
-            panic!("Cannot run a Checker twice!");
+            Err(UtilityError::DuplicateExec)?
         }
+        Ok(())
     }
 }
 

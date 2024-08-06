@@ -15,17 +15,20 @@ pub struct BroadcastContext<T: Clone> {
 }
 
 impl<T: DAMType> Context for BroadcastContext<T> {
-    fn run(&mut self) {
+    fn run_falliable(&mut self) -> anyhow::Result<()> {
         loop {
             let value = self.receiver.dequeue(&self.time);
             match value {
                 Ok(mut data) => {
+                    for target in &self.targets {
+                        target.wait_until_available(&self.time)?
+                    }
                     data.time = self.time.tick() + 1;
-                    self.targets.iter().for_each(|target| {
-                        target.enqueue(&self.time, data.clone()).unwrap();
-                    });
+                    for target in &self.targets {
+                        target.enqueue(&self.time, data.clone())?;
+                    }
                 }
-                Err(_) => return,
+                Err(_) => return Ok(()),
             }
         }
     }

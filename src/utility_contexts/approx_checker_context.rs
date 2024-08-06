@@ -6,6 +6,8 @@ use crate::{
     types::DAMType,
 };
 
+use super::UtilityError;
+
 /// Checks that a given channel contains elements approximately equal to a reference iterator, with a user-defined function.
 #[context_internal]
 pub struct ApproxCheckerContext<T: Clone, IType, FType, CheckType>
@@ -28,7 +30,7 @@ where
 {
     fn init(&mut self) {}
 
-    fn run(&mut self) {
+    fn run_falliable(&mut self) -> anyhow::Result<()> {
         if let Some(iter) = self.iterator.take() {
             for (ind, val) in iter().enumerate() {
                 match self.input.dequeue(&self.time) {
@@ -36,14 +38,16 @@ where
                         panic!("Mismatch on iteration {ind} at time {time:?}: Expected {val:?} but found {data:?}")
                     }
                     Ok(_) => {}
-                    Err(_) => {
-                        panic!("Ran out of things to read on iteration {ind}, expected {val:?}")
-                    }
+                    Err(_) => Err(UtilityError::Receiver {
+                        iteration: ind,
+                        channel: self.input.id(),
+                    })?,
                 }
             }
         } else {
-            panic!("Cannot run a Checker twice!");
+            Err(UtilityError::DuplicateExec)?;
         }
+        Ok(())
     }
 }
 

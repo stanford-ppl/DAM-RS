@@ -4,6 +4,8 @@ use crate::context_tools::*;
 
 use crate::context::Context;
 
+use super::UtilityError;
+
 /// A context which writes to a channel with elements taken from an iterator.
 /// This is used for sending pre-defined values, or for reading from files.
 #[context_internal]
@@ -23,7 +25,7 @@ where
 {
     fn init(&mut self) {}
 
-    fn run(&mut self) {
+    fn run_falliable(&mut self) -> anyhow::Result<()> {
         if let Some(func) = self.iterator.take() {
             for val in (func)() {
                 let current_time = self.time.tick();
@@ -33,8 +35,9 @@ where
                 self.time.incr_cycles(1);
             }
         } else {
-            panic!("Can't run a generator twice!");
+            Err(UtilityError::DuplicateExec)?
         }
+        Ok(())
     }
 }
 

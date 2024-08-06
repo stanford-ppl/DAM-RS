@@ -1,6 +1,8 @@
 use crate::{context_tools::*, view::TimeManager};
 use dam_macros::context_internal;
 
+use super::UtilityError;
+
 /// Contains an arbitrarily defined inner body for a context
 /// Used mostly for one-off operations, such as test drivers.
 #[context_internal]
@@ -14,11 +16,12 @@ where
 {
     fn init(&mut self) {} //No-op since Function Contexts don't have internal data.
 
-    fn run(&mut self) {
+    fn run_falliable(&mut self) -> anyhow::Result<()> {
         if let Some(rf) = self.run_fn.take() {
             rf(&mut self.time);
+            Ok(())
         } else {
-            panic!("Called run twice!");
+            Err(UtilityError::DuplicateExec)?
         }
     }
 }

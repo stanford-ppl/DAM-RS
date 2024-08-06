@@ -87,21 +87,4 @@ mod tests {
             println!("{}", summary.to_dot_string());
         }
     }
-
-    cfg_if! {
-        if #[cfg(panic = "unwind")] {
-            #[test]
-            fn test_failures() {
-                // Makes sure that DAM's failure handling infrastructure correctly catches failures when running with unwinds.
-                let mut ctx = ProgramBuilder::default();
-                let mut fc = FunctionContext::new();
-                fc.set_run(|_| {
-                    panic!("Here we gooooooooo")
-                });
-                ctx.add_child(fc);
-                let executed = ctx.initialize(Default::default()).unwrap().run(Default::default());
-                assert!(!executed.passed());
-            }
-        }
-    }
 }

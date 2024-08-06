@@ -44,7 +44,9 @@ pub trait Context: Send + Sync + TimeViewable + Identifiable {
 
     /// The 'meat-and-bones' of a context, expressed as a monolithic function.
     #[deprecated]
-    fn run(&mut self);
+    fn run(&mut self) {
+        panic!("Run wasn't implemented!")
+    }
 
     /// A falliable version of [Context::run]
     fn run_falliable(&mut self) -> anyhow::Result<()> {
