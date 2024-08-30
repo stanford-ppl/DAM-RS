@@ -25,7 +25,7 @@ builtin_ss!(f32, 32);
 builtin_ss!(f64, 64);
 
 impl StaticallySized for usize {
-    const SIZE: usize = unimplemented!();
+    const SIZE: usize = (usize::BITS as usize);
     // usize is a type with a static size, but the value of the size is platform-dependent.
     // Therefore, we implement the trait StaticallySized but keep SIZE unimplemented.
 }
