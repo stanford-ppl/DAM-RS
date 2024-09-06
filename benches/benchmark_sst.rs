@@ -4,7 +4,6 @@ use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use dam::channel::*;
 use dam::context::Context;
 use dam::context_tools::*;
-use dam::shim::RunMode;
 use dam::simulation::*;
 use dam::types::DAMType;
 use dam::utility_contexts::*;
@@ -105,12 +104,7 @@ pub fn merge_benchmark(c: &mut Criterion) {
                                 .unwrap(),
                         )
                         .unwrap()
-                        .run(
-                            RunOptionsBuilder::default()
-                                .mode(RunMode::FIFO)
-                                .build()
-                                .unwrap(),
-                        );
+                        .run(RunOptionsBuilder::default().build().unwrap());
                 })
             },
         );
@@ -219,12 +213,7 @@ pub fn add_benchmark(c: &mut Criterion) {
                             .unwrap(),
                     )
                     .unwrap()
-                    .run(
-                        RunOptionsBuilder::default()
-                            .mode(RunMode::FIFO)
-                            .build()
-                            .unwrap(),
-                    );
+                    .run(RunOptionsBuilder::default().build().unwrap());
             })
         });
     }
