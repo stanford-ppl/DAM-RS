@@ -30,8 +30,7 @@ where
             for val in (func)() {
                 let current_time = self.time.tick();
                 self.output
-                    .enqueue(&self.time, ChannelElement::new(current_time + 1, val))
-                    .unwrap();
+                    .enqueue(&self.time, ChannelElement::new(current_time + 1, val))?;
                 self.time.incr_cycles(1);
             }
         } else {
