@@ -72,7 +72,10 @@ trait SenderCommon<T>: DataProvider<T> + BoundedProvider {
         if data.time < min_time {
             data.update_time(min_time);
         }
-        self.data().underlying.send(data).unwrap();
+        self.data()
+            .underlying
+            .send(data)
+            .map_err(|_| EnqueueError::Closed)?;
         self.register_send();
         Ok(())
     }
