@@ -24,14 +24,16 @@ pub(super) trait AcyclicReceiver<T: Clone>: ReceiverCommon<T> {
     }
 
     fn dequeue(&mut self, manager: &TimeManager) -> Result<ChannelElement<T>, DequeueError> {
-        match &self.data().head {
+        match self.data().head {
             Some(PeekResult::Closed) => return Err(DequeueError::Closed),
-            Some(PeekResult::Something(element)) => {
-                let cloned = element.clone();
+            Some(PeekResult::Something(_)) => {
+                let PeekResult::Something(element) = self.data().head.take().unwrap() else {
+                    unreachable!();
+                };
                 self.data().head = None;
-                self.register_recv(cloned.time.max(manager.tick()));
-                manager.advance(cloned.time);
-                return Ok(cloned);
+                manager.advance(element.time);
+                self.register_recv(element.time.max(manager.tick()));
+                return Ok(element);
             }
             None | Some(PeekResult::Nothing(_)) => {}
         }
